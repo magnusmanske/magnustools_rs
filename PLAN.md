@@ -42,7 +42,7 @@ All web-facing functionality should have a common UI/UX theme, minimalist, sleek
 | M4 ✓ | Buggregator backend: `api.php` (all actions; writes POST-only with CSRF check; no SQL in output), `ingest.php` (exact contract, tested against the `wikimisc` client), OAuth 1.0a |
 | M5 ✓ | `oauth_uploader.php` (`site` allowlist; downloads only from the public internet) |
 | M6 ✓ | Jobs: buggregator update (with Toolhub), webstatus, dashboard maintenance, monitor (mail via Toolforge SMTP); `jobs.yaml`. toolinfo_buggregator.json is served live. |
-| Cutover | Diff old vs new responses per endpoint, switch webservice and jobs. Rollback = restart the PHP webservice/jobs. |
+| Cutover ✓ | 2026-10-23: webservice and jobs switched to Rust; smoke test 23/23. Tools moved to `/<name>/`, `.php` redirects. Rollback: `toolforge webservice stop && toolforge webservice -r 4 php8.4 start`, PHP jobs from `tjs`. |
 
 Phase 2: triage the ~93 magnus-toolserver scripts into port / redirect / drop, then port.
 
