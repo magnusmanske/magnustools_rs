@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">An M3U playlist of the audio and video files listed on a wiki page, or in a category.</p>
-<form method="get" action="wiki2playlist.php">
+<form method="get" action="/wiki2playlist/">
   <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
   <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
   <label>Page with the playlist <span class="hint">one file per <code>*</code> list item;

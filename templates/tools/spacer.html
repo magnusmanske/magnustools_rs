@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">Links to spacecraft databases for an international designator (COSPAR ID).</p>
-<form method="get" action="spacer.php">
+<form method="get" action="/spacer/">
   <label>ID <span class="hint">e.g. 1957-001A</span>
     <input type="text" name="id" value="{{ id }}" required>
   </label>

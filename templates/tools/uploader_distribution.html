@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">For the files in a category tree, optionally also in other category trees: how many of the tree's categories each uploader contributed files to.</p>
-<form method="get" action="uploader_distribution.php">
+<form method="get" action="/uploader_distribution/">
   <label>Language <input type="text" name="lang" value="{{ request.lang }}" required></label>
   <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
   <label>Category tree <input type="text" name="cat1" value="{{ request.cat1 }}" required></label>

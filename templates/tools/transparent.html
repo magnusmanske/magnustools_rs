@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">Find a translator: users of a wiki who are native speakers of another language (by their babel box), most recently active first.</p>
-<form method="get" action="transparent.php">
+<form method="get" action="/transparent/">
   <label>Wiki language <input type="text" name="planguage" value="{{ request.planguage }}" required></label>
   <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
   <label>Native language <span class="hint">language code, e.g. de</span>

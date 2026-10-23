@@ -64,7 +64,7 @@ pub async fn article(
     let depth = depth(&request.d);
     let mut page = Page {
         title: "Random article",
-        action: "randomarticle.php",
+        action: "/randomarticle/",
         site: Some((&request.lang, &request.family)),
         category_field: "categories",
         category: request.categories.trim(),
@@ -91,7 +91,7 @@ pub async fn image(
     let depth = depth(&request.d);
     let mut page = Page {
         title: "Random image",
-        action: "random_image_commons_subcat.php",
+        action: "/random_image_commons_subcat/",
         site: None,
         category_field: "category",
         category: request.category.trim(),

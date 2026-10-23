@@ -159,7 +159,7 @@ fn next_url(request: &Request, limit: u64, oldest: &str) -> String {
         ("doit", "1"),
     ];
     let query: Vec<String> = params.iter().map(|(k, v)| format!("{k}={}", encode_component(v))).collect();
-    format!("herding_sheep.php?{}", query.join("&"))
+    format!("/herding_sheep/?{}", query.join("&"))
 }
 
 /// A `YYYYMMDDHHMMSS` prefix, padded to a full timestamp.
@@ -205,7 +205,7 @@ mod tests {
         };
         assert_eq!(
             next_url(&request, 50, "20240102030405"),
-            "herding_sheep.php?language=de&project=wikipedia&category=Benutzer%3AX&users=&timestamp=2024\
+            "/herding_sheep/?language=de&project=wikipedia&category=Benutzer%3AX&users=&timestamp=2024\
              &timestamp_stop=20240102030404&limit=50&doit=1"
         );
     }

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">Wikitext for a new English Wikipedia biography: intro, infobox, categories and authority control.</p>
-<form method="get" action="prepbio.php">
+<form method="get" action="/prepbio/">
   <label>Pre-fill from Wikidata <span class="hint">optional; e.g. Q42</span>
     <input type="text" name="q" value="{{ q }}" placeholder="Q42">
   </label>
@@ -14,7 +14,7 @@
 {% endif %}
 
 <h2>Details</h2>
-<form method="post" action="prepbio.php">
+<form method="post" action="/prepbio/">
 {% for field in fields %}
   <label>{{ field.label }}{% if !field.hint.is_empty() %} <span class="hint">{{ field.hint }}</span>{% endif %}
     <input type="text" name="{{ field.name }}" value="{{ field.value }}">

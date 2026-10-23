@@ -17,7 +17,7 @@ use serde_json::{Map, Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 
-const SESSION: Session = Session { name: "uploader_auth", path: "/oauth_uploader.php" };
+const SESSION: Session = Session { name: "uploader_auth", path: "/oauth_uploader/" };
 const MAX_FILE: u64 = 100 << 20;
 /// A pause after each edit or upload, as the old tool made.
 const EDIT_DELAY: Duration = Duration::from_secs(1);
@@ -25,7 +25,7 @@ const EDIT_DELAY: Duration = Duration::from_secs(1);
 /// already on Commons, or was deleted before.
 const DEFAULT_BLOCKING_WARNINGS: &[&str] = &["duplicate", "duplicate-archive"];
 const NOT_AUTHORIZED: &str =
-    "You have not authorised this tool yet; log in at https://magnustools.toolforge.org/oauth_uploader.php";
+    "You have not authorised this tool yet; log in at https://magnustools.toolforge.org/oauth_uploader/";
 
 #[derive(Debug, Default, Deserialize)]
 pub struct Request {
@@ -74,6 +74,9 @@ pub async fn handler(
         return Ok(login_callback(oauth, jar, verifier, token).await);
     }
     let action = request.action.clone().unwrap_or_default();
+    if action == "logout" {
+        return Ok((SESSION.without_tokens(jar), Redirect::to(SESSION.path)).into_response());
+    }
     if action == "authorize" {
         let (request_token, url) = oauth.initiate("oob").await?;
         return Ok((SESSION.with_request_token(jar, &request_token), Redirect::to(&url)).into_response());

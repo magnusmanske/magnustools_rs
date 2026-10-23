@@ -13,9 +13,10 @@ pub use params::Params;
 
 use crate::state::AppState;
 use axum::Router;
+use axum::http::Uri;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
-use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::response::{IntoResponse, Redirect};
+use axum::routing::{MethodRouter, any, get};
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -43,6 +44,18 @@ pub fn router(state: Arc<AppState>) -> Router {
 
 fn header_layer(name: header::HeaderName, value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value))
+}
+
+/// A permanent redirect to `to`, keeping the query string. 308, so that
+/// POST requests stay POST requests, with their body.
+pub fn moved<S: Clone + Send + Sync + 'static>(to: &str) -> MethodRouter<S> {
+    let to = to.to_string();
+    any(move |uri: Uri| async move {
+        match uri.query() {
+            Some(query) => Redirect::permanent(&format!("{to}?{query}")),
+            None => Redirect::permanent(&to),
+        }
+    })
 }
 
 /// Whether a request comes from a page of this site: the defence against

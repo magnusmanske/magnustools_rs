@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">Page views in one month of the articles a user started.</p>
-<form method="get" action="metronom.php">
+<form method="get" action="/metronom/">
   <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
   <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
   <label>Month <span class="hint">YYYYMM, from 201507</span>

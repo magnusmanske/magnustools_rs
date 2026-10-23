@@ -38,7 +38,7 @@ pub async fn handler(
     let request = Request { state: &state, oauth, jar: &jar, headers: &headers, method: &method, get: &get };
     match request.answer(get("action").unwrap_or_default().as_str()).await {
         Ok(Reply::Json(out)) => answer(Value::Object(out)),
-        Ok(Reply::Login(url, jar)) => (jar, Redirect::to(&url)).into_response(),
+        Ok(Reply::Redirect(url, jar)) => (jar, Redirect::to(&url)).into_response(),
         Err(e) => {
             tracing::warn!("buggregator API: {e:#}");
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status": "Internal error", "data": []}))).into_response()
@@ -52,7 +52,7 @@ fn answer(out: Value) -> Response {
 
 enum Reply {
     Json(Map<String, Value>),
-    Login(String, PrivateCookieJar),
+    Redirect(String, PrivateCookieJar),
 }
 
 struct Request<'a, F: Fn(&str) -> Option<String>> {
@@ -75,7 +75,11 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
                 let callback = format!("{}/buggregator/api.php", self.state.config.public_url);
                 let (request_token, url) = self.oauth.initiate(&callback).await?;
                 let jar = SESSION.with_request_token(self.jar.clone(), &request_token);
-                return Ok(Reply::Login(url, jar));
+                return Ok(Reply::Redirect(url, jar));
+            }
+            "logout" => {
+                let jar = SESSION.without_tokens(self.jar.clone());
+                return Ok(Reply::Redirect(format!("{}/buggregator/", self.state.config.public_url), jar));
             }
             "get_rights" => {
                 out.insert("result".to_string(), self.rights().await);

@@ -3,7 +3,7 @@
 <p class="lead">An XML summary of Wikimedia Commons files for re-users: URLs, size, descriptions, author, source,
 location, categories, and licences with their terms.</p>
 <h2>Usage</h2>
-<p><code>commonsapi.php?image=IMAGENAME</code>, without the <code>File:</code> prefix. Several images are separated by <code>|</code>.</p>
+<p><code>/commonsapi/?image=IMAGENAME</code>, without the <code>File:</code> prefix. Several images are separated by <code>|</code>.</p>
 <table>
   <tr><th>Parameter</th><th>Effect</th></tr>
   <tr><td><code>thumbwidth=XX</code></td><td>Adds the URL of a thumbnail at most XX pixels wide</td></tr>
@@ -14,9 +14,9 @@ location, categories, and licences with their terms.</p>
 </table>
 <h2>Examples</h2>
 <ul>
-  <li><a href="commonsapi.php?image=Sa-warthog.jpg&amp;thumbwidth=150&amp;thumbheight=150&amp;versions&amp;meta">Sa-warthog.jpg</a>, with thumbnail, versions and metadata</li>
-  <li><a href="commonsapi.php?image=Yarra_Panorama.jpg">Yarra_Panorama.jpg</a>, with a location</li>
-  <li><a href="commonsapi.php?image=Sa-warthog.jpg|Yarra_Panorama.jpg|filedoesnotexist">Several images</a>, one of them missing</li>
+  <li><a href="/commonsapi/?image=Sa-warthog.jpg&amp;thumbwidth=150&amp;thumbheight=150&amp;versions&amp;meta">Sa-warthog.jpg</a>, with thumbnail, versions and metadata</li>
+  <li><a href="/commonsapi/?image=Yarra_Panorama.jpg">Yarra_Panorama.jpg</a>, with a location</li>
+  <li><a href="/commonsapi/?image=Sa-warthog.jpg|Yarra_Panorama.jpg|filedoesnotexist">Several images</a>, one of them missing</li>
 </ul>
 <p class="hint">Licence terms come from <a href="https://commons.wikimedia.org/wiki/Commons:Commons_API">Commons:Commons API</a>.</p>
 {% endblock %}

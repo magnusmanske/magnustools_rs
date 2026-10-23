@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">Files in a Commons category tree that no Wikimedia wiki uses in an article.</p>
-<form method="get" action="unused_files.php">
+<form method="get" action="/unused_files/">
   <label>Commons category <input type="text" name="category" value="{{ category }}" required></label>
   <label>Subcategory depth
     <input type="number" name="depth" min="0" max="20" value="{{ depth }}" style="max-width:6rem">
@@ -12,7 +12,7 @@
   <button>Find unused files</button>
 </form>
 {% if results.is_none() %}
-<p class="hint">Example: <a href="unused_files.php?category=Belgrade+Aviation+Museum&amp;depth=12">Belgrade Aviation Museum</a></p>
+<p class="hint">Example: <a href="/unused_files/?category=Belgrade+Aviation+Museum&amp;depth=12">Belgrade Aviation Museum</a></p>
 {% endif %}
 {% if let Some(results) = results %}
 <h2>{{ results.unused }} unused files</h2>

@@ -2,9 +2,9 @@
 {% block content %}
 <p class="lead">Uploads files to Wikimedia Commons under your own user name, for tools that transfer files.</p>
 {% if let Some(user) = user %}
-<p>You are logged in as <strong>{{ user }}</strong>.</p>
+<p>You are logged in as <strong>{{ user }}</strong>. <a href="/oauth_uploader/?action=logout">Log out</a> when you are done.</p>
 {% else %}
-<p>To use it, <a href="oauth_uploader.php?action=authorize">log in</a> first.</p>
+<p>To use it, <a href="/oauth_uploader/?action=authorize">log in</a> first.</p>
 {% endif %}
 {% if let Some(message) = message %}
 <p{% if message != "Auth OK!" && message != "Done." %} class="error"{% endif %}>{{ message }}</p>

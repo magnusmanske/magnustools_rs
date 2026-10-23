@@ -24,35 +24,64 @@ mod wiki2playlist;
 mod wp_data_url;
 
 use crate::state::AppState;
+use crate::web::moved;
 use axum::Router;
-use axum::routing::get;
+use axum::routing::{MethodRouter, get};
 use std::sync::Arc;
 
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
+type State = Arc<AppState>;
+
+pub fn routes() -> Router<State> {
+    let tools: Vec<(&str, MethodRouter<State>)> = vec![
+        ("authority_control", get(authority_control::handler).post(authority_control::handler)),
+        ("cas", get(cas::handler)),
+        ("commonsapi", get(commonsapi::handler)),
+        ("flickrfree", get(flickrfree::handler)),
+        ("get_article_intro", get(get_article_intro::handler)),
+        ("get_distinct_authors", get(get_distinct_authors::handler).post(get_distinct_authors::handler)),
+        ("herding_sheep", get(herding_sheep::handler)),
+        ("html2wiki", get(html2wiki::handler).post(html2wiki::handler)),
+        ("logger", get(logger::handler).post(logger::handler)),
+        ("metronom", get(metronom::handler)),
+        ("oauth_uploader", get(oauth_uploader::handler).post(oauth_uploader::handler)),
+        ("prepbio", get(prepbio::handler).post(prepbio::handler)),
+        ("quick_counter", get(quick_counter::handler)),
+        ("random_image_commons_subcat", get(random_page::image)),
+        ("randomarticle", get(random_page::article)),
+        ("spacer", get(spacer::handler)),
+        ("tab2wiki", get(tab2wiki::handler).post(tab2wiki::handler)),
+        ("transparent", get(transparent::handler).post(transparent::handler)),
+        ("unused_files", get(unused_files::handler)),
+        ("uploader_distribution", get(uploader_distribution::handler)),
+        ("wiki2playlist", get(wiki2playlist::handler)),
+        ("wp_data_url", get(wp_data_url::handler)),
+    ];
+    let router = Router::new()
         .route("/", get(index::handler))
         .route("/index.html", get(index::handler))
-        .route("/main.html", get(|| async { axum::response::Redirect::permanent("/") }))
-        .route("/authority_control.php", get(authority_control::handler).post(authority_control::handler))
-        .route("/cas.php", get(cas::handler))
-        .route("/commonsapi.php", get(commonsapi::handler))
-        .route("/flickrfree.php", get(flickrfree::handler))
-        .route("/get_article_intro.php", get(get_article_intro::handler))
-        .route("/get_distinct_authors.php", get(get_distinct_authors::handler).post(get_distinct_authors::handler))
-        .route("/herding_sheep.php", get(herding_sheep::handler))
-        .route("/html2wiki.php", get(html2wiki::handler).post(html2wiki::handler))
-        .route("/logger.php", get(logger::handler).post(logger::handler))
-        .route("/metronom.php", get(metronom::handler))
-        .route("/oauth_uploader.php", get(oauth_uploader::handler).post(oauth_uploader::handler))
-        .route("/prepbio.php", get(prepbio::handler).post(prepbio::handler))
-        .route("/quick_counter.php", get(quick_counter::handler))
-        .route("/random_image_commons_subcat.php", get(random_page::image))
-        .route("/randomarticle.php", get(random_page::article))
-        .route("/spacer.php", get(spacer::handler))
-        .route("/tab2wiki.php", get(tab2wiki::handler).post(tab2wiki::handler))
-        .route("/transparent.php", get(transparent::handler).post(transparent::handler))
-        .route("/unused_files.php", get(unused_files::handler))
-        .route("/uploader_distribution.php", get(uploader_distribution::handler))
-        .route("/wiki2playlist.php", get(wiki2playlist::handler))
-        .route("/wp_data_url.php", get(wp_data_url::handler))
+        .route("/main.html", moved("/"));
+    tools.into_iter().fold(router, |router, (name, handler)| tool(router, name, handler))
+}
+
+/// A tool at `/<name>/`. Its old address, `/<name>.php`, and `/<name>` redirect there.
+fn tool(router: Router<State>, name: &str, handler: MethodRouter<State>) -> Router<State> {
+    let path = format!("/{name}/");
+    router.route(&path, handler).route(&format!("/{name}.php"), moved(&path)).route(&format!("/{name}"), moved(&path))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::web::test_support::get;
+
+    #[tokio::test]
+    async fn old_addresses_redirect() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = get(dir.path(), "/tab2wiki.php?text=a&doit=1").await;
+        assert_eq!(old.status.as_u16(), 308);
+        assert_eq!(old.headers["location"], "/tab2wiki/?text=a&doit=1");
+        assert_eq!(get(dir.path(), "/tab2wiki").await.headers["location"], "/tab2wiki/");
+        let new = get(dir.path(), "/tab2wiki/?text=a%09b&doit=1").await;
+        assert_eq!(new.status.as_u16(), 200);
+        assert!(new.body.contains("{| border="));
+    }
 }

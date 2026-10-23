@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">Copy a table from a spreadsheet, paste it here, and get a wiki table.</p>
-<form method="post" action="tab2wiki.php">
+<form method="post" action="/tab2wiki/">
   <label>Table
     <textarea class="code" name="text" rows="10" required>{{ text }}</textarea>
   </label>

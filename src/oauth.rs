@@ -275,6 +275,12 @@ impl Session {
         ))
     }
 
+    /// Forgets the login (and any handshake).
+    pub fn without_tokens(&self, jar: PrivateCookieJar) -> PrivateCookieJar {
+        jar.remove(Cookie::build(self.handshake_name()).path(self.path))
+            .remove(Cookie::build(self.name).path(self.path))
+    }
+
     fn handshake_name(&self) -> String {
         format!("{}_handshake", self.name)
     }

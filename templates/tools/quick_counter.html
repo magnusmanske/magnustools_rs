@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">A user's live and deleted edits, per namespace.</p>
-<form method="get" action="quick_counter.php">
+<form method="get" action="/quick_counter/">
   <label>User <input type="text" name="user" value="{{ user }}" required></label>
   <label>Wiki <span class="hint">e.g. en.wikipedia, de.wikisource, commons.wikimedia</span>
     <input type="text" name="project" value="{{ project }}" required>
