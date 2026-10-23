@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block head %}
+{% if places.is_some() %}
+<link rel="stylesheet" href="https://tools-static.wmflabs.org/cdnjs/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+{% endif %}
+{% endblock %}
+{% block content %}
+<p class="lead">The places a page links to, on a map; or as KML or GeoJSON.</p>
+<form method="get" action="/related_places/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <label>Namespace
+    <select name="namespace">
+    {% for (number, name) in namespaces %}
+      <option value="{{ number }}"{% if request.namespace == *number %} selected{% endif %}>{{ name }}</option>
+    {% endfor %}
+    </select>
+  </label>
+  <label>Title <input type="text" name="title" value="{{ request.title }}" required></label>
+  <button>Show places</button>
+</form>
+{% if places.is_none() %}
+<p class="hint">Example: <a href="/related_places/?language=en&amp;project=wikipedia&amp;title=List+of+lighthouses+in+Scotland">List of lighthouses in Scotland</a></p>
+{% endif %}
+{% if let Some(places) = places %}
+<h2>{{ places.len() }} places</h2>
+<p class="muted">Download as <a href="/related_places/?{{ query }}&amp;format=kml">KML</a> or <a href="/related_places/?{{ query }}&amp;format=geojson">GeoJSON</a>.</p>
+{% if !places.is_empty() %}
+<div id="map" data-places="{{ geojson }}" style="height:28rem;border-radius:var(--radius);margin-bottom:1rem"></div>
+<script>
+const map = L.map('map');
+L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png', {
+  maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Wikimedia maps'
+}).addTo(map);
+const layer = L.geoJSON(JSON.parse(document.getElementById('map').dataset.places), {
+  onEachFeature: (f, marker) => {
+    const a = document.createElement('a');
+    a.href = f.properties.url;
+    a.textContent = f.properties.title;
+    marker.bindPopup(a);
+  }
+}).addTo(map);
+map.fitBounds(layer.getBounds(), { maxZoom: 12 });
+</script>
+<div class="table-wrap">
+<table>
+  <tr><th>Place</th><th class="num">Latitude</th><th class="num">Longitude</th></tr>
+{% for p in places %}
+  <tr><td><a href="{{ p.url }}">{{ p.title }}</a></td><td class="num">{{ p.lat }}</td><td class="num">{{ p.lon }}</td></tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

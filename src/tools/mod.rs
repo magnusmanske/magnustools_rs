@@ -20,6 +20,7 @@ mod prepbio;
 mod quick_counter;
 mod random_page;
 mod redirector;
+mod related_places;
 mod spacer;
 mod tab2wiki;
 mod transparent;
@@ -58,6 +59,7 @@ pub fn routes() -> Router<State> {
         ("random_image_commons_subcat", get(random_page::image)),
         ("randomarticle", get(random_page::article)),
         ("redirector", get(redirector::handler).post(redirector::handler)),
+        ("related_places", get(related_places::handler)),
         ("spacer", get(spacer::handler)),
         ("tab2wiki", get(tab2wiki::handler).post(tab2wiki::handler)),
         ("transparent", get(transparent::handler).post(transparent::handler)),
