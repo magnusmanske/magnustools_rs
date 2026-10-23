@@ -3,6 +3,7 @@
 mod authority_control;
 mod cas;
 mod commonsapi;
+mod coord_gen;
 mod flickrfree;
 mod get_article_intro;
 mod get_distinct_authors;
@@ -36,6 +37,7 @@ pub fn routes() -> Router<State> {
         ("authority_control", get(authority_control::handler).post(authority_control::handler)),
         ("cas", get(cas::handler)),
         ("commonsapi", get(commonsapi::handler)),
+        ("coord_gen", get(coord_gen::handler).post(coord_gen::handler)),
         ("flickrfree", get(flickrfree::handler)),
         ("get_article_intro", get(get_article_intro::handler)),
         ("get_distinct_authors", get(get_distinct_authors::handler).post(get_distinct_authors::handler)),

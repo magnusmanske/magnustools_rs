@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Wikitext for German Wikipedia's <a href="https://de.wikipedia.org/wiki/Vorlage:Coordinate">{{ "{{" }}Coordinate}}</a> template, from degrees, minutes and seconds.</p>
+<form method="get" action="/coord_gen/">
+  <fieldset class="row">
+    <legend>Latitude</legend>
+    <label>Degrees <input type="number" name="breite_grad" min="0" max="90" value="{{ request.breite_grad }}" required></label>
+    <label>Minutes <input type="number" name="breite_minute" min="0" max="59" value="{{ request.breite_minute }}"></label>
+    <label>Seconds <input type="number" name="breite_sekunde" min="0" max="59" value="{{ request.breite_sekunde }}"></label>
+    <label class="check"><input type="radio" name="breite_dir" value="N"{% if request.breite_dir != "S" %} checked{% endif %}> North</label>
+    <label class="check"><input type="radio" name="breite_dir" value="S"{% if request.breite_dir == "S" %} checked{% endif %}> South</label>
+  </fieldset>
+  <fieldset class="row">
+    <legend>Longitude</legend>
+    <label>Degrees <input type="number" name="laenge_grad" min="0" max="180" value="{{ request.laenge_grad }}" required></label>
+    <label>Minutes <input type="number" name="laenge_minute" min="0" max="59" value="{{ request.laenge_minute }}"></label>
+    <label>Seconds <input type="number" name="laenge_sekunde" min="0" max="59" value="{{ request.laenge_sekunde }}"></label>
+    <label class="check"><input type="radio" name="laenge_dir" value="E"{% if request.laenge_dir != "W" %} checked{% endif %}> East</label>
+    <label class="check"><input type="radio" name="laenge_dir" value="W"{% if request.laenge_dir == "W" %} checked{% endif %}> West</label>
+  </fieldset>
+  <label>Type
+    <select name="data_type">
+    {% for (value, text) in types %}
+      <option value="{{ value }}"{% if request.data_type == *value %} selected{% endif %}>{{ text }}</option>
+    {% endfor %}
+    </select>
+  </label>
+  <label>Population or elevation <span class="hint">for cities and mountains</span>
+    <input type="text" name="data_size" inputmode="decimal" value="{{ request.data_size }}">
+  </label>
+  <fieldset class="row">
+    <legend>Shown</legend>
+    {% for (value, text, _) in placements %}
+    <label class="check"><input type="radio" name="template_name" value="{{ value }}"{% if placement == *value %} checked{% endif %}> {{ text }}</label>
+    {% endfor %}
+  </fieldset>
+  <button name="doit" value="1">Generate</button>
+</form>
+{% if !rows.is_empty() %}
+<h2>Wikitext</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>Precision</th><th>Wikitext</th><th>Shown as</th></tr>
+{% for row in rows %}
+  <tr><td>{{ row.precision }}</td><td><code>{{ row.wikitext }}</code></td><td>{{ row.preview }}</td></tr>
+{% endfor %}
+</table>
+</div>
+<p class="hint">Replace <code>region=…</code> with the ISO 3166 code of the region, e.g. <code>region=DE-BE</code>.</p>
+{% endif %}
+{% endblock %}
