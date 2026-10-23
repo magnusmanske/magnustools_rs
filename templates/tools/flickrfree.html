@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The latest photos on Flickr under a licence that allows uploading them to Commons.</p>
+<div class="table-wrap">
+<table>
+{% for photo in photos.iter() %}
+  <tr>
+    <td><a href="{{ photo.page_url() }}"><img loading="lazy" src="{{ photo.url_t }}" alt="" style="min-width:100px"></a></td>
+    <td>
+      <strong>{% if photo.title.is_empty() %}Untitled photo {{ photo.id }}{% else %}{{ photo.title }}{% endif %}</strong><br>
+      by <a href="{{ photo.owner_url() }}">{{ photo.ownername }}</a>, {{ photo.uploaded() }}<br>
+      <span class="muted">{{ photo.license_name() }}{% if !photo.tags.is_empty() %} · {{ photo.tags }}{% endif %}</span>
+    </td>
+    <td><a href="{{ photo.upload_url() }}">Upload to Commons</a></td>
+  </tr>
+{% endfor %}
+</table>
+</div>
+{% endblock %}

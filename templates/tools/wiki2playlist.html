@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">An M3U playlist of the audio and video files listed on a wiki page, or in a category.</p>
+<form method="get" action="wiki2playlist.php">
+  <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+  <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  <label>Page with the playlist <span class="hint">one file per <code>*</code> list item;
+    <a href="https://commons.wikimedia.org/wiki/User:Magnus_Manske/playlist">example</a></span>
+    <input type="text" name="page" value="{{ request.page }}">
+  </label>
+  <label>… or category
+    <input type="text" name="category" value="{{ request.category }}">
+  </label>
+  <label>Subcategory depth
+    <input type="number" name="depth" min="0" max="5" value="{{ request.depth }}" placeholder="0" style="max-width:6rem">
+  </label>
+  <button name="doit" value="1">Get playlist</button>
+</form>
+{% if let Some(error) = error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+{% endblock %}

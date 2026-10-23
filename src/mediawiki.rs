@@ -46,3 +46,76 @@ pub async fn page_html(http: &reqwest::Client, wiki: &Wiki, title: &str) -> Resu
     let html = response.error_for_status()?.text().await?;
     Ok(Some(html))
 }
+
+/// Files in a category and its subcategories down to `depth` (0: the
+/// category alone), as titles without namespace; at most `limit` of them.
+pub async fn category_files(
+    http: &reqwest::Client,
+    wiki: &Wiki,
+    category: &str,
+    depth: u32,
+    limit: usize,
+) -> Result<Vec<String>> {
+    let category = category.trim();
+    let category = strip_namespace(category, &["category", "kategorie"]).unwrap_or(category);
+    let mut files = vec![];
+    let mut seen = std::collections::HashSet::from([category.replace('_', " ")]);
+    let mut level = vec![category.replace('_', " ")];
+    for current_depth in 0..=depth {
+        let mut next_level = vec![];
+        for category in &level {
+            let mut cont: Option<String> = None;
+            loop {
+                let title = format!("Category:{category}");
+                let mut params = vec![
+                    ("action", "query"),
+                    ("list", "categorymembers"),
+                    ("cmtitle", title.as_str()),
+                    ("cmtype", "file|subcat"),
+                    ("cmlimit", "max"),
+                ];
+                if let Some(c) = &cont {
+                    params.push(("cmcontinue", c.as_str()));
+                }
+                let json = api(http, wiki, &params).await?;
+                for member in json["query"]["categorymembers"].as_array().into_iter().flatten() {
+                    let (Some(ns), Some(title)) = (member["ns"].as_i64(), member["title"].as_str()) else { continue };
+                    let name = title.split_once(':').map_or(title, |(_, name)| name).to_string();
+                    match ns {
+                        6 => files.push(name),
+                        14 if current_depth < depth && seen.insert(name.clone()) => next_level.push(name),
+                        _ => {}
+                    }
+                    if files.len() >= limit {
+                        return Ok(files);
+                    }
+                }
+                cont = json["continue"]["cmcontinue"].as_str().map(str::to_string);
+                if cont.is_none() {
+                    break;
+                }
+            }
+        }
+        level = next_level;
+    }
+    Ok(files)
+}
+
+/// `title` without a leading `Namespace:` from `namespaces` (case-insensitive).
+pub fn strip_namespace<'a>(title: &'a str, namespaces: &[&str]) -> Option<&'a str> {
+    let (namespace, rest) = title.split_once(':')?;
+    namespaces.iter().any(|ns| ns.eq_ignore_ascii_case(namespace.trim())).then(|| rest.trim())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn namespaces() {
+        assert_eq!(strip_namespace("Category:X", &["category"]), Some("X"));
+        assert_eq!(strip_namespace("file: A.ogg", &["file", "image"]), Some("A.ogg"));
+        assert_eq!(strip_namespace("X: Y", &["category"]), None);
+        assert_eq!(strip_namespace("X", &["category"]), None);
+    }
+}

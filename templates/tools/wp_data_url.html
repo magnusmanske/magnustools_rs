@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">A Wikipedia article as one self-contained HTML page, with its images inlined, e.g. to save for offline reading.</p>
+<form method="get" action="wp_data_url.php">
+  <label>Language <input type="text" name="lang" value="en" required></label>
+  <label>Article <input type="text" name="title" required></label>
+  <button>Get page</button>
+</form>
+{% endblock %}
