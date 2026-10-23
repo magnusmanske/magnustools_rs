@@ -19,6 +19,19 @@ pub struct Config {
     pub replica_credentials: PathBuf,
     #[serde(default)]
     pub tool_db: ToolDbConfig,
+    /// Where this service is reachable, for OAuth callbacks.
+    #[serde(default = "default_public_url")]
+    pub public_url: String,
+    /// Encrypts the login cookies: 64 bytes, hex. Without one, a random key
+    /// is used, so logins last only until a restart, and only on one replica.
+    #[serde(default)]
+    pub cookie_key: Option<String>,
+    /// OAuth consumers (`consumerKey`, `consumerSecret`, `agent`); without
+    /// the file, logging in to that part is unavailable.
+    #[serde(default = "default_buggregator_oauth")]
+    pub buggregator_oauth: PathBuf,
+    #[serde(default = "default_uploader_oauth")]
+    pub uploader_oauth: PathBuf,
     /// The Flickr API key, alone in a file; without it, `flickrfree.php` is unavailable.
     #[serde(default)]
     pub flickr_key_file: Option<PathBuf>,
@@ -31,6 +44,18 @@ fn default_replica_credentials() -> PathBuf {
     "replica.my.cnf".into()
 }
 
+fn default_public_url() -> String {
+    "https://magnustools.toolforge.org".to_string()
+}
+
+fn default_buggregator_oauth() -> PathBuf {
+    "buggregator_oauth.ini".into()
+}
+
+fn default_uploader_oauth() -> PathBuf {
+    "oauth.ini".into()
+}
+
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         let text =
@@ -41,6 +66,8 @@ impl Config {
         config.public_html = dir.join(&config.public_html);
         config.flickr_key_file = config.flickr_key_file.map(|f| dir.join(f));
         config.replica_credentials = dir.join(&config.replica_credentials);
+        config.buggregator_oauth = dir.join(&config.buggregator_oauth);
+        config.uploader_oauth = dir.join(&config.uploader_oauth);
         Ok(config)
     }
 }

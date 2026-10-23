@@ -13,7 +13,7 @@ pub use params::Params;
 
 use crate::state::AppState;
 use axum::Router;
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use std::sync::Arc;
@@ -27,6 +27,7 @@ const HEALTH_PATH: &str = "/healthz";
 pub fn router(state: Arc<AppState>) -> Router {
     let static_files = static_files::service(&state.config.public_html);
     let router = crate::tools::routes()
+        .merge(crate::buggregator::routes())
         .route(HEALTH_PATH, get(wikimisc::server::health::ok))
         .route(page::STYLESHEET_PATH, get(page::stylesheet))
         .with_state(state)
@@ -42,6 +43,18 @@ pub fn router(state: Arc<AppState>) -> Router {
 
 fn header_layer(name: header::HeaderName, value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
     SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value))
+}
+
+/// Whether a request comes from a page of this site: the defence against
+/// cross-site requests for actions that change something.
+pub fn is_same_origin(headers: &HeaderMap) -> bool {
+    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+    if let Some(site) = header("sec-fetch-site") {
+        return site == "same-origin";
+    }
+    let Some(host) = header("host") else { return false };
+    let from_host = |url: &str| url.split_once("://").is_some_and(|(_, rest)| rest.split('/').next() == Some(host));
+    header("origin").or(header("referer")).is_some_and(from_host)
 }
 
 /// The themed 404 page, for anything no route or file matches.
@@ -67,13 +80,13 @@ pub(crate) mod test_support {
         // Credentials are only read here; nothing connects.
         let credentials = public_html.join("test.my.cnf");
         std::fs::write(&credentials, "[client]\nuser=test\npassword=test\n").unwrap();
-        let config = crate::config::Config {
-            public_html: public_html.to_path_buf(),
-            replica_credentials: credentials,
-            tool_db: Default::default(),
-            flickr_key_file: None,
-            telemetry: Default::default(),
-        };
+        let config: crate::config::Config = serde_json::from_value(serde_json::json!({
+            "public_html": public_html,
+            "replica_credentials": credentials,
+            "buggregator_oauth": public_html.join("none.ini"),
+            "uploader_oauth": public_html.join("none.ini"),
+        }))
+        .unwrap();
         let state = AppState::new(config).unwrap();
         let request = Request::get(uri).body(Body::empty()).unwrap();
         let response = router(Arc::new(state)).oneshot(request).await.unwrap();
@@ -87,6 +100,27 @@ pub(crate) mod test_support {
 #[cfg(test)]
 mod tests {
     use super::test_support::get;
+    use super::*;
+
+    #[test]
+    fn same_origin() {
+        let headers = |pairs: &[(&'static str, &str)]| {
+            let mut h = HeaderMap::new();
+            for (k, v) in pairs {
+                h.insert(*k, v.parse().unwrap());
+            }
+            h
+        };
+        assert!(is_same_origin(&headers(&[("sec-fetch-site", "same-origin")])));
+        assert!(!is_same_origin(&headers(&[
+            ("sec-fetch-site", "cross-site"),
+            ("host", "a.org"),
+            ("referer", "https://a.org/")
+        ])));
+        assert!(is_same_origin(&headers(&[("host", "a.org"), ("referer", "https://a.org/buggregator/")])));
+        assert!(!is_same_origin(&headers(&[("host", "a.org"), ("origin", "https://a.org.evil.com")])));
+        assert!(!is_same_origin(&headers(&[("host", "a.org")])));
+    }
 
     #[tokio::test]
     async fn health_and_stylesheet() {
