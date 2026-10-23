@@ -33,7 +33,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
 tower-http = { version = "0.7", features = ["fs", "trace", "timeout", "compression-gzip", "compression-br", "catch-panic", "set-header"] }
 tracing = "0.1"
-wikimisc = { git = "https://github.com/magnusmanske/wikimisc", features = ["database", "http", "logging", "server", "telemetry", "telemetry-wire", "toolforge"] }
+wikimisc = { git = "https://github.com/magnusmanske/wikimisc", features = ["database", "escape", "http", "logging", "server", "telemetry", "telemetry-wire", "toolforge"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

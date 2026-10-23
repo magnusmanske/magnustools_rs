@@ -1,6 +1,7 @@
 //! The tools, one module each, at the URLs of their PHP originals.
 
 mod authority_control;
+mod bong;
 mod cas;
 mod commonsapi;
 mod coord_gen;
@@ -35,6 +36,7 @@ type State = Arc<AppState>;
 pub fn routes() -> Router<State> {
     let tools: Vec<(&str, MethodRouter<State>)> = vec![
         ("authority_control", get(authority_control::handler).post(authority_control::handler)),
+        ("bong", get(bong::handler)),
         ("cas", get(cas::handler)),
         ("commonsapi", get(commonsapi::handler)),
         ("coord_gen", get(coord_gen::handler).post(coord_gen::handler)),

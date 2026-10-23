@@ -101,6 +101,21 @@ pub async fn category_files(
     Ok(files)
 }
 
+/// The text of an HTML snippet, such as a search result's: tags removed, references decoded.
+pub fn html_to_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            c if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    wikimisc::escape::unescape_html(&text).into_owned()
+}
+
 /// `title` without a leading `Namespace:` from `namespaces` (case-insensitive).
 pub fn strip_namespace<'a>(title: &'a str, namespaces: &[&str]) -> Option<&'a str> {
     let (namespace, rest) = title.split_once(':')?;
@@ -110,6 +125,11 @@ pub fn strip_namespace<'a>(title: &'a str, namespaces: &[&str]) -> Option<&'a st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_of_html() {
+        assert_eq!(html_to_text(r#"A <span class="searchmatch">warthog</span> &amp; &lt;b&gt;"#), "A warthog & <b>");
+    }
 
     #[test]
     fn namespaces() {

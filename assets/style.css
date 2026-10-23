@@ -124,6 +124,11 @@ th { font-weight: 600; color: var(--muted); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table-wrap { overflow-x: auto; }
 
+.thumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.thumbs img { max-width: 180px; max-height: 180px; border-radius: var(--radius); }
+ul.hits { list-style: none; padding: 0; }
+ul.hits li { margin: 0 0 1rem; }
+
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
 

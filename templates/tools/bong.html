@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">One search box for Wikimedia: the encyclopedia, images, audio and video, news, a dictionary, and places.</p>
+<nav class="groups">
+{% for tab in tabs %}
+  {% if tab.current %}<strong>{{ tab.label }}</strong>{% else %}<a href="{{ tab.url }}">{{ tab.label }}</a>{% endif %}
+{% endfor %}
+</nav>
+<form method="get" action="/bong/">
+  <input type="hidden" name="mode" value="{{ mode }}">
+  <label>Search <input type="search" name="q" value="{{ q }}" required autofocus></label>
+  <button>BONG</button>
+</form>
+{% if let Some(hits) = hits %}
+{% if hits.is_empty() %}
+<p class="muted">Nothing found.</p>
+{% else if grid %}
+<div class="thumbs">
+{% for hit in hits %}
+  <a href="{{ hit.url }}" title="{{ hit.title }}">{% if let Some(thumbnail) = hit.thumbnail %}<img loading="lazy" src="{{ thumbnail }}" alt="{{ hit.title }}">{% else %}{{ hit.title }}{% endif %}</a>
+{% endfor %}
+</div>
+{% else %}
+<ul class="hits">
+{% for hit in hits %}
+  <li>
+    {% if let Some(thumbnail) = hit.thumbnail %}<a href="{{ hit.url }}"><img loading="lazy" src="{{ thumbnail }}" alt=""></a>{% endif %}
+    <a href="{{ hit.url }}"><strong>{{ hit.title }}</strong></a>
+    {% if !hit.text.is_empty() %}<br><span class="muted">{{ hit.text }}</span>{% endif %}
+  </li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+{% endblock %}
