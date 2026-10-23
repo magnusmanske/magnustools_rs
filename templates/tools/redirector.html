@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Redirects a Wikipedia may want: for the articles in a category tree, the titles of the same article in other Wikipedias, and the redirects to those, that articles here already link to.</p>
+<form method="get" action="/redirector/">
+  <label>Wikipedia language <input type="text" name="language" value="{{ request.language }}" required style="max-width:8rem"></label>
+  <label>Category <input type="text" name="category" value="{{ request.category }}" required></label>
+  <label>Subcategory depth <input type="number" name="depth" min="0" max="10" value="{{ depth }}" style="max-width:6rem"></label>
+  <label class="check"><input type="checkbox" name="hidezero" value="1"{% if hide_unwanted %} checked{% endif %}> Only titles that are linked to</label>
+  <button name="doit" value="1">Find redirects</button>
+</form>
+<p class="hint">Titles come from these Wikipedias: {{ languages }}.</p>
+{% if let Some(results) = results %}
+<h2>{{ results.rows.len() }} of {{ results.pages }} articles could use redirects</h2>
+{% if results.truncated %}<p class="muted">The category tree is larger; only the first {{ results.pages }} articles were checked.</p>{% endif %}
+<div class="table-wrap">
+<table>
+  <tr><th>Article</th><th>Missing redirects</th><th>Existing pages</th></tr>
+{% for row in results.rows %}
+  <tr>
+    <td><a href="{{ row.url }}">{{ row.title }}</a></td>
+    <td>
+    {% for c in row.missing %}
+      <form method="post" action="{{ results.index_url }}?title={{ c.title|urlencode }}&amp;action=submit" target="_blank" class="inline">
+        <input type="hidden" name="wpTextbox1" value="{{ c.redirect }}">
+        <input type="hidden" name="wpSummary" value="Redirect to [[{{ row.title }}]] (found with https://magnustools.toolforge.org/redirector/)">
+        <input type="hidden" name="wpDiff" value="1">
+        <button class="link" title="Create the redirect">{{ c.title }}</button>
+        <span class="hint">{{ c.links }}× linked · {{ c.languages }}</span>
+      </form>
+    {% endfor %}
+    </td>
+    <td>
+    {% for c in row.existing %}
+      <a href="{{ c.url }}">{{ c.title }}</a> <span class="hint">{{ c.links }}× · {{ c.languages }}</span><br>
+    {% endfor %}
+    </td>
+  </tr>
+{% endfor %}
+</table>
+</div>
+<p class="hint">A missing title opens the wiki's edit form, ready to save as a redirect.</p>
+{% endif %}
+{% endblock %}

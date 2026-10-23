@@ -116,6 +116,8 @@ button {
   cursor: pointer;
 }
 button:hover { filter: brightness(1.08); }
+form.inline { display: block; max-width: none; }
+button.link { background: none; color: var(--accent); padding: 0; font-weight: normal; }
 
 /* Results */
 table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
