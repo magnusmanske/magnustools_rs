@@ -38,10 +38,10 @@ All web-facing functionality should have a common UI/UX theme, minimalist, sleek
 | M0b ✓ | `wikimisc`: `telemetry-wire` feature with the shared push format. |
 | M1 ✓ | Stateless: html2wiki, tab2wiki, spacer, cas, get_article_intro, authority_control, flickrfree, commonsapi (now API-based), prepbio, wiki2playlist (category mode via API), wp_data_url (drop webp, cap fetches, sandboxed) |
 | M2 ✓ | Replica DB: get_distinct_authors, quick_counter, herding_sheep, metronom, randomarticle, random_image_commons_subcat, unused_files; fix transparent (actor/linktarget) and uploader_distribution (direct DB intersection instead of dead quick-intersection) |
-| M3 | `logger.php` (exact responses, JSONP fixed) and the main page from DB |
-| M4 | Buggregator backend: `api.php` (all actions; writes POST-only with CSRF check; no SQL in output), `ingest.php` (exact contract, tested against the `wikimisc` client), OAuth 1.0a |
-| M5 | `oauth_uploader.php` (check how callers use it cross-site first; `site` allowlist) |
-| M6 | Jobs: buggregator update/toolhub/webstatus/toolinfo, dashboard maintenance, monitor (mail via Toolforge SMTP) |
+| M3 ✓ | `logger.php` (exact responses, JSONP fixed) and the main page from DB |
+| M4 ✓ | Buggregator backend: `api.php` (all actions; writes POST-only with CSRF check; no SQL in output), `ingest.php` (exact contract, tested against the `wikimisc` client), OAuth 1.0a |
+| M5 ✓ | `oauth_uploader.php` (`site` allowlist; downloads only from the public internet) |
+| M6 ✓ | Jobs: buggregator update (with Toolhub), webstatus, dashboard maintenance, monitor (mail via Toolforge SMTP); `jobs.yaml`. toolinfo_buggregator.json is served live. |
 | Cutover | Diff old vs new responses per endpoint, switch webservice and jobs. Rollback = restart the PHP webservice/jobs. |
 
 Phase 2: triage the ~93 magnus-toolserver scripts into port / redirect / drop, then port.

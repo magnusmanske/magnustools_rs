@@ -1,0 +1,10 @@
+<html>
+<body>
+{% for (tool, alerts) in alerts.0 %}
+<h2>{{ tool }}</h2>
+<ul>
+{% for alert in alerts %}<li>{{ alert }}</li>
+{% endfor %}</ul>
+{% endfor %}
+</body>
+</html>

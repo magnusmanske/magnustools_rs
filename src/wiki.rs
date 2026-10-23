@@ -56,6 +56,22 @@ impl Wiki {
         Self::new(language, project)
     }
 
+    /// From a database name: `enwiki`, `dewikisource`, `commonswiki`, …
+    pub fn from_dbname(dbname: &str) -> Result<Self, UnknownWiki> {
+        let dbname = dbname.trim().trim_end_matches("_p");
+        if let Some((name, ..)) = SPECIAL_WIKIS.iter().find(|(.., db)| *db == dbname) {
+            return Ok(Self::special(name));
+        }
+        let unknown = || UnknownWiki { language: dbname.to_string(), project: String::new() };
+        let (language, project) = LANGUAGE_PROJECTS
+            .iter()
+            .filter(|p| **p != "wikipedia")
+            .find_map(|p| dbname.strip_suffix(p).map(|l| (l, *p)))
+            .or_else(|| dbname.strip_suffix("wiki").map(|l| (l, "wikipedia")))
+            .ok_or_else(unknown)?;
+        Self::new(&language.replace('_', "-"), project)
+    }
+
     fn special(name: &str) -> Self {
         let (_, host, dbname) = SPECIAL_WIKIS.iter().find(|(n, ..)| *n == name).copied().unwrap_or(SPECIAL_WIKIS[0]);
         Self { host: host.to_string(), dbname: dbname.to_string() }
@@ -172,6 +188,13 @@ mod tests {
         assert_eq!(dbname("en", "wikidata"), "wikidatawiki");
         assert_eq!(Wiki::from_domain_prefix("fr.wiktionary").unwrap().dbname(), "frwiktionary");
         assert!(Wiki::from_domain_prefix("enwiki").is_err());
+        let host = |db: &str| Wiki::from_dbname(db).map(|w| w.host().to_string());
+        assert_eq!(host("metawiki").as_deref(), Ok("meta.wikimedia.org"));
+        assert_eq!(host("dewiki").as_deref(), Ok("de.wikipedia.org"));
+        assert_eq!(host("zh_min_nanwiki").as_deref(), Ok("zh-min-nan.wikipedia.org"));
+        assert_eq!(host("frwikisource_p").as_deref(), Ok("fr.wikisource.org"));
+        assert_eq!(host("wikidatawiki").as_deref(), Ok("www.wikidata.org"));
+        assert!(Wiki::from_dbname("nonsense").is_err());
     }
 
     #[test]

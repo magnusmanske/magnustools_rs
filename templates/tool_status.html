@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block head %}<meta http-equiv="refresh" content="1800">{% endblock %}
+{% block content %}
+<table>
+{% for (tool, alerts) in alerts.0 %}
+  <tr>
+    <th>{{ tool }}</th>
+    {% if alerts.is_empty() %}<td>Nominal</td>{% else %}<td class="error">{% for alert in alerts %}<div>{{ alert }}</div>{% endfor %}</td>{% endif %}
+  </tr>
+{% endfor %}
+</table>
+<p class="muted">Last update: {{ updated }}</p>
+<p class="hint">If you see an error here, Magnus has received an automated email about it; no need to contact him.</p>
+{% endblock %}

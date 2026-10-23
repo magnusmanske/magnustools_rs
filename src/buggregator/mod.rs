@@ -6,6 +6,8 @@ mod api;
 pub mod dashboard;
 mod ingest;
 pub mod issues;
+mod toolinfo;
+pub mod update;
 
 use crate::state::AppState;
 use axum::Router;
@@ -16,4 +18,5 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/buggregator/api.php", get(api::handler).post(api::handler))
         .route("/buggregator/ingest.php", any(ingest::handler))
+        .route("/toolinfo_buggregator.json", get(toolinfo::handler))
 }

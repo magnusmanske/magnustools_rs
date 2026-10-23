@@ -35,9 +35,51 @@ pub struct Config {
     /// The Flickr API key, alone in a file; without it, `flickrfree.php` is unavailable.
     #[serde(default)]
     pub flickr_key_file: Option<PathBuf>,
+    #[serde(default)]
+    pub monitor: MonitorConfig,
     /// Service dashboard push; the token may also come from `$DASHBOARD_TOKEN`.
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+}
+
+/// The `monitor` job: checks tools, writes `tool_status.html` into
+/// `public_html`, and mails new alerts.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MonitorConfig {
+    /// Without an address, alerts are only logged.
+    #[serde(default)]
+    pub mail_to: Option<String>,
+    #[serde(default = "default_mail_from")]
+    pub mail_from: String,
+    #[serde(default = "default_smtp_host")]
+    pub smtp_host: String,
+    /// The last alert mail, so that an unchanged situation is mailed only once.
+    #[serde(default = "default_monitor_state")]
+    pub state_file: PathBuf,
+}
+
+impl Default for MonitorConfig {
+    fn default() -> Self {
+        Self {
+            mail_to: None,
+            mail_from: default_mail_from(),
+            smtp_host: default_smtp_host(),
+            state_file: default_monitor_state(),
+        }
+    }
+}
+
+fn default_mail_from() -> String {
+    "Tool monitor <tools.magnustools@toolforge.org>".to_string()
+}
+
+fn default_smtp_host() -> String {
+    "mail.tools.wmcloud.org".to_string()
+}
+
+fn default_monitor_state() -> PathBuf {
+    "monitor_last_message.html".into()
 }
 
 fn default_replica_credentials() -> PathBuf {
@@ -68,6 +110,7 @@ impl Config {
         config.replica_credentials = dir.join(&config.replica_credentials);
         config.buggregator_oauth = dir.join(&config.buggregator_oauth);
         config.uploader_oauth = dir.join(&config.uploader_oauth);
+        config.monitor.state_file = dir.join(&config.monitor.state_file);
         Ok(config)
     }
 }

@@ -1,0 +1,26 @@
+# Toolforge jobs: `toolforge jobs load jobs.yaml`. Each runs `job <command>`
+# (see the Procfile) in the image that ./build.sh makes.
+- name: buggregator-update
+  command: job buggregator-update
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "37 3 * * *"
+  mount: all
+  emails: onfailure
+- name: webstatus
+  command: job webstatus
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "5,35 * * * *"
+  mount: all
+  emails: onfailure
+- name: dashboard-maintenance
+  command: job dashboard-maintenance
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "27 * * * *"
+  mount: all
+  emails: onfailure
+- name: tool-monitor
+  command: job monitor
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "15,45 * * * *"
+  mount: all
+  emails: onfailure

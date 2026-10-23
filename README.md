@@ -27,8 +27,13 @@ types are served (`src/web/static_files.rs`). Pages share one layout
 ## Deploy (Toolforge)
 
 `./build.sh` builds the image. The webservice reads
-`$TOOL_DATA_DIR/magnustools_rs.json` (see `Procfile`) and needs NFS mounted
-for `public_html`.
+`$TOOL_DATA_DIR/magnustools_rs.json` (see `Procfile` and
+`config.json.template`) and needs NFS mounted for `public_html`. The jobs
+are in `jobs.yaml`; the same binary runs them (`magnustools_rs --help`).
+
+For local work on anything that writes to the tool database, point
+`tool_db.url` at a local copy (`mysql://user@localhost/db?socket=…`);
+`sql/buggregator.sql` has the schema.
 
 ## License
 

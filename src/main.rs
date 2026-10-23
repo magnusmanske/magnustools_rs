@@ -1,11 +1,12 @@
 use anyhow::Result;
 use clap::Parser;
+use magnustools_rs::jobs::{self, Command};
 use magnustools_rs::{config::Config, state::AppState, web};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wikimisc::telemetry::Telemetry;
 
-/// The magnustools web service.
+/// The magnustools web service; or, with a command, one of its jobs.
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Cli {
@@ -15,6 +16,8 @@ struct Cli {
     /// Port to listen on. Toolforge sets `PORT`.
     #[arg(long, env = "PORT", default_value_t = 8000)]
     port: u16,
+    #[command(subcommand)]
+    command: Option<Command>,
 }
 
 #[tokio::main]
@@ -22,6 +25,10 @@ async fn main() -> Result<()> {
     wikimisc::logging::init();
     let cli = Cli::parse();
     let config = Config::load(&cli.config)?;
+    if let Some(command) = cli.command {
+        let state = AppState::new(config)?;
+        return jobs::run(command, &state).await;
+    }
     // `server::serve` drains requests on SIGTERM, then sends the final push.
     Telemetry::builder("web")
         .config(&config.telemetry)

@@ -1,4 +1,12 @@
 {
   "public_html": "/data/project/magnustools/public_html",
+  "public_url": "https://magnustools.toolforge.org",
+  "replica_credentials": "replica.my.cnf",
+  "tool_db": { "database": "{user}__buggregator" },
+  "cookie_key": "<128 hex digits: openssl rand -hex 64>",
+  "buggregator_oauth": "buggregator_oauth.ini",
+  "uploader_oauth": "oauth.ini",
+  "flickr_key_file": "flickr_key.txt",
+  "monitor": { "mail_to": "<address for alerts>" },
   "telemetry": { "token": "<dashboard token; or set $DASHBOARD_TOKEN>" }
 }
