@@ -1,7 +1,7 @@
 //! `herding_sheep.php`: recent article edits by a group of users, given as
 //! a category of user pages or as a list.
 
-use crate::replicas::{db_title, display_title, select_in};
+use crate::replicas::{db_title, display_title, format_timestamp, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::{Wiki, encode_component};
@@ -178,12 +178,6 @@ impl Bound {
     }
 }
 
-/// `20240102030405` as `2024-01-02 03:04:05`.
-fn format_timestamp(ts: &str) -> String {
-    let part = |range: std::ops::Range<usize>| ts.get(range).unwrap_or_default();
-    format!("{}-{}-{} {}:{}:{}", part(0..4), part(4..6), part(6..8), part(8..10), part(10..12), part(12..14))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,11 +189,6 @@ mod tests {
         assert_eq!(Bound::parse("", '9').unwrap().0, "99999999999999");
         assert!(Bound::parse("2024' OR 1", '0').is_err());
         assert!(Bound::parse("202401010000000", '0').is_err());
-    }
-
-    #[test]
-    fn timestamps() {
-        assert_eq!(format_timestamp("20240102030405"), "2024-01-02 03:04:05");
     }
 
     #[test]

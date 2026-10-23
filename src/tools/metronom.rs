@@ -1,5 +1,6 @@
 //! `metronom.php`: page views in one month of the articles a user created.
 
+use crate::replicas::format_date;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render, thousands};
 use crate::wiki::{Wiki, encode_component};
@@ -114,7 +115,12 @@ async fn results(
     let mut articles: Vec<Article> = created
         .into_iter()
         .take(MAX_ARTICLES)
-        .map(|(title, timestamp)| Article { url: wiki.page_url(&title), created: date(&timestamp), title, views: None })
+        .map(|(title, timestamp)| Article {
+            url: wiki.page_url(&title),
+            created: format_date(&timestamp),
+            title,
+            views: None,
+        })
         .collect();
 
     let project = wiki.host().trim_end_matches(".org").to_string();
@@ -153,12 +159,6 @@ async fn results(
         article.title = article.title.replace('_', " ");
     }
     Ok(Results { articles, started, capped, total: thousands(total), failed })
-}
-
-/// `20240102…` as `2024-01-02`.
-fn date(timestamp: &str) -> String {
-    let part = |range: std::ops::Range<usize>| timestamp.get(range).unwrap_or_default();
-    format!("{}-{}-{}", part(0..4), part(4..6), part(6..8))
 }
 
 /// Views in the month; no data (e.g. a new article) counts as none. `None` if the API failed.

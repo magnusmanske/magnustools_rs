@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">For the files in a category tree, optionally also in other category trees: how many of the tree's categories each uploader contributed files to.</p>
+<form method="get" action="uploader_distribution.php">
+  <label>Language <input type="text" name="lang" value="{{ request.lang }}" required></label>
+  <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  <label>Category tree <input type="text" name="cat1" value="{{ request.cat1 }}" required></label>
+  <label>Only files also in <span class="hint">optional; one category (tree) per line</span>
+    <textarea name="cat2" rows="4">{{ request.cat2 }}</textarea>
+  </label>
+  <button name="doit" value="1">Show uploaders</button>
+</form>
+{% if let Some(results) = results %}
+<h2>{{ results.uploaders.len() }} uploaders of {{ results.files }} files</h2>
+{% if results.capped %}<p class="muted">Only the first {{ results.files }} files are counted.</p>{% endif %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Uploader</th><th class="num">Categories</th><th></th></tr></thead>
+  <tbody>
+  {% for uploader in results.uploaders %}
+    <tr>
+      <td><a href="{{ uploader.url }}">{{ uploader.name }}</a></td>
+      <td class="num">{{ uploader.categories.len() }}</td>
+      <td><details><summary class="hint">Show</summary>{{ uploader.categories.join(", ") }}</details></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

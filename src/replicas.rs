@@ -141,6 +141,17 @@ pub fn db_title(title: &str) -> String {
     chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
+/// A database timestamp (`20240102030405`) as `2024-01-02 03:04:05`.
+pub fn format_timestamp(ts: &str) -> String {
+    let part = |range: std::ops::Range<usize>| ts.get(range).unwrap_or_default();
+    format!("{}-{}-{} {}:{}:{}", part(0..4), part(4..6), part(6..8), part(8..10), part(10..12), part(12..14))
+}
+
+/// A database timestamp's date, as `2024-01-02`.
+pub fn format_date(ts: &str) -> String {
+    format_timestamp(ts).get(0..10).unwrap_or_default().to_string()
+}
+
 /// A database title for display.
 pub fn display_title(title: &str) -> String {
     title.replace('_', " ")
@@ -156,5 +167,7 @@ mod tests {
         assert_eq!(display_title("A_b"), "A b");
         assert_eq!(placeholders(3), "?,?,?");
         assert_eq!(placeholders(0), "");
+        assert_eq!(format_timestamp("20240102030405"), "2024-01-02 03:04:05");
+        assert_eq!(format_date("20240102030405"), "2024-01-02");
     }
 }

@@ -98,7 +98,7 @@ impl fmt::Display for Wiki {
 }
 
 /// `en`, `simple`, `zh-min-nan`, `be-tarask`, …
-fn is_language_code(code: &str) -> bool {
+pub fn is_language_code(code: &str) -> bool {
     (2..=20).contains(&code.len())
         && code.starts_with(|c: char| c.is_ascii_lowercase())
         && !code.ends_with('-')

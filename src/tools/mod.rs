@@ -14,7 +14,9 @@ mod quick_counter;
 mod random_page;
 mod spacer;
 mod tab2wiki;
+mod transparent;
 mod unused_files;
+mod uploader_distribution;
 mod wiki2playlist;
 mod wp_data_url;
 
@@ -40,7 +42,9 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/randomarticle.php", get(random_page::article))
         .route("/spacer.php", get(spacer::handler))
         .route("/tab2wiki.php", get(tab2wiki::handler).post(tab2wiki::handler))
+        .route("/transparent.php", get(transparent::handler).post(transparent::handler))
         .route("/unused_files.php", get(unused_files::handler))
+        .route("/uploader_distribution.php", get(uploader_distribution::handler))
         .route("/wiki2playlist.php", get(wiki2playlist::handler))
         .route("/wp_data_url.php", get(wp_data_url::handler))
 }

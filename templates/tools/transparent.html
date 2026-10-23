@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Find a translator: users of a wiki who are native speakers of another language (by their babel box), most recently active first.</p>
+<form method="get" action="transparent.php">
+  <label>Wiki language <input type="text" name="planguage" value="{{ request.planguage }}" required></label>
+  <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  <label>Native language <span class="hint">language code, e.g. de</span>
+    <input type="text" name="tlanguage" value="{{ request.tlanguage }}" required>
+  </label>
+  <button name="doit" value="1">Find translators</button>
+</form>
+{% if let Some(translators) = translators %}
+<h2>Recently active members of <a href="{{ category_url }}">User {{ request.tlanguage }}-N</a></h2>
+{% if translators.is_empty() %}
+<p class="muted">None was active in the last 30 days.</p>
+{% else %}
+<table>
+  <thead><tr><th>User</th><th>Last edit</th></tr></thead>
+  <tbody>
+  {% for t in translators %}
+    <tr><td><a href="{{ t.url }}">{{ t.name }}</a></td><td>{{ t.last_edit }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+{% endblock %}
