@@ -6,6 +6,9 @@ Wikimedia projects, the tool list, a usage logger, an OAuth uploader, and the
 [Buggregator](https://magnustools.toolforge.org/buggregator/) issue tracker
 and service dashboard.
 
+It also hosts what is left of [magnus-toolserver](https://codeberg.org/magnusmanske/magnus-toolserver),
+whose addresses all redirect to the same path here.
+
 This replaces the PHP version, [magnustools on Codeberg](https://codeberg.org/magnusmanske/magnustools/).
 That repository stays in use for what is not a web service: the PHP library
 other tools include, the shared static files (`public_html/resources/`), and
@@ -20,19 +23,25 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 |---|---|
 | `/` | The list of all tools |
 | `/authority_control/` | VIAF lookup (JSON/JSONP) |
+| `/bong/` | One search box over Wikipedia, Commons, Wikinews, Wiktionary, places |
 | `/cas/` | Links for a CAS registry number |
-| `/commonsapi/` | XML summary of Commons files |
+| `/commonsapi/` | XML (or JSON) summary of Commons files |
+| `/coord_gen/` | German Wikipedia's `{{Coordinate}}` from degrees |
 | `/flickrfree/` | Latest freely licensed Flickr photos |
+| `/forest4trees/` | Articles that may be missing from a category tree |
 | `/get_article_intro/` | An article's first paragraph (JSON/JSONP) |
 | `/get_distinct_authors/` | Who edited a set of articles |
 | `/herding_sheep/` | Recent edits by a group of users |
 | `/html2wiki/`, `/tab2wiki/` | HTML or spreadsheet tables to wiki markup |
 | `/logger/` | Counts tool uses (JSON/JSONP) |
 | `/metronom/` | Page views of the articles a user started |
+| `/misstake/` | Red links on some pages, ranked by how wanted they are |
 | `/oauth_uploader/` | Uploads to Commons under the user's account |
 | `/prepbio/` | Wikitext for a new biography |
 | `/quick_counter/` | A user's edits per namespace |
 | `/randomarticle/`, `/random_image_commons_subcat/` | A random page from a category tree |
+| `/redirector/` | Redirects a Wikipedia may want, from other languages' titles |
+| `/related_places/` | The places a page links to, on a map, as KML or GeoJSON |
 | `/spacer/` | Links for a spacecraft designator |
 | `/transparent/` | Find a translator |
 | `/unused_files/` | Commons files not used in articles |
@@ -45,7 +54,9 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 
 Anything else is a static file from the PHP checkout's `public_html`, if its
 type is on an allowlist (`src/web/static_files.rs`); retired pages redirect or
-answer 410 (`src/web/legacy.rs`).
+answer 410 (`src/web/legacy.rs`). From magnus-toolserver, the checkout has
+`ts2/geneawiki/` (family trees from Wikidata), `thetalkpage/`, and the
+`commcomm/` files that Commons' `MediaWiki:Commander.js` loads.
 
 ## Code
 

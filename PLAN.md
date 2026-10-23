@@ -44,7 +44,25 @@ All web-facing functionality should have a common UI/UX theme, minimalist, sleek
 | M6 ✓ | Jobs: buggregator update (with Toolhub), webstatus, dashboard maintenance, monitor (mail via Toolforge SMTP); `jobs.yaml`. toolinfo_buggregator.json is served live. |
 | Cutover ✓ | 2026-10-23: webservice and jobs switched to Rust; smoke test 23/23. Tools moved to `/<name>/`, `.php` redirects. Rollback: `toolforge webservice stop && toolforge webservice -r 4 php8.4 start`, PHP jobs from `tjs`. |
 
-Phase 2: triage the ~93 magnus-toolserver scripts into port / redirect / drop, then port.
+## Phase 2: magnus-toolserver
+magnus-toolserver becomes a pure redirect: every path goes to the same path on magnustools, which serves what is kept. Nearly all of its ~93 scripts were broken (missing libraries, dead Toolserver services); triage used the error log (Aug–Oct 2026; ~30 hits = crawler baseline) and links from the wikis.
+
+| # | Content |
+|---|---|
+| T0 ✓ | 2026-10-23: removed live security holes on magnus-toolserver: two open proxies (`normdaten/ba-simple-proxy.php`, `ts2/php/proxy.php`, plus `ts2/resources/proxy.php`) and 47 exposed `.svn/` directories. Archived in `~/quarantine-2026-10-23/` (tool home, not served). |
+| T1 ✓ | Redirects and 410s (`src/web/legacy.rs`); kept static files into the magnustools checkout |
+| T2 ✓ | commonsapi parity: `format=json`, JSONP `callback`, `sdc` |
+| T3 ✓ | Ported: coord_gen, bong, redirector, misstake |
+| T4 ✓ | Ported: forest4trees, related_places |
+| T5 | Switch magnus-toolserver to a redirect; tool table updated |
+
+Ported (as `/<name>/`, `.php` redirects): `misstake` (most traffic), `redirector`, `coord_gen`, `forest4trees`, `related_places` (rewritten on `geo_tags`, Leaflet map, KML/GeoJSON), `bong` (maps now from Wikipedia coordinates; GeoNames needs an account). `commonsapi.php` redirects to the magnustools one.
+
+Static, in the magnustools checkout: `ts2/geneawiki/`, `ts2/geneawiki2/` and the ts2 assets they load (~80 wiki links; Bootstrap now from tools-static), `thetalkpage/` (+ `lib/jquery-1.5.2.min.js`), and `commcomm/{jquery.contextMenu.js,jquery.contextmenu.css,wpinclude.css}` (loaded by Commons' `MediaWiki:Commander.js`).
+
+Redirects: FIST (`missing_images`, `watchflickr`, `fist_api`, `fist_old`, `ts2/fist/`), Flickr2Commons (`flickr_mass`, `ts2/flickr2commons/`), GLAMorous (`amalglamate`, `ts2/glamorous/`), glamtools treeviews (`treeviews`, `ts2/treeviews/`), CommonsHelper (`pushforcommons`, `pushforcommons2`), PetScan (`files_in_category`, `PDator`), sigma Editor Interaction (`familiar`), Reasonator (`ts2/reasonator/`), the main page (`ts2/`, `ts2/main/`), Special:Commander on Commons (`commcomm/?category=`).
+
+410: everything else (list in `legacy.rs`): dead backends (Toolserver user DBs, wiki2xml, TUSC, stats.grok.se, Google Books GData, Sifter DBs, scraped sites), removed MediaWiki features (Persondata, `rev_user`, `img_user_text`), libraries (`class_*`, `queryclass`, `phpdiff`, `wf_funs`, `xml2json`, `transwiki_data`), bots, test leftovers; `normdaten/` and dead `ts2/` tools. Not ported despite working ideas: `summarizer`, `filterdone`, `creationist` (crawler traffic only), `familiar` (sigma does it).
 
 ## Endpoint dispositions
 Port (M1–M5): all endpoints listed in the milestones.
