@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Wikitext for a new English Wikipedia biography: intro, infobox, categories and authority control.</p>
+<form method="get" action="prepbio.php">
+  <label>Pre-fill from Wikidata <span class="hint">optional; e.g. Q42</span>
+    <input type="text" name="q" value="{{ q }}" placeholder="Q42">
+  </label>
+  <button>Pre-fill</button>
+</form>
+
+{% if let Some(wikitext) = wikitext %}
+<h2>Wikitext</h2>
+<textarea class="code" rows="24" readonly>{{ wikitext }}</textarea>
+{% endif %}
+
+<h2>Details</h2>
+<form method="post" action="prepbio.php">
+{% for field in fields %}
+  <label>{{ field.label }}{% if !field.hint.is_empty() %} <span class="hint">{{ field.hint }}</span>{% endif %}
+    <input type="text" name="{{ field.name }}" value="{{ field.value }}">
+  </label>
+{% endfor %}
+  <label>Categories <span class="hint">one per line</span>
+    <textarea name="categories" rows="3">{{ categories }}</textarea>
+  </label>
+  <label>External links <span class="hint">one URL per line</span>
+    <textarea name="externallinks" rows="3">{{ external_links }}</textarea>
+  </label>
+  <label class="check"><input type="checkbox" name="stub" value="1"{% if stub %} checked{% endif %}> Stub</label>
+  <label class="check"><input type="checkbox" name="create_infobox" value="1"{% if infobox %} checked{% endif %}> Infobox</label>
+  <label class="check"><input type="checkbox" name="brief_infobox" value="1"{% if brief_infobox %} checked{% endif %}> Brief infobox <span class="hint">(only filled-in fields)</span></label>
+  <button name="doit" value="1">Generate wikitext</button>
+</form>
+{% endblock %}

@@ -5,6 +5,7 @@ mod cas;
 mod flickrfree;
 mod get_article_intro;
 mod html2wiki;
+mod prepbio;
 mod spacer;
 mod tab2wiki;
 mod wiki2playlist;
@@ -22,6 +23,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/flickrfree.php", get(flickrfree::handler))
         .route("/get_article_intro.php", get(get_article_intro::handler))
         .route("/html2wiki.php", get(html2wiki::handler).post(html2wiki::handler))
+        .route("/prepbio.php", get(prepbio::handler).post(prepbio::handler))
         .route("/spacer.php", get(spacer::handler))
         .route("/tab2wiki.php", get(tab2wiki::handler).post(tab2wiki::handler))
         .route("/wiki2playlist.php", get(wiki2playlist::handler))
