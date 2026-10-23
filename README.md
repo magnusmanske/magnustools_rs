@@ -11,6 +11,15 @@ cp config.json.template config.json   # point public_html at a magnustools check
 cargo run -- --port 8000
 ```
 
+Database tools need the tool's `replica.my.cnf` next to `config.json` (or
+wherever `replica_credentials` points), with `local='true'` and a
+`[tunnels]` section giving each tunnel a local port (see the `toolforge`
+crate). Then open the tunnels with:
+
+```bash
+TOOL_DATA_DIR=$PWD toolforge-tunnel
+```
+
 Static files come from the PHP tool's `public_html`; only allowlisted file
 types are served (`src/web/static_files.rs`). Pages share one layout
 (`templates/base.html`) and stylesheet (`assets/style.css`).
