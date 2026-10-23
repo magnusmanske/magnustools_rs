@@ -4,6 +4,7 @@
 //! whose every address redirects to the same path here.
 
 use super::{AppError, Params, moved};
+use crate::mediawiki::strip_namespace;
 use crate::wiki::encode_component;
 use axum::Router;
 use axum::response::{IntoResponse, Redirect};
@@ -172,7 +173,8 @@ struct CommanderRequest {
 /// Its old page took a category to open.
 async fn commander(Params(request): Params<CommanderRequest>) -> Redirect {
     const COMMANDER: &str = "https://commons.wikimedia.org/w/index.php?title=Special:Commander";
-    match request.category.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+    let category = request.category.as_deref().map(|c| strip_namespace(c, &["category"]).unwrap_or(c).trim());
+    match category.filter(|c| !c.is_empty()) {
         Some(category) => {
             Redirect::permanent(&format!("{COMMANDER}&pane1=cat&cat1={}&run1=1&pane2=cat", encode_component(category)))
         }

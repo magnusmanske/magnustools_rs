@@ -66,6 +66,9 @@ impl Angle {
         let degrees = number(degrees, max + 1)?.ok_or("Degrees are missing.")?;
         let minutes = number(minutes, 60)?;
         let seconds = minutes.and(number(seconds, 60)?);
+        if degrees == max && minutes.unwrap_or_default() + seconds.unwrap_or_default() > 0 {
+            return Err(format!("{degrees}° is the most there is."));
+        }
         let directions = if max == 90 { ['N', 'S'] } else { ['E', 'W'] };
         let direction = direction.trim().chars().next().filter(|d| directions.contains(d)).unwrap_or(directions[0]);
         Ok(Self { degrees, minutes, seconds, direction })
@@ -211,6 +214,9 @@ mod tests {
     fn bad_input() {
         assert!(rows(&request(["91", "", "", "N"], ["0", "", "", "E"])).is_err());
         assert!(rows(&request(["10", "60", "", "N"], ["0", "", "", "E"])).is_err());
+        assert!(rows(&request(["90", "30", "", "N"], ["0", "", "", "E"])).is_err());
+        assert!(rows(&request(["90", "0", "30", "N"], ["0", "", "", "E"])).is_err());
+        assert!(rows(&request(["90", "0", "0", "N"], ["180", "", "", "W"])).is_ok());
         assert!(rows(&request(["", "", "", "N"], ["0", "", "", "E"])).is_err());
         let mut r = request(["1", "", "", "N"], ["2", "", "", "E"]);
         r.data_size = "1|evil=1".into();

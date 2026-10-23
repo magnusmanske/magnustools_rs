@@ -17,9 +17,11 @@ use std::sync::Arc;
 use wikimisc::mysql_async::Value;
 
 const DEFAULT_DEPTH: u32 = 3;
-const MAX_DEPTH: u32 = 9;
+const MAX_DEPTH: u32 = 6;
 /// Pages per tree.
-const MAX_PAGES: usize = 20_000;
+const MAX_PAGES: usize = 10_000;
+/// Other Wikipedias to compare with.
+const MAX_WIKIS: usize = 60;
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -82,7 +84,8 @@ async fn results(state: &AppState, wiki: &Wiki, category: &str, depth: u32) -> R
 
     // Article here (database title) → (language, article there, its URL).
     let mut found: BTreeMap<String, Vec<(String, String, String)>> = BTreeMap::new();
-    let counterparts = category_langlinks(&state.http, wiki, category).await?;
+    let mut counterparts = category_langlinks(&state.http, wiki, category).await?;
+    counterparts.truncate(MAX_WIKIS);
     let mut skipped = 0;
     for (other, other_category) in &counterparts {
         let links = match links_here(state, other, other_category, depth, language).await {
@@ -127,9 +130,7 @@ async fn links_here(
 }
 
 async fn tree(state: &AppState, wiki: &Wiki, category: &str, depth: u32) -> anyhow::Result<Vec<String>> {
-    let mut pages = state.replicas.pages_in_tree(wiki, category, depth, 0).await?;
-    pages.truncate(MAX_PAGES);
-    Ok(pages)
+    state.replicas.some_pages_in_tree(wiki, category, depth, 0, Some(MAX_PAGES)).await
 }
 
 /// The category in other Wikipedias: wiki, category name. The wiki comes

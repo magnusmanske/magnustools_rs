@@ -17,6 +17,8 @@ const MAX_LINES: usize = 50;
 /// Pages to take the red links from.
 const MAX_PAGES: usize = 5000;
 const MAX_SHOWN: usize = 1000;
+/// Red link candidates to look up.
+const MAX_TARGETS: usize = 50_000;
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -81,7 +83,8 @@ async fn results(state: &AppState, wiki: &Wiki, lines: &[&str]) -> Result<Result
     if !categories.is_empty() {
         let sql = "SELECT DISTINCT cl_from FROM categorylinks JOIN linktarget ON cl_target_id=lt_id
             WHERE lt_namespace=14 AND lt_title IN";
-        page_ids.extend(select_in::<u64, _>(&mut links, sql, "", &[], &categories).await?);
+        let limit = format!("LIMIT {MAX_PAGES}");
+        page_ids.extend(select_in::<u64, _>(&mut links, sql, &limit, &[], &categories).await?);
     }
     page_ids.sort_unstable();
     page_ids.dedup();
@@ -89,7 +92,9 @@ async fn results(state: &AppState, wiki: &Wiki, lines: &[&str]) -> Result<Result
 
     let sql = "SELECT DISTINCT lt_title FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
         WHERE lt_namespace=0 AND pl_from IN";
-    let targets: Vec<String> = select_in(&mut links, sql, "", &[], &page_ids).await?;
+    let limit = format!("LIMIT {MAX_TARGETS}");
+    let mut targets: Vec<String> = select_in(&mut links, sql, &limit, &[], &page_ids).await?;
+    targets.truncate(MAX_TARGETS);
     let existing = state.replicas.existing(wiki, 0, &targets).await?;
     let red: Vec<String> = targets.into_iter().filter(|t| !existing.contains(t)).collect();
 

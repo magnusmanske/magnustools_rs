@@ -73,17 +73,34 @@ impl Replicas {
 
     /// Pages of `namespace` in a category tree, as database titles.
     pub async fn pages_in_tree(&self, wiki: &Wiki, category: &str, depth: u32, namespace: i64) -> Result<Vec<String>> {
-        let categories = self.category_tree(wiki, category, depth).await?;
+        self.some_pages_in_tree(wiki, category, depth, namespace, None).await
+    }
+
+    /// As [`Self::pages_in_tree`], but at most `limit` (any) of them, without
+    /// the database reading more.
+    pub async fn some_pages_in_tree(
+        &self,
+        wiki: &Wiki,
+        category: &str,
+        depth: u32,
+        namespace: i64,
+        limit: Option<usize>,
+    ) -> Result<Vec<String>> {
+        let mut categories = self.category_tree(wiki, category, depth).await?;
         if namespace == NS_CATEGORY {
+            categories.truncate(limit.unwrap_or(usize::MAX));
             return Ok(categories);
         }
         let mut conn = self.conn(wiki, CATEGORY_TABLES).await?;
         let sql = "SELECT DISTINCT page_title FROM page
             JOIN categorylinks ON cl_from=page_id JOIN linktarget ON cl_target_id=lt_id
             WHERE page_namespace=? AND lt_namespace=14 AND lt_title IN";
-        let pages: Vec<String> = select_in(&mut conn, sql, "", &[namespace.into()], &categories).await?;
+        let suffix = limit.map(|n| format!("LIMIT {n}")).unwrap_or_default();
+        let pages: Vec<String> = select_in(&mut conn, sql, &suffix, &[namespace.into()], &categories).await?;
         let mut seen = HashSet::new();
-        Ok(pages.into_iter().filter(|p| seen.insert(p.clone())).collect())
+        let mut pages: Vec<String> = pages.into_iter().filter(|p| seen.insert(p.clone())).collect();
+        pages.truncate(limit.unwrap_or(usize::MAX));
+        Ok(pages)
     }
 
     /// A random non-redirect page of `namespace` in a category tree (of a

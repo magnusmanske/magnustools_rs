@@ -4,7 +4,7 @@
 <form method="get" action="/forest4trees/">
   <label>Wikipedia language <input type="text" name="language" value="{{ request.language }}" required style="max-width:8rem"></label>
   <label>Category <input type="text" name="category" value="{{ request.category }}" required></label>
-  <label>Subcategory depth <input type="number" name="depth" min="0" max="9" value="{{ depth }}" style="max-width:6rem"></label>
+  <label>Subcategory depth <input type="number" name="depth" min="0" max="6" value="{{ depth }}" style="max-width:6rem"></label>
   <button>Search the forest</button>
 </form>
 {% if results.is_none() %}
@@ -12,7 +12,7 @@
 {% endif %}
 {% if let Some(results) = results %}
 <h2>{{ results.missing.len() }} articles may be missing</h2>
-<p class="muted">The tree here has {{ results.pages }} articles; {{ results.languages }} other Wikipedias have the category.</p>
+<p class="muted">The tree here has {{ results.pages }} articles; {{ results.languages }} other Wikipedias with the category were compared.</p>
 <div class="table-wrap">
 <table>
   <tr><th>Article here</th><th>In the trees of</th></tr>

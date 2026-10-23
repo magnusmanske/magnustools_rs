@@ -108,7 +108,8 @@ async fn results(
     depth: u32,
     hide_unwanted: bool,
 ) -> Result<Results, AppError> {
-    let mut pages = state.replicas.pages_in_tree(wiki, category, depth, 0).await?;
+    // One more than needed, to know whether there are more.
+    let mut pages = state.replicas.some_pages_in_tree(wiki, category, depth, 0, Some(MAX_PAGES + 1)).await?;
     let truncated = pages.len() > MAX_PAGES;
     pages.truncate(MAX_PAGES);
     pages.sort();

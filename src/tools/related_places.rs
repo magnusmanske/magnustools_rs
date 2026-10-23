@@ -111,7 +111,8 @@ async fn places(state: &AppState, wiki: &Wiki, namespace: i64, title: &str) -> R
 
     let mut geo = state.replicas.conn(wiki, &["page", "geo_tags"]).await?;
     let sql = "SELECT page_title, gt_lat, gt_lon FROM page JOIN geo_tags ON gt_page_id=page_id
-        WHERE gt_primary=1 AND gt_globe='earth' AND page_namespace=0 AND page_title IN";
+        WHERE gt_primary=1 AND gt_globe='earth' AND gt_lat IS NOT NULL AND gt_lon IS NOT NULL
+        AND page_namespace=0 AND page_title IN";
     let mut rows: Vec<(String, f64, f64)> = select_in(&mut geo, sql, "", &[], &targets).await?;
     rows.sort_by(|a, b| a.0.cmp(&b.0));
     rows.dedup_by(|a, b| a.0 == b.0);

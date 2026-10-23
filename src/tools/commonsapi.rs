@@ -509,6 +509,16 @@ async fn license_data(http: &reqwest::Client) -> anyhow::Result<Arc<LicenseData>
 
 /// Elements that are lists in JSON, even with a single entry.
 const JSON_LISTS: &[&str] = &["image", "category", "language", "license", "version", "item", "caption", "entity"];
+/// Elements holding such a list, with its name: in JSON, the list is there even when empty.
+const JSON_CONTAINERS: &[(&str, &str)] = &[
+    ("categories", "category"),
+    ("description", "language"),
+    ("licenses", "license"),
+    ("meta", "item"),
+    ("versions", "version"),
+    ("captions", "caption"),
+    ("depicts", "entity"),
+];
 
 /// An element of the response, written as XML or JSON.
 #[derive(Debug, Default)]
@@ -567,13 +577,17 @@ impl Element {
 
     /// As the PHP version turned its XML into JSON: a plain element becomes
     /// its text; attributes become keys, with the text as `value`; repeated
-    /// elements become lists.
+    /// elements become lists. Unlike there, an empty list is an empty list, not `""`.
     fn to_json(&self) -> Value {
-        if self.children.is_empty() && self.attributes.is_empty() {
+        let list_name = JSON_CONTAINERS.iter().find(|(name, _)| *name == self.name).map(|(_, list)| *list);
+        if self.children.is_empty() && self.attributes.is_empty() && list_name.is_none() {
             return Value::String(self.text.clone());
         }
         let mut map: Map<String, Value> =
             self.attributes.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
+        if let Some(list_name) = list_name {
+            map.insert(list_name.to_string(), Value::Array(vec![]));
+        }
         if self.children.is_empty() && !self.text.trim().is_empty() {
             map.insert("value".to_string(), Value::String(self.text.clone()));
         }
@@ -762,7 +776,7 @@ mod tests {
                 "version": API_VERSION,
                 "categories": {"category": ["A"]},
                 "language": [{"code": "en", "value": "View"}, {"code": "de", "value": "Blick"}],
-                "licenses": {"selfmade": "1"},
+                "licenses": {"selfmade": "1", "license": []},
                 "sha1": ""
             })
         );
