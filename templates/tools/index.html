@@ -21,7 +21,7 @@ Problems? See the <a href="/buggregator/">Buggregator</a>.</p>
     <strong>{% if let Some(url) = tool.url %}<a href="{{ url }}">{{ tool.name }}</a>{% else %}{{ tool.name }}{% endif %}</strong>
     {{ tool.description }}
     {% if !tool.note.is_empty() %}<em>{{ tool.note }}</em>{% endif %}
-    {% if let Some(usage) = tool.usage %}<span class="muted">(used {{ usage }} times in the last 30 days)</span>{% endif %}
+    {% if let Some(usage) = tool.usage %}<span class="muted">({{ usage }})</span>{% endif %}
     {% if tool.no_webservice %}<span class="muted">(no web interface)</span>{% endif %}
     <span class="tool-links">
       {% if let Some(repo) = tool.repo %}<a href="{{ repo }}">code</a>{% endif %}

@@ -29,7 +29,7 @@ struct Tool {
     toolhub: Option<String>,
     item: Option<String>,
     no_webservice: bool,
-    /// For "most used": uses last month.
+    /// For "most used": how much, from which source.
     usage: Option<String>,
 }
 
@@ -77,7 +77,7 @@ async fn load(state: &AppState) -> anyhow::Result<MainPage> {
     let most_used = most_used(&mut conn).await?;
 
     let tools: HashMap<u32, ToolRow> = rows.into_iter().map(|row| (row.0, row)).collect();
-    let tool = |id: u32, usage: Option<u64>| -> Option<Tool> {
+    let tool = |id: u32, usage: Option<&Usage>| -> Option<Tool> {
         let (_, name, subdomain, description, note, url, toolhub, has_webservice) = tools.get(&id)?;
         let name = match name.as_str() {
             "SUGGESTED TOOL" => return None,
@@ -94,7 +94,7 @@ async fn load(state: &AppState) -> anyhow::Result<MainPage> {
             toolhub: non_empty(toolhub).map(|t| format!("https://toolhub.wikimedia.org/tools/{t}")),
             item: items.get(&id).map(|q| format!("https://www.wikidata.org/wiki/{q}")),
             no_webservice: !has_webservice && !on_a_wiki,
-            usage: usage.map(thousands),
+            usage: usage.map(Usage::describe),
         })
     };
     let mut seen: HashSet<u32> = HashSet::new();
@@ -116,8 +116,10 @@ async fn load(state: &AppState) -> anyhow::Result<MainPage> {
     if let Some(popular) = popular {
         groups.push(group("Popular tools", None, tagged_tools(popular)));
     }
-    let most_used: Vec<Tool> = most_used.iter().filter_map(|(id, uses)| tool(*id, Some(*uses))).collect();
-    groups.push(group("Most used tools", Some("Many tools do not collect central usage figures."), most_used));
+    let most_used: Vec<Tool> = most_used.iter().filter_map(|(id, usage)| tool(*id, Some(usage))).collect();
+    let note = "Uses are counted by the tools themselves; requests are all page and API calls a service answered, \
+        so the two are not comparable. Many tools do not collect central usage figures.";
+    groups.push(group("Most used tools", Some(note), most_used));
     for (id, tag) in tags.iter().filter(|(id, _)| Some(*id) != popular) {
         groups.push(group(&ucfirst(tag), None, tagged_tools(*id)));
     }
@@ -138,7 +140,7 @@ fn group(name: &str, note: Option<&'static str>, tools: Vec<Tool>) -> Group {
 /// uses counted by the logger, plus successful requests to the services that
 /// report to the dashboard. (Tools move from the one to the other, so for
 /// the same tool the two count different periods.)
-async fn most_used(conn: &mut Conn) -> anyhow::Result<Vec<(u32, u64)>> {
+async fn most_used(conn: &mut Conn) -> anyhow::Result<Vec<(u32, Usage)>> {
     let today = Utc::now().date_naive();
     let first = today.checked_sub_days(Days::new(USAGE_DAYS)).unwrap_or(today);
     let logged: Vec<(u32, u64)> = conn
@@ -160,17 +162,46 @@ async fn most_used(conn: &mut Conn) -> anyhow::Result<Vec<(u32, u64)>> {
     Ok(combine(logged, served))
 }
 
-/// The two counts added up per tool; those under the threshold left out.
-fn combine(logged: Vec<(u32, u64)>, served: Vec<(u32, f64)>) -> Vec<(u32, u64)> {
-    let mut uses: HashMap<u32, u64> = logged.into_iter().collect();
+/// A tool's usage over the last `USAGE_DAYS` days.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Usage {
+    /// Counted by the logger.
+    uses: u64,
+    /// Successful requests reported to the dashboard.
+    requests: u64,
+}
+
+impl Usage {
+    fn total(&self) -> u64 {
+        self.uses + self.requests
+    }
+
+    /// E.g. `1,234 uses and 56 requests in the last 30 days`.
+    fn describe(&self) -> String {
+        let count = |n: u64, what: &str| {
+            let plural = if n == 1 { "" } else { "s" };
+            (n > 0).then(|| format!("{} {what}{plural}", thousands(n)))
+        };
+        let parts: Vec<String> =
+            [count(self.uses, "use"), count(self.requests, "request")].into_iter().flatten().collect();
+        format!("{} in the last {USAGE_DAYS} days", parts.join(" and "))
+    }
+}
+
+/// The two counts per tool, most first; those under the threshold left out.
+fn combine(logged: Vec<(u32, u64)>, served: Vec<(u32, f64)>) -> Vec<(u32, Usage)> {
+    let mut usage: HashMap<u32, Usage> = HashMap::new();
+    for (tool, uses) in logged {
+        usage.entry(tool).or_default().uses += uses;
+    }
     for (tool, requests) in served {
         // Counters are whole numbers, stored as floating point.
-        let requests = requests.max(0.0).round() as u64;
-        *uses.entry(tool).or_default() += requests;
+        usage.entry(tool).or_default().requests += requests.max(0.0).round() as u64;
     }
-    let mut uses: Vec<(u32, u64)> = uses.into_iter().filter(|(_, n)| *n >= MOST_USED_PER_DAY * USAGE_DAYS).collect();
-    uses.sort_by(|(a, x), (b, y)| y.cmp(x).then(a.cmp(b)));
-    uses
+    let mut usage: Vec<(u32, Usage)> =
+        usage.into_iter().filter(|(_, u)| u.total() >= MOST_USED_PER_DAY * USAGE_DAYS).collect();
+    usage.sort_by(|(a, x), (b, y)| y.total().cmp(&x.total()).then(a.cmp(b)));
+    usage
 }
 
 /// Midnight (UTC) at the start of `date`, in Unix seconds.
@@ -207,6 +238,17 @@ mod tests {
         let threshold = MOST_USED_PER_DAY * USAGE_DAYS;
         let logged = vec![(1, threshold - 10), (2, 5), (3, threshold * 2)];
         let served = vec![(1, 10.0), (4, threshold as f64 * 3.0), (5, 1.0)];
-        assert_eq!(combine(logged, served), vec![(4, threshold * 3), (3, threshold * 2), (1, threshold)]);
+        let usage = |uses, requests| Usage { uses, requests };
+        assert_eq!(
+            combine(logged, served),
+            vec![(4, usage(0, threshold * 3)), (3, usage(threshold * 2, 0)), (1, usage(threshold - 10, 10))]
+        );
+    }
+
+    #[test]
+    fn usage_says_where_it_comes_from() {
+        assert_eq!(Usage { uses: 1234, requests: 0 }.describe(), "1,234 uses in the last 30 days");
+        assert_eq!(Usage { uses: 0, requests: 56 }.describe(), "56 requests in the last 30 days");
+        assert_eq!(Usage { uses: 1, requests: 2 }.describe(), "1 use and 2 requests in the last 30 days");
     }
 }
