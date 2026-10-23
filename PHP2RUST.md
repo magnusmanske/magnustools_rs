@@ -7,7 +7,7 @@ Based on: usage over 30 days (logger uses, dashboard requests), the code (`~/php
 ## Already Rust
 PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria (web, since 2026-10-23), geohack (9.2M requests/30d), autodesc, wdrc, Harvest Templates, wd-infernal, ac2wd, RustCCI, magnustools. BaGLAMa2 is ~95% Rust (`baglama2_rs`; only a thin read API and the add-category action are PHP).
 
-The tool table's `webserver_type` is out of date for several of these (e.g. QuickStatements, Listeria, geohack, autodesc).
+The tool table's `webserver_type` was out of date for several of these; fixed 2026-10-23 (see below).
 
 ## Ranking
 
@@ -56,5 +56,5 @@ Cheap PHP fixes for the worst errors:
 
 Other:
 - [ ] Listeria: `query_list.php` has no Rust route; port or drop.
-- [ ] Tool table: update `webserver_type` for the tools now on Rust.
+- [x] Tool table: `webserver_type` set from the live `service.manifest` for the 18 subdomains checked here (2026-10-23; restore SQL in the magnustools tool home). Other subdomains were not checked.
 - [ ] Remove the leftover `/tmp/wdt_tail.*` on `login.toolforge.org` (a copy of the wikidata-todo error log from this analysis; the host was unreachable).
