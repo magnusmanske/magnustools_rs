@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Links to spacecraft databases for an international designator (COSPAR ID).</p>
+<form method="get" action="spacer.php">
+  <label>ID <span class="hint">e.g. 1957-001A</span>
+    <input type="text" name="id" value="{{ id }}" required>
+  </label>
+  <button>Get links</button>
+</form>
+{% if !id.is_empty() %}
+<h2>{{ id }}</h2>
+{% if links.is_empty() %}
+<p class="muted">No databases are configured.</p>
+{% else %}
+<ul>
+{% for link in links %}
+  <li><a href="{{ link.url }}">{{ link.name }}</a></li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+<p class="hint">The list of databases is on <a href="{{ config_url }}">a wiki page</a>.</p>
+{% endblock %}

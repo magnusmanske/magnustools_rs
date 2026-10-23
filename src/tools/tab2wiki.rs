@@ -55,25 +55,27 @@ fn convert(text: &str, options: Options) -> String {
     let separator = if compressed { "||" } else { "\n|" };
     let rows = text.replace("\r\n", "\n");
     let rows = rows.trim_matches('\n').replace('\n', "\n|-\n|").replace('\t', separator);
-    let sortable = if options.sortable { " class=\"sortable\"" } else { "" };
-    let mut wiki = format!("{{| border=\"1\"{sortable}\n|{rows}\n|}}");
-
+    // Cells start with `|`, or `!` for headers.
+    let mut body = format!("|{rows}");
     if options.column_headers {
-        let (first, rest) = wiki.split_once("\n|-\n").unwrap_or((&wiki, ""));
-        let mut first = first.replace("\n|", "\n!");
+        let (first, rest) = body.split_once("\n|-\n").map_or((body.as_str(), None), |(f, r)| (f, Some(r)));
+        let mut first = format!("!{}", first.get(1..).unwrap_or_default()).replace("\n|", "\n!");
         if compressed {
             first = first.replace("||", "!!");
         }
-        wiki = format!("{first}\n|-\n{rest}");
+        body = match rest {
+            Some(rest) => format!("{first}\n|-\n{rest}"),
+            None => first,
+        };
     }
     if options.row_headers {
-        wiki = wiki.replace("\n|-\n|", "\n|-\n!");
+        body = body.replace("\n|-\n|", "\n|-\n!");
         if !options.column_headers {
-            let (first, rest) = wiki.split_once("\n|").unwrap_or((&wiki, ""));
-            wiki = format!("{first}\n!{rest}");
+            body = format!("!{}", body.get(1..).unwrap_or_default());
         }
     }
-    wiki
+    let sortable = if options.sortable { " class=\"sortable\"" } else { "" };
+    format!("{{| border=\"1\"{sortable}\n{body}\n|}}")
 }
 
 #[cfg(test)]
@@ -100,6 +102,11 @@ mod tests {
             convert("a\tb\r\n1\t2", options(false, false, false, false)),
             "{| border=\"1\"\n|a\n|b\n|-\n|1\n|2\n|}"
         );
+    }
+
+    #[test]
+    fn single_row_keeps_the_table_end() {
+        assert_eq!(convert("a\tb", options(true, false, true, false)), "{| border=\"1\"\n!a!!b\n|}");
     }
 
     #[test]

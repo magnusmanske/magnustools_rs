@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">An API returning the intro of an article (its first paragraph, as plain text) as JSON, or JSONP with a <code>callback</code>.</p>
+<form method="get" action="get_article_intro.php">
+  <label>Language <input type="text" name="language" value="{{ language }}" required></label>
+  <label>Project <input type="text" name="project" value="{{ project }}" required></label>
+  <label>Title <input type="text" name="title" required></label>
+  <label>Callback <span class="hint">optional; JavaScript function to call</span>
+    <input type="text" name="callback">
+  </label>
+  <button>Get intro</button>
+</form>
+<h2>Example</h2>
+<p><a href="get_article_intro.php?language=en&amp;project=wikipedia&amp;title=Douglas_Adams"><code>get_article_intro.php?language=en&amp;project=wikipedia&amp;title=Douglas_Adams</code></a></p>
+{% endblock %}

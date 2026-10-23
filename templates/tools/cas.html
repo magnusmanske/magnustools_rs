@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Links to chemistry databases for a CAS registry number, as listed in a Wikipedia's <code>CasTemplate</code>.</p>
+<form method="get" action="cas.php">
+  <label>CAS number <span class="hint">e.g. 7732-18-5</span>
+    <input type="text" name="cas" value="{{ cas }}" required>
+  </label>
+  <label>Substance <span class="hint">optional</span>
+    <input type="text" name="title" value="{{ name }}">
+  </label>
+  <label>Wikipedia
+    <select name="language">
+    {% for wiki in wikis_with_template %}
+      <option value="{{ wiki }}"{% if **wiki == language %} selected{% endif %}>{{ wiki }}</option>
+    {% endfor %}
+    </select>
+  </label>
+  <button>Get links</button>
+</form>
+{% if let Some(error) = error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+{% if let Some(links_html) = links_html %}
+<h2>{{ cas }}{% if !name.is_empty() %} ({{ name }}){% endif %}</h2>
+<div class="wiki-content">{{ links_html|safe }}</div>
+{% endif %}
+{% endblock %}

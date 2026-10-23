@@ -100,6 +100,13 @@ pub fn encode_title(title: &str) -> String {
     percent_encoding::utf8_percent_encode(&title.trim().replace(' ', "_"), KEEP).to_string()
 }
 
+/// A value for a URL query or path segment: everything but `A-Za-z0-9-._~` percent-encoded.
+pub fn encode_component(value: &str) -> String {
+    const KEEP: &percent_encoding::AsciiSet =
+        &percent_encoding::NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
+    percent_encoding::utf8_percent_encode(value, KEEP).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,5 +151,6 @@ mod tests {
             "https://de.wikipedia.org/wiki/Benutzer:Magnus_Manske/Spacer"
         );
         assert_eq!(encode_title("A&B?c d"), "A%26B%3Fc_d");
+        assert_eq!(encode_component("1957-001A a&b"), "1957-001A%20a%26b");
     }
 }
