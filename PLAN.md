@@ -36,7 +36,7 @@ All web-facing functionality should have a common UI/UX theme, minimalist, sleek
 |---|---|
 | M0 ✓ | Skeleton: CLI, config, layout/theme, static serving (allowlist), retired URLs, health, telemetry, deploy files. DB pools and typed params come with their first users (M1/M2). |
 | M0b ✓ | `wikimisc`: `telemetry-wire` feature with the shared push format. |
-| M1 | Stateless: html2wiki, tab2wiki, spacer, cas, get_article_intro, authority_control, flickrfree, commonsapi, prepbio, wiki2playlist (fix category mode), wp_data_url (drop webp, cap fetches) |
+| M1 ✓ | Stateless: html2wiki, tab2wiki, spacer, cas, get_article_intro, authority_control, flickrfree, commonsapi (now API-based), prepbio, wiki2playlist (category mode via API), wp_data_url (drop webp, cap fetches, sandboxed) |
 | M2 | Replica DB: get_distinct_authors, quick_counter, herding_sheep, metronom, randomarticle, random_image_commons_subcat, unused_files; fix transparent (actor/linktarget) and uploader_distribution (direct DB intersection instead of dead quick-intersection) |
 | M3 | `logger.php` (exact responses, JSONP fixed) and the main page from DB |
 | M4 | Buggregator backend: `api.php` (all actions; writes POST-only with CSRF check; no SQL in output), `ingest.php` (exact contract, tested against the `wikimisc` client), OAuth 1.0a |
