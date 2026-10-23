@@ -1,8 +1,66 @@
 # magnustools_rs
 
-Rust replacement for the web service and background jobs of
-[magnustools](https://magnustools.toolforge.org/) on Toolforge. URLs and
-parameters stay as they were; see `PLAN.md` for scope and progress.
+The web service and background jobs of [magnustools](https://magnustools.toolforge.org/),
+a [Toolforge](https://toolforge.org/) tool by Magnus Manske: small tools for
+Wikimedia projects, the tool list, a usage logger, an OAuth uploader, and the
+[Buggregator](https://magnustools.toolforge.org/buggregator/) issue tracker
+and service dashboard.
+
+This replaces the PHP version, [magnustools on Codeberg](https://codeberg.org/magnusmanske/magnustools/).
+That repository stays in use for what is not a web service: the PHP library
+other tools include, the shared static files (`public_html/resources/`), and
+the Buggregator front-end, all of which this service serves from its checkout.
+
+## Tools
+
+Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
+(permanently, keeping the query string and, for POST, the body).
+
+| Path | What it does |
+|---|---|
+| `/` | The list of all tools |
+| `/authority_control/` | VIAF lookup (JSON/JSONP) |
+| `/cas/` | Links for a CAS registry number |
+| `/commonsapi/` | XML summary of Commons files |
+| `/flickrfree/` | Latest freely licensed Flickr photos |
+| `/get_article_intro/` | An article's first paragraph (JSON/JSONP) |
+| `/get_distinct_authors/` | Who edited a set of articles |
+| `/herding_sheep/` | Recent edits by a group of users |
+| `/html2wiki/`, `/tab2wiki/` | HTML or spreadsheet tables to wiki markup |
+| `/logger/` | Counts tool uses (JSON/JSONP) |
+| `/metronom/` | Page views of the articles a user started |
+| `/oauth_uploader/` | Uploads to Commons under the user's account |
+| `/prepbio/` | Wikitext for a new biography |
+| `/quick_counter/` | A user's edits per namespace |
+| `/randomarticle/`, `/random_image_commons_subcat/` | A random page from a category tree |
+| `/spacer/` | Links for a spacecraft designator |
+| `/transparent/` | Find a translator |
+| `/unused_files/` | Commons files not used in articles |
+| `/uploader_distribution/` | Uploaders of a category tree |
+| `/wiki2playlist/` | M3U playlist from a wiki page or category |
+| `/wp_data_url/` | An article with its images inlined |
+| `/buggregator/api/` | Buggregator API (the front-end is static) |
+| `/buggregator/ingest.php` | Service dashboard pushes from `wikimisc` telemetry (also `/buggregator/ingest/`; not a redirect, as the client does not follow those) |
+| `/toolinfo_buggregator.json` | Toolinfo for tools not on Toolhub yet |
+
+Anything else is a static file from the PHP checkout's `public_html`, if its
+type is on an allowlist (`src/web/static_files.rs`); retired pages redirect or
+answer 410 (`src/web/legacy.rs`).
+
+## Code
+
+- `src/tools/`: one module per tool; `templates/tools/` their pages.
+- `src/buggregator/`: API, ingest, dashboard, and the update job.
+- `src/jobs/`: background jobs and admin commands.
+- `src/web/`: routing, errors, parameters, static files. `templates/base.html`
+  and `assets/style.css` give all pages one look.
+- `src/wiki.rs`, `src/mediawiki.rs`, `src/replicas.rs`, `src/tool_db.rs`,
+  `src/oauth.rs`: wikis, their API and databases, the tool database, OAuth.
+
+```bash
+cargo test
+cargo clippy --all-targets -- -D warnings
+```
 
 ## Run locally
 
@@ -12,28 +70,35 @@ cargo run -- --port 8000
 ```
 
 Database tools need the tool's `replica.my.cnf` next to `config.json` (or
-wherever `replica_credentials` points), with `local='true'` and a
-`[tunnels]` section giving each tunnel a local port (see the `toolforge`
-crate). Then open the tunnels with:
+wherever `replica_credentials` points), with `local='true'` and a `[tunnels]`
+section giving each tunnel a local port (see the `toolforge` crate). Open the
+tunnels with:
 
 ```bash
 TOOL_DATA_DIR=$PWD toolforge-tunnel
 ```
 
-Static files come from the PHP tool's `public_html`; only allowlisted file
-types are served (`src/web/static_files.rs`). Pages share one layout
-(`templates/base.html`) and stylesheet (`assets/style.css`).
+For anything that writes to the tool database, point `tool_db.url` at a local
+copy (`mysql://user@localhost/db?socket=…`); `sql/buggregator.sql` has the schema.
 
-## Deploy (Toolforge)
+## Jobs
 
-`./build.sh` builds the image. The webservice reads
-`$TOOL_DATA_DIR/magnustools_rs.json` (see `Procfile` and
-`config.json.template`) and needs NFS mounted for `public_html`. The jobs
-are in `jobs.yaml`; the same binary runs them (`magnustools_rs --help`).
+The same binary runs the background jobs: `magnustools_rs --help` lists them,
+and `jobs.yaml` schedules them on Toolforge. Service dashboard administration
+is `magnustools_rs dashboard add|rotate|enable|disable|list|reinfer`.
 
-For local work on anything that writes to the tool database, point
-`tool_db.url` at a local copy (`mysql://user@localhost/db?socket=…`);
-`sql/buggregator.sql` has the schema.
+## Deploy
+
+On Toolforge, as the `magnustools` tool:
+
+```bash
+./build.sh                                              # build the image from GitHub
+toolforge webservice buildservice restart --mount=all   # or start, the first time
+toolforge jobs load jobs.yaml
+```
+
+The service reads `$TOOL_DATA_DIR/magnustools_rs.json` (see
+`config.json.template` and the `Procfile`).
 
 ## License
 
