@@ -2,6 +2,7 @@
 
 use crate::config::Config;
 use crate::replicas::Replicas;
+use crate::tool_db::ToolDb;
 use anyhow::Result;
 
 /// Sent with every outbound request, per the Wikimedia User-Agent policy.
@@ -13,11 +14,13 @@ pub struct AppState {
     pub config: Config,
     pub http: reqwest::Client,
     pub replicas: Replicas,
+    pub tool_db: ToolDb,
 }
 
 impl AppState {
     pub fn new(config: Config) -> Result<Self> {
         let replicas = Replicas::new(&config.replica_credentials)?;
-        Ok(Self { http: wikimisc::http::client(USER_AGENT)?, replicas, config })
+        let tool_db = ToolDb::new(&config.tool_db, &config.replica_credentials)?;
+        Ok(Self { http: wikimisc::http::client(USER_AGENT)?, replicas, tool_db, config })
     }
 }

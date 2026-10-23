@@ -97,7 +97,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(root.join("tool/.git")).unwrap();
-        std::fs::write(root.join("index.html"), "<p>main</p>").unwrap();
+        std::fs::write(root.join("page.html"), "<p>main</p>").unwrap();
         std::fs::write(root.join("tool/index.html"), "<p>tool</p>").unwrap();
         std::fs::write(root.join("tool/.git/config"), "secret").unwrap();
         std::fs::write(root.join("tool.php"), "<?php secret").unwrap();
@@ -109,8 +109,8 @@ mod tests {
     async fn serves_public_files_only() {
         let dir = public_html();
         let root = dir.path();
-        let index = get(root, "/").await;
-        assert_eq!((index.status.as_u16(), index.body.as_str()), (200, "<p>main</p>"));
+        let page = get(root, "/page.html").await;
+        assert_eq!((page.status.as_u16(), page.body.as_str()), (200, "<p>main</p>"));
         assert_eq!(get(root, "/tool/").await.body, "<p>tool</p>");
         let redirect = get(root, "/tool").await;
         assert!(redirect.status.is_redirection());

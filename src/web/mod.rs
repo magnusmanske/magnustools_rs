@@ -70,6 +70,7 @@ pub(crate) mod test_support {
         let config = crate::config::Config {
             public_html: public_html.to_path_buf(),
             replica_credentials: credentials,
+            tool_db: Default::default(),
             flickr_key_file: None,
             telemetry: Default::default(),
         };

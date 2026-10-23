@@ -1,6 +1,7 @@
 //! Typed configuration, loaded from a JSON file that is never committed.
 //! See `config.json.template` for the shape.
 
+use crate::tool_db::ToolDbConfig;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -16,6 +17,8 @@ pub struct Config {
     /// `local='true'` in it, connections go to SSH tunnels instead.
     #[serde(default = "default_replica_credentials")]
     pub replica_credentials: PathBuf,
+    #[serde(default)]
+    pub tool_db: ToolDbConfig,
     /// The Flickr API key, alone in a file; without it, `flickrfree.php` is unavailable.
     #[serde(default)]
     pub flickr_key_file: Option<PathBuf>,

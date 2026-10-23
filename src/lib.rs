@@ -5,6 +5,7 @@ pub mod config;
 pub mod mediawiki;
 pub mod replicas;
 pub mod state;
+pub mod tool_db;
 pub mod tools;
 pub mod web;
 pub mod wiki;

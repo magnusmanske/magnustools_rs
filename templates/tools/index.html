@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">All {{ main.tool_count }} active tools and scripts by <a href="https://www.wikidata.org/wiki/User:Magnus_Manske">Magnus Manske</a>.
+Also on <a href="https://hay.toolforge.org/directory/#/author/Magnus%20Manske">Hay's tool directory</a> and
+<a href="https://toolhub.wikimedia.org/search?author__term=Magnus%20Manske">Toolhub</a>.
+Problems? See the <a href="/buggregator/">Buggregator</a>.</p>
+
+<label>Find a tool <input type="search" id="tool-filter" placeholder="Name or description" autofocus></label>
+
+<nav class="groups">
+{% for group in main.groups %}<a href="#{{ group.key }}">{{ group.name }}</a>{% endfor %}
+</nav>
+
+{% for group in main.groups %}
+<section class="tool-group">
+<h2 id="{{ group.key }}">{{ group.name }}</h2>
+{% if let Some(note) = group.note %}<p class="hint">{{ note }}</p>{% endif %}
+<ul class="tools">
+{% for tool in group.tools %}
+  <li>
+    <strong>{% if let Some(url) = tool.url %}<a href="{{ url }}">{{ tool.name }}</a>{% else %}{{ tool.name }}{% endif %}</strong>
+    {{ tool.description }}
+    {% if !tool.note.is_empty() %}<em>{{ tool.note }}</em>{% endif %}
+    {% if let Some(usage) = tool.usage %}<span class="muted">(used {{ usage }} times last month)</span>{% endif %}
+    {% if tool.no_webservice %}<span class="muted">(no web interface)</span>{% endif %}
+    <span class="tool-links">
+      {% if let Some(repo) = tool.repo %}<a href="{{ repo }}">code</a>{% endif %}
+      {% if let Some(toolhub) = tool.toolhub %}<a href="{{ toolhub }}">Toolhub</a>{% endif %}
+      {% if let Some(item) = tool.item %}<a href="{{ item }}">Wikidata</a>{% endif %}
+    </span>
+  </li>
+{% endfor %}
+</ul>
+</section>
+{% endfor %}
+
+<script>
+// Hides tools (and then empty groups) that do not match the filter.
+document.getElementById('tool-filter').addEventListener('input', function () {
+  const words = this.value.toLowerCase().split(/\s+/).filter(Boolean);
+  for (const section of document.querySelectorAll('.tool-group')) {
+    let shown = 0;
+    for (const li of section.querySelectorAll('li')) {
+      const text = li.textContent.toLowerCase();
+      const match = words.every(w => text.includes(w));
+      li.hidden = !match;
+      if (match) shown++;
+    }
+    section.hidden = shown === 0;
+  }
+});
+</script>
+{% endblock %}

@@ -8,6 +8,8 @@ mod get_article_intro;
 mod get_distinct_authors;
 mod herding_sheep;
 mod html2wiki;
+mod index;
+mod logger;
 mod metronom;
 mod prepbio;
 mod quick_counter;
@@ -27,6 +29,9 @@ use std::sync::Arc;
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/", get(index::handler))
+        .route("/index.html", get(index::handler))
+        .route("/main.html", get(|| async { axum::response::Redirect::permanent("/") }))
         .route("/authority_control.php", get(authority_control::handler).post(authority_control::handler))
         .route("/cas.php", get(cas::handler))
         .route("/commonsapi.php", get(commonsapi::handler))
@@ -35,6 +40,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/get_distinct_authors.php", get(get_distinct_authors::handler).post(get_distinct_authors::handler))
         .route("/herding_sheep.php", get(herding_sheep::handler))
         .route("/html2wiki.php", get(html2wiki::handler).post(html2wiki::handler))
+        .route("/logger.php", get(logger::handler).post(logger::handler))
         .route("/metronom.php", get(metronom::handler))
         .route("/prepbio.php", get(prepbio::handler).post(prepbio::handler))
         .route("/quick_counter.php", get(quick_counter::handler))

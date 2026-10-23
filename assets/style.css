@@ -122,3 +122,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .error { color: var(--danger); }
 .muted { color: var(--muted); }
+
+/* Main page */
+nav.groups { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 1.5rem 0; font-size: 0.9375rem; }
+ul.tools { padding-left: 1.25rem; }
+ul.tools li { margin: 0.35rem 0; }
+.tool-links a { font-size: 0.8125rem; margin-left: 0.4rem; }
