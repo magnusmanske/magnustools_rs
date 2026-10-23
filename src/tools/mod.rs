@@ -6,6 +6,7 @@ mod cas;
 mod commonsapi;
 mod coord_gen;
 mod flickrfree;
+mod forest4trees;
 mod get_article_intro;
 mod get_distinct_authors;
 mod herding_sheep;
@@ -43,6 +44,7 @@ pub fn routes() -> Router<State> {
         ("commonsapi", get(commonsapi::handler)),
         ("coord_gen", get(coord_gen::handler).post(coord_gen::handler)),
         ("flickrfree", get(flickrfree::handler)),
+        ("forest4trees", get(forest4trees::handler)),
         ("get_article_intro", get(get_article_intro::handler)),
         ("get_distinct_authors", get(get_distinct_authors::handler).post(get_distinct_authors::handler)),
         ("herding_sheep", get(herding_sheep::handler)),

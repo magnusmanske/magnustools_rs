@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Articles that may be missing from a category tree: walks the tree in one Wikipedia and in all the others that have the category, and lists articles in their trees whose counterpart here is not in this one.</p>
+<form method="get" action="/forest4trees/">
+  <label>Wikipedia language <input type="text" name="language" value="{{ request.language }}" required style="max-width:8rem"></label>
+  <label>Category <input type="text" name="category" value="{{ request.category }}" required></label>
+  <label>Subcategory depth <input type="number" name="depth" min="0" max="9" value="{{ depth }}" style="max-width:6rem"></label>
+  <button>Search the forest</button>
+</form>
+{% if results.is_none() %}
+<p class="hint">Example: <a href="/forest4trees/?language=en&amp;category=Lighthouses+in+Scotland&amp;depth=2">Lighthouses in Scotland</a></p>
+{% endif %}
+{% if let Some(results) = results %}
+<h2>{{ results.missing.len() }} articles may be missing</h2>
+<p class="muted">The tree here has {{ results.pages }} articles; {{ results.languages }} other Wikipedias have the category.</p>
+<div class="table-wrap">
+<table>
+  <tr><th>Article here</th><th>In the trees of</th></tr>
+{% for m in results.missing %}
+  <tr>
+    <td><a href="{{ m.url }}">{{ m.title }}</a></td>
+    <td>{% for (language, title, url) in m.others %}<a href="{{ url }}" title="{{ title }}">{{ language }}</a>{% if !loop.last %}, {% endif %}{% endfor %}</td>
+  </tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
+{% endblock %}
