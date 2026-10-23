@@ -57,6 +57,9 @@ pub struct MonitorConfig {
     /// The last alert mail, so that an unchanged situation is mailed only once.
     #[serde(default = "default_monitor_state")]
     pub state_file: PathBuf,
+    /// The dashboard services known to be offline, so that each outage is mailed only once.
+    #[serde(default = "default_dashboard_state")]
+    pub dashboard_state_file: PathBuf,
 }
 
 impl Default for MonitorConfig {
@@ -66,6 +69,7 @@ impl Default for MonitorConfig {
             mail_from: default_mail_from(),
             smtp_host: default_smtp_host(),
             state_file: default_monitor_state(),
+            dashboard_state_file: default_dashboard_state(),
         }
     }
 }
@@ -80,6 +84,10 @@ fn default_smtp_host() -> String {
 
 fn default_monitor_state() -> PathBuf {
     "monitor_last_message.html".into()
+}
+
+fn default_dashboard_state() -> PathBuf {
+    "dashboard_alerts_state.txt".into()
 }
 
 fn default_replica_credentials() -> PathBuf {
@@ -111,6 +119,7 @@ impl Config {
         config.buggregator_oauth = dir.join(&config.buggregator_oauth);
         config.uploader_oauth = dir.join(&config.uploader_oauth);
         config.monitor.state_file = dir.join(&config.monitor.state_file);
+        config.monitor.dashboard_state_file = dir.join(&config.monitor.dashboard_state_file);
         Ok(config)
     }
 }

@@ -18,6 +18,12 @@
   schedule: "27 * * * *"
   mount: all
   emails: onfailure
+- name: dashboard-alerts
+  command: job dashboard-alerts
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "*/5 * * * *"
+  mount: all
+  emails: onfailure
 - name: tool-monitor
   command: job monitor
   image: tool-magnustools/tool-magnustools:latest

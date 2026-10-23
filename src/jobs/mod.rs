@@ -1,6 +1,8 @@
 //! Background jobs and admin commands: `magnustools_rs <command>`. On
 //! Toolforge, the jobs framework runs them (see `jobs.yaml`).
 
+mod dashboard_alerts;
+mod mail;
 mod monitor;
 
 use crate::buggregator::dashboard::{self, admin};
@@ -22,7 +24,9 @@ pub enum Command {
     Webstatus,
     /// Service dashboard: end inference, rollups, retention (hourly).
     DashboardMaintenance,
-    /// Checks tools, writes tool_status.html, mails new alerts (twice an hour).
+    /// Mails services on the dashboard that are offline for over ten minutes (every five minutes).
+    DashboardAlerts,
+    /// Checks tools not on the dashboard, writes tool_status.html, mails new alerts (twice an hour).
     Monitor,
     /// Service dashboard administration.
     #[command(subcommand)]
@@ -64,6 +68,7 @@ pub async fn run(command: Command, state: &AppState) -> Result<()> {
         Command::Toolhub => update::toolhub(state, &mut conn).await?,
         Command::Webstatus => update::web_status(&mut conn).await?,
         Command::DashboardMaintenance => admin::maintenance(&mut conn, now).await?,
+        Command::DashboardAlerts => dashboard_alerts::run(state).await?,
         Command::Monitor => monitor::run(state).await?,
         Command::IssueStatus { issue_id, status } => {
             let status = status.to_uppercase();

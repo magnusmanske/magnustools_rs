@@ -1,0 +1,9 @@
+<html>
+<body>
+<p>Offline for more than ten minutes:</p>
+<ul>
+{% for o in offline %}<li>{{ o.text }}</li>
+{% endfor %}</ul>
+<p><a href="{{ dashboard_url }}">Service dashboard</a></p>
+</body>
+</html>
