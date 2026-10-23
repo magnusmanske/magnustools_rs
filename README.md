@@ -52,6 +52,11 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/buggregator/ingest.php` | Service dashboard pushes from `wikimisc` telemetry (also `/buggregator/ingest/`; not a redirect, as the client does not follow those) |
 | `/toolinfo_buggregator.json` | Toolinfo for tools not on Toolhub yet |
 
+Uses of the tools are counted per day in the tool database, as tool
+`magnustools` with the tool's name as method (`src/tools/logger.rs`): a
+request counts if it brings parameters and does not fail, so opening an empty
+form does not.
+
 Anything else is a static file from the PHP checkout's `public_html`, if its
 type is on an allowlist (`src/web/static_files.rs`); retired pages redirect or
 answer 410 (`src/web/legacy.rs`). From magnus-toolserver, the checkout has

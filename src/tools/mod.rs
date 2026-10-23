@@ -32,12 +32,14 @@ mod wp_data_url;
 use crate::state::AppState;
 use crate::web::moved;
 use axum::Router;
+use axum::extract::{Request, State as Extract};
+use axum::middleware::{self, Next};
 use axum::routing::{MethodRouter, get};
 use std::sync::Arc;
 
 type State = Arc<AppState>;
 
-pub fn routes() -> Router<State> {
+pub fn routes(state: &State) -> Router<State> {
     let tools: Vec<(&str, MethodRouter<State>)> = vec![
         ("authority_control", get(authority_control::handler).post(authority_control::handler)),
         ("bong", get(bong::handler)),
@@ -72,7 +74,19 @@ pub fn routes() -> Router<State> {
         .route("/", get(index::handler))
         .route("/index.html", get(index::handler))
         .route("/main.html", moved("/"));
-    tools.into_iter().fold(router, |router, (name, handler)| tool(router, name, handler))
+    tools.into_iter().fold(router, |router, (name, handler)| {
+        // The logger counts other tools' uses, not its own.
+        let handler = match name {
+            "logger" => handler,
+            _ => handler.layer(middleware::from_fn_with_state(
+                state.clone(),
+                move |Extract(state): Extract<State>, request: Request, next: Next| {
+                    logger::count_uses(state, name, request, next)
+                },
+            )),
+        };
+        tool(router, name, handler)
+    })
 }
 
 /// A tool at `/<name>/`. Its old address, `/<name>.php`, and `/<name>` redirect there.

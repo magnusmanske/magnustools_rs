@@ -27,7 +27,7 @@ const HEALTH_PATH: &str = "/healthz";
 
 pub fn router(state: Arc<AppState>) -> Router {
     let static_files = static_files::service(&state.config.public_html);
-    let router = crate::tools::routes()
+    let router = crate::tools::routes(&state)
         .merge(crate::buggregator::routes())
         .route(HEALTH_PATH, get(wikimisc::server::health::ok))
         .route(page::STYLESHEET_PATH, get(page::stylesheet))
