@@ -34,8 +34,8 @@ All web-facing functionality should have a common UI/UX theme, minimalist, sleek
 ## Milestones (phase 1: magnustools)
 | # | Content |
 |---|---|
-| M0 | Skeleton: CLI, config, pools, typed params, layout/theme, static serving, health, telemetry, deploy files. Clippy-clean. |
-| M0b | `wikimisc`: public + `Deserialize` telemetry payload types (needs a push before Toolforge builds can use it). |
+| M0 ✓ | Skeleton: CLI, config, layout/theme, static serving (allowlist), retired URLs, health, telemetry, deploy files. DB pools and typed params come with their first users (M1/M2). |
+| M0b ✓ | `wikimisc`: `telemetry-wire` feature with the shared push format. |
 | M1 | Stateless: html2wiki, tab2wiki, spacer, cas, get_article_intro, authority_control, flickrfree, commonsapi, prepbio, wiki2playlist (fix category mode), wp_data_url (drop webp, cap fetches) |
 | M2 | Replica DB: get_distinct_authors, quick_counter, herding_sheep, metronom, randomarticle, random_image_commons_subcat, unused_files; fix transparent (actor/linktarget) and uploader_distribution (direct DB intersection instead of dead quick-intersection) |
 | M3 | `logger.php` (exact responses, JSONP fixed) and the main page from DB |
@@ -62,7 +62,7 @@ Drop / redirect:
 | `autotools.php` | 410 | Scrapes dead `tools.wmflabs.org` index |
 | `last_tools.php` | 410 | Shells out to list `/data/project` |
 | `record_ip.php` | 410 | Unauthenticated file append |
-| `test1.php`, `test2.html`, `test3.html`, `test.file`, `csstest.html` | 404 | Test leftovers |
-| `flommons.pl` | 404 | Perl, already 403 |
+| `test1.php`, `test2.html`, `test3.html`, `test.file`, `csstest.html` | 410 | Test leftovers |
+| `flommons.pl` | 404 | Perl, already 403 (not an allowlisted file type) |
 
 To check during M2: `cross_cats.php` (OmniScan) and `prep_art.php` — both untracked in git but live.

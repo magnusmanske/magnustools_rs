@@ -2,5 +2,31 @@
 name = "magnustools_rs"
 version = "0.1.0"
 edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Web service and background jobs of the magnustools Toolforge tool"
+repository = "https://github.com/magnusmanske/magnustools_rs"
+authors = ["Magnus Manske <magnusmanske@googlemail.com>"]
 
 [dependencies]
+anyhow = "1"
+askama = "0.16"
+axum = "0.8"
+clap = { version = "4", features = ["derive", "env"] }
+percent-encoding = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.7", features = ["fs", "trace", "timeout", "compression-gzip", "compression-br", "catch-panic", "set-header"] }
+tracing = "0.1"
+wikimisc = { git = "https://github.com/magnusmanske/wikimisc", features = ["logging", "server", "telemetry", "toolforge"] }
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

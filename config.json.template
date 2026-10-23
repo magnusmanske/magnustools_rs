@@ -1,0 +1,4 @@
+{
+  "public_html": "/data/project/magnustools/public_html",
+  "telemetry": { "token": "<dashboard token; or set $DASHBOARD_TOKEN>" }
+}
