@@ -6,11 +6,12 @@
 //! changed, so most fields came back empty. This keeps the XML format but
 //! takes the data from the MediaWiki API (`extmetadata`, `categories`).
 //! Licence terms still come from the wiki page `Commons:Commons API`.
+//! `format=json` gives the same as JSON (or JSONP, with `callback`).
 
 use crate::cache::TimedCache;
 use crate::mediawiki::{self, strip_namespace};
 use crate::state::AppState;
-use crate::web::{AppError, Params, render};
+use crate::web::{AppError, Params, jsonp, render};
 use crate::wiki::Wiki;
 use askama::Template;
 use axum::extract::State;
@@ -41,6 +42,10 @@ pub struct Request {
     languages: String,
     versions: Option<String>,
     meta: Option<String>,
+    sdc: Option<String>,
+    #[serde(default)]
+    format: String,
+    callback: Option<String>,
 }
 
 struct Options {
@@ -49,6 +54,8 @@ struct Options {
     languages: Vec<String>,
     versions: bool,
     meta: bool,
+    /// Structured data: captions and "depicts" statements.
+    sdc: bool,
 }
 
 #[derive(Template)]
@@ -79,6 +86,7 @@ pub async fn handler(
         languages: request.languages.split('|').map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect(),
         versions: request.versions.is_some(),
         meta: request.meta.is_some(),
+        sdc: request.sdc.is_some(),
     };
     let license_data = license_data(&state.http).await?;
     let mut files = vec![];
@@ -87,23 +95,24 @@ pub async fn handler(
     }
     let language_names = language_names(&state.http, &files).await?;
 
-    let mut xml = Xml::default();
-    xml.raw(&format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><response version=\"{API_VERSION}\">"));
+    let mut response = Element::new("response").attribute("version", API_VERSION);
     let multiple = images.len() > 1;
     for (image, file) in &files {
-        if multiple {
-            xml.raw(&format!("<image name=\"{}\">", attribute(&ucfirst(image))));
-        }
-        match file {
-            Some(file) => write_file(&mut xml, image, file, &options, &license_data, &language_names),
-            None => xml.element("error", &format!("File does not exist : {image}")),
-        }
-        if multiple {
-            xml.raw("</image>");
+        let elements = match file {
+            Some(file) => file_elements(image, file, &options, &license_data, &language_names),
+            None => vec![Element::text("error", &format!("File does not exist : {image}"))],
+        };
+        match multiple {
+            true => response.push(Element::new("image").attribute("name", &ucfirst(image)).children(elements)),
+            false => response.children.extend(elements),
         }
     }
-    xml.raw("</response>");
-    Ok(([(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml.0).into_response())
+    if request.format.trim().eq_ignore_ascii_case("json") {
+        return Ok(jsonp(serde_json::json!({ "response": response.to_json() }), request.callback).into_response());
+    }
+    let mut xml = r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string();
+    response.write_xml(&mut xml);
+    Ok(([(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml).into_response())
 }
 
 /// What the API knows about one file.
@@ -111,6 +120,8 @@ struct File {
     info: Map<String, Value>,
     versions: Vec<Map<String, Value>>,
     categories: Vec<String>,
+    /// The MediaInfo entity, for `sdc`.
+    entity: Option<Value>,
 }
 
 async fn fetch(http: &reqwest::Client, image: &str, options: &Options) -> anyhow::Result<Option<File>> {
@@ -135,6 +146,14 @@ async fn fetch(http: &reqwest::Client, image: &str, options: &Options) -> anyhow
     let json = mediawiki::api(http, &commons, &params).await?;
     let page = &json["query"]["pages"][0];
     let Some(info) = page["imageinfo"][0].as_object() else { return Ok(None) };
+    let entity = match (options.sdc, page["pageid"].as_u64()) {
+        (true, Some(id)) => {
+            let id = format!("M{id}");
+            let json = mediawiki::api(http, &commons, &[("action", "wbgetentities"), ("ids", id.as_str())]).await?;
+            json["entities"].get(&id).filter(|e| e.get("missing").is_none()).cloned()
+        }
+        _ => None,
+    };
     let categories = page["categories"]
         .as_array()
         .into_iter()
@@ -162,7 +181,7 @@ async fn fetch(http: &reqwest::Client, image: &str, options: &Options) -> anyhow
             .map(|v| v.iter().filter(|(k, _)| k.as_str() != "url").map(|(k, v)| (k.clone(), v.clone())).collect())
             .collect();
     }
-    Ok(Some(File { info: info.clone(), versions, categories }))
+    Ok(Some(File { info: info.clone(), versions, categories, entity }))
 }
 
 fn thumb_params<'a>(params: &mut Vec<(&'a str, &'a str)>, width: &'a Option<String>, height: &'a Option<String>) {
@@ -228,101 +247,134 @@ fn absolute_links(html: &str) -> String {
     html.replace("href=\"//", "href=\"https://")
 }
 
-fn write_file(
-    xml: &mut Xml,
+/// The elements describing one file.
+fn file_elements(
     image: &str,
     file: &File,
     options: &Options,
     licenses: &LicenseData,
     language_names: &HashMap<String, String>,
-) {
+) -> Vec<Element> {
     let info = &file.info;
     let text = |key: &str| info.get(key).map(scalar);
     let categories = Categories::new(&file.categories, licenses);
+    let mut elements = vec![];
 
-    xml.raw("<file>");
-    xml.element("name", &image.replace('_', " "));
-    xml.element("title", &format!("File:{image}"));
-    xml.raw("<urls>");
-    xml.element("file", &text("url").unwrap_or_default());
-    xml.element("description", &format!("https://commons.wikimedia.org/wiki/File:{image}"));
+    let mut summary = Element::new("file");
+    summary.add("name", &image.replace('_', " "));
+    summary.add("title", &format!("File:{image}"));
+    let mut urls = Element::new("urls");
+    urls.add("file", &text("url").unwrap_or_default());
+    urls.add("description", &format!("https://commons.wikimedia.org/wiki/File:{image}"));
     if let Some(thumbnail) = text("thumburl") {
-        xml.element("thumbnail", &thumbnail);
+        urls.add("thumbnail", &thumbnail);
     }
-    xml.raw("</urls>");
+    summary.push(urls);
     for (tag, key) in [("size", "size"), ("width", "width"), ("height", "height"), ("uploader", "user")] {
-        xml.element(tag, &text(key).unwrap_or_else(|| "0".to_string()));
+        summary.add(tag, &text(key).unwrap_or_else(|| "0".to_string()));
     }
     for (tag, key) in [("upload_date", "timestamp"), ("sha1", "sha1")] {
-        match text(key) {
-            Some(value) => xml.element(tag, &value),
-            None => xml.raw(&format!("<{tag}/>")),
-        }
+        summary.add(tag, &text(key).unwrap_or_default());
     }
     let coordinate = |field| extmetadata(info, field).as_str().map(str::trim).filter(|v| !v.is_empty());
     if let (Some(lat), Some(lon)) = (coordinate("GPSLatitude"), coordinate("GPSLongitude")) {
-        xml.raw(&format!("<location><lat>{}</lat><lon>{}</lon></location>", text_escape(lat), text_escape(lon)));
+        summary.push(Element::new("location").children(vec![Element::text("lat", lat), Element::text("lon", lon)]));
     }
     for (tag, field) in FIELDS {
         if let Some(value) = extmetadata(info, field).as_str() {
-            xml.element(tag, &absolute_links(value));
+            summary.add(tag, &absolute_links(value));
         }
     }
     for (tag, value) in &categories.flags {
-        xml.element(tag, value);
+        summary.add(tag, value);
     }
-    xml.raw("</file>");
+    elements.push(summary);
 
     let metadata = info.get("metadata").and_then(Value::as_array).filter(|m| !m.is_empty());
     if let (true, Some(metadata)) = (options.meta, metadata) {
-        xml.raw("<meta>");
-        for item in metadata {
-            let name = item["name"].as_str().unwrap_or_default();
-            xml.raw(&format!("<item name=\"{}\">{}</item>", attribute(name), text_escape(&scalar(&item["value"]))));
-        }
-        xml.raw("</meta>");
+        let items = metadata
+            .iter()
+            .map(|item| {
+                Element::text("item", &scalar(&item["value"]))
+                    .attribute("name", item["name"].as_str().unwrap_or_default())
+            })
+            .collect();
+        elements.push(Element::new("meta").children(items));
     }
 
-    xml.raw("<description>");
     let mut descriptions = descriptions(info);
     if !options.languages.is_empty() {
         descriptions =
             options.languages.iter().filter_map(|l| descriptions.iter().find(|(code, _)| code == l).cloned()).collect();
     }
-    for (code, text) in &descriptions {
-        let name = language_names.get(code).map(|n| format!(" name=\"{}\"", attribute(n))).unwrap_or_default();
-        xml.raw(&format!("<language code=\"{}\"{name}>{}</language>", attribute(code), text_escape(text)));
-    }
-    xml.raw("</description>");
+    let descriptions = descriptions
+        .iter()
+        .map(|(code, text)| {
+            let language = Element::text("language", text).attribute("code", code);
+            match language_names.get(code) {
+                Some(name) => language.attribute("name", name),
+                None => language,
+            }
+        })
+        .collect();
+    elements.push(Element::new("description").children(descriptions));
 
-    xml.raw("<categories>");
-    for category in &categories.other {
-        xml.element("category", category);
-    }
-    xml.raw("</categories>");
+    let other = categories.other.iter().map(|c| Element::text("category", c)).collect();
+    elements.push(Element::new("categories").children(other));
 
-    xml.raw(if categories.self_made { "<licenses selfmade=\"1\">" } else { "<licenses>" });
+    let mut list = Element::new("licenses");
+    if categories.self_made {
+        list = list.attribute("selfmade", "1");
+    }
     for license in &categories.licenses {
-        xml.raw("<license>");
-        xml.element("name", license);
+        let mut element = Element::new("license");
+        element.add("name", license);
         for (key, value) in licenses.terms.get(license).into_iter().flatten() {
-            xml.element(key, value);
+            element.add(key, value);
         }
-        xml.raw("</license>");
+        list.push(element);
     }
-    xml.raw("</licenses>");
+    elements.push(list);
 
     if options.versions {
-        xml.raw("<versions>");
-        for version in &file.versions {
-            xml.raw("<version>");
-            for (key, value) in version {
-                xml.element(key, &scalar(value));
-            }
-            xml.raw("</version>");
-        }
-        xml.raw("</versions>");
+        let versions = file
+            .versions
+            .iter()
+            .map(|version| {
+                let mut element = Element::new("version");
+                for (key, value) in version {
+                    element.add(key, &scalar(value));
+                }
+                element
+            })
+            .collect();
+        elements.push(Element::new("versions").children(versions));
     }
+    if let Some(entity) = &file.entity {
+        elements.push(structured_data(entity));
+    }
+    elements
+}
+
+/// Captions and "depicts" (P180) statements of a MediaInfo entity.
+fn structured_data(entity: &Value) -> Element {
+    let captions = entity["labels"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(code, label)| {
+            Element::text("caption", label["value"].as_str().unwrap_or_default()).attribute("code", code)
+        })
+        .collect();
+    let depicts = entity["statements"]["P180"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s["mainsnak"]["datavalue"]["value"]["id"].as_str())
+        .map(|id| Element::new("entity").attribute("id", id))
+        .collect();
+    Element::new("structured_data")
+        .children(vec![Element::new("captions").children(captions), Element::new("depicts").children(depicts)])
 }
 
 /// A file's categories, sorted into licences, flags and the rest.
@@ -455,19 +507,90 @@ async fn license_data(http: &reqwest::Client) -> anyhow::Result<Arc<LicenseData>
         .await
 }
 
-/// The response under construction.
-#[derive(Default)]
-struct Xml(String);
+/// Elements that are lists in JSON, even with a single entry.
+const JSON_LISTS: &[&str] = &["image", "category", "language", "license", "version", "item", "caption", "entity"];
 
-impl Xml {
-    fn raw(&mut self, s: &str) {
-        self.0.push_str(s);
+/// An element of the response, written as XML or JSON.
+#[derive(Debug, Default)]
+struct Element {
+    name: String,
+    attributes: Vec<(String, String)>,
+    text: String,
+    children: Vec<Element>,
+}
+
+impl Element {
+    /// A tag name from data is made a valid XML name.
+    fn new(name: &str) -> Self {
+        Self { name: element_name(name), ..Default::default() }
     }
 
-    /// `<tag>text</tag>`; a tag name from data is made a valid XML name.
-    fn element(&mut self, tag: &str, text: &str) {
-        let tag = element_name(tag);
-        self.0.push_str(&format!("<{tag}>{}</{tag}>", text_escape(text)));
+    fn text(name: &str, text: &str) -> Self {
+        Self { text: text.to_string(), ..Self::new(name) }
+    }
+
+    fn attribute(mut self, name: &str, value: &str) -> Self {
+        self.attributes.push((name.to_string(), value.to_string()));
+        self
+    }
+
+    fn children(mut self, children: Vec<Element>) -> Self {
+        self.children = children;
+        self
+    }
+
+    fn push(&mut self, child: Element) {
+        self.children.push(child);
+    }
+
+    fn add(&mut self, name: &str, text: &str) {
+        self.push(Self::text(name, text));
+    }
+
+    fn write_xml(&self, out: &mut String) {
+        out.push('<');
+        out.push_str(&self.name);
+        for (name, value) in &self.attributes {
+            out.push_str(&format!(" {name}=\"{}\"", attribute(value)));
+        }
+        if self.text.is_empty() && self.children.is_empty() {
+            out.push_str("/>");
+            return;
+        }
+        out.push('>');
+        out.push_str(&text_escape(&self.text));
+        for child in &self.children {
+            child.write_xml(out);
+        }
+        out.push_str(&format!("</{}>", self.name));
+    }
+
+    /// As the PHP version turned its XML into JSON: a plain element becomes
+    /// its text; attributes become keys, with the text as `value`; repeated
+    /// elements become lists.
+    fn to_json(&self) -> Value {
+        if self.children.is_empty() && self.attributes.is_empty() {
+            return Value::String(self.text.clone());
+        }
+        let mut map: Map<String, Value> =
+            self.attributes.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
+        if self.children.is_empty() && !self.text.trim().is_empty() {
+            map.insert("value".to_string(), Value::String(self.text.clone()));
+        }
+        for child in &self.children {
+            let value = child.to_json();
+            match map.get_mut(&child.name) {
+                Some(Value::Array(list)) => list.push(value),
+                Some(single) => *single = Value::Array(vec![single.take(), value]),
+                None if JSON_LISTS.contains(&child.name.as_str()) => {
+                    map.insert(child.name.clone(), Value::Array(vec![value]));
+                }
+                None => {
+                    map.insert(child.name.clone(), value);
+                }
+            }
+        }
+        Value::Object(map)
     }
 }
 
@@ -591,14 +714,23 @@ mod tests {
             info: info.as_object().unwrap().clone(),
             versions: vec![],
             categories: vec!["CC-BY-SA-2.5".into(), "Self-published work".into(), "Yarra River".into()],
+            entity: None,
         };
-        let options =
-            Options { thumb_width: None, thumb_height: None, languages: vec![], versions: false, meta: false };
+        let options = Options {
+            thumb_width: None,
+            thumb_height: None,
+            languages: vec![],
+            versions: false,
+            meta: false,
+            sdc: false,
+        };
         let names = HashMap::from([("en".to_string(), "English".to_string())]);
-        let mut xml = Xml::default();
-        write_file(&mut xml, "Yarra_Panorama.jpg", &file, &options, &LicenseData::parse(LICENSE_PAGE_TEXT), &names);
+        let elements =
+            file_elements("Yarra_Panorama.jpg", &file, &options, &LicenseData::parse(LICENSE_PAGE_TEXT), &names);
+        let mut xml = String::new();
+        elements.iter().for_each(|e| e.write_xml(&mut xml));
         assert_eq!(
-            xml.0,
+            xml,
             "<file><name>Yarra Panorama.jpg</name><title>File:Yarra_Panorama.jpg</title><urls>\
              <file>https://upload.wikimedia.org/x/Yarra_Panorama.jpg?a=1&amp;b=2</file>\
              <description>https://commons.wikimedia.org/wiki/File:Yarra_Panorama.jpg</description></urls>\
@@ -613,6 +745,43 @@ mod tests {
              <full_name>Creative Commons Attribution Share-Alike V2.5</full_name><attribute_author>1</attribute_author>\
              <license_info_url>http://creativecommons.org/licenses/by/2.5/</license_info_url>\
              <keep_under_similar_license>1</keep_under_similar_license></license></licenses>"
+        );
+    }
+
+    #[test]
+    fn json_as_the_php_version_made_it() {
+        let mut response = Element::new("response").attribute("version", API_VERSION);
+        response.push(Element::new("categories").children(vec![Element::text("category", "A")]));
+        response.push(Element::text("language", "View").attribute("code", "en"));
+        response.push(Element::text("language", "Blick").attribute("code", "de"));
+        response.push(Element::new("licenses").attribute("selfmade", "1"));
+        response.push(Element::text("sha1", ""));
+        assert_eq!(
+            response.to_json(),
+            json!({
+                "version": API_VERSION,
+                "categories": {"category": ["A"]},
+                "language": [{"code": "en", "value": "View"}, {"code": "de", "value": "Blick"}],
+                "licenses": {"selfmade": "1"},
+                "sha1": ""
+            })
+        );
+        let mut xml = String::new();
+        response.write_xml(&mut xml);
+        assert!(xml.ends_with(r#"<licenses selfmade="1"/><sha1/></response>"#), "{xml}");
+    }
+
+    #[test]
+    fn captions_and_depicts() {
+        let entity = json!({
+            "labels": {"en": {"language": "en", "value": "A warthog"}},
+            "statements": {"P180": [{"mainsnak": {"datavalue": {"value": {"id": "Q1"}}}}]}
+        });
+        let mut xml = String::new();
+        structured_data(&entity).write_xml(&mut xml);
+        assert_eq!(
+            xml,
+            r#"<structured_data><captions><caption code="en">A warthog</caption></captions><depicts><entity id="Q1"/></depicts></structured_data>"#
         );
     }
 

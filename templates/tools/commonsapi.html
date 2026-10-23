@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<p class="lead">An XML summary of Wikimedia Commons files for re-users: URLs, size, descriptions, author, source,
+<p class="lead">An XML (or JSON) summary of Wikimedia Commons files for re-users: URLs, size, descriptions, author, source,
 location, categories, and licences with their terms.</p>
 <h2>Usage</h2>
 <p><code>/commonsapi/?image=IMAGENAME</code>, without the <code>File:</code> prefix. Several images are separated by <code>|</code>.</p>
@@ -11,11 +11,15 @@ location, categories, and licences with their terms.</p>
   <tr><td><code>languages=en|de|default</code></td><td>Only descriptions in these languages</td></tr>
   <tr><td><code>versions</code></td><td>Adds all former versions of the file</td></tr>
   <tr><td><code>meta</code></td><td>Adds the metadata stored in the file, such as EXIF</td></tr>
+  <tr><td><code>sdc</code></td><td>Adds structured data: captions and “depicts” statements</td></tr>
+  <tr><td><code>format=json</code></td><td>JSON instead of XML</td></tr>
+  <tr><td><code>callback=NAME</code></td><td>With <code>format=json</code>: JSONP</td></tr>
 </table>
 <h2>Examples</h2>
 <ul>
   <li><a href="/commonsapi/?image=Sa-warthog.jpg&amp;thumbwidth=150&amp;thumbheight=150&amp;versions&amp;meta">Sa-warthog.jpg</a>, with thumbnail, versions and metadata</li>
   <li><a href="/commonsapi/?image=Yarra_Panorama.jpg">Yarra_Panorama.jpg</a>, with a location</li>
+  <li><a href="/commonsapi/?image=Sa-warthog.jpg&amp;sdc&amp;format=json">Sa-warthog.jpg</a> as JSON, with structured data</li>
   <li><a href="/commonsapi/?image=Sa-warthog.jpg|Yarra_Panorama.jpg|filedoesnotexist">Several images</a>, one of them missing</li>
 </ul>
 <p class="hint">Licence terms come from <a href="https://commons.wikimedia.org/wiki/Commons:Commons_API">Commons:Commons API</a>.</p>
