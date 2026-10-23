@@ -11,7 +11,7 @@ use axum_extra::extract::cookie::Key;
 use std::path::Path;
 
 /// Sent with every outbound request, per the Wikimedia User-Agent policy.
-const USER_AGENT: &str =
+pub const USER_AGENT: &str =
     wikimisc::user_agent!(name = "magnustools", description = "https://magnustools.toolforge.org/");
 
 #[derive(Debug)]

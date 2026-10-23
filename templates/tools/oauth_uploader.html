@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Uploads files to Wikimedia Commons under your own user name, for tools that transfer files.</p>
+{% if let Some(user) = user %}
+<p>You are logged in as <strong>{{ user }}</strong>.</p>
+{% else %}
+<p>To use it, <a href="oauth_uploader.php?action=authorize">log in</a> first.</p>
+{% endif %}
+{% if let Some(message) = message %}
+<p{% if message != "Auth OK!" && message != "Done." %} class="error"{% endif %}>{{ message }}</p>
+{% endif %}
+<h2>Tools using it</h2>
+<ul>
+  <li><a href="https://flickr2commons.toolforge.org/">Flickr2Commons</a></li>
+  <li><a href="https://url2commons.toolforge.org/">Url2Commons</a></li>
+  <li><a href="https://geograph2commons.toolforge.org/">Geograph2Commons</a></li>
+  <li><a href="https://commonshelper.toolforge.org/">CommonsHelper</a></li>
+</ul>
+<p class="hint">See <a href="https://commons.wikimedia.org/wiki/Special:MyLanguage/Commons:OAuth_Uploader">Commons:OAuth Uploader</a>.</p>
+{% endblock %}

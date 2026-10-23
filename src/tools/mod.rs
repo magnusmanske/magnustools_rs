@@ -11,6 +11,7 @@ mod html2wiki;
 mod index;
 mod logger;
 mod metronom;
+mod oauth_uploader;
 mod prepbio;
 mod quick_counter;
 mod random_page;
@@ -42,6 +43,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/html2wiki.php", get(html2wiki::handler).post(html2wiki::handler))
         .route("/logger.php", get(logger::handler).post(logger::handler))
         .route("/metronom.php", get(metronom::handler))
+        .route("/oauth_uploader.php", get(oauth_uploader::handler).post(oauth_uploader::handler))
         .route("/prepbio.php", get(prepbio::handler).post(prepbio::handler))
         .route("/quick_counter.php", get(quick_counter::handler))
         .route("/random_image_commons_subcat.php", get(random_page::image))

@@ -5,6 +5,7 @@ pub mod cache;
 pub mod config;
 pub mod mediawiki;
 pub mod oauth;
+pub mod public_web;
 pub mod replicas;
 pub mod state;
 pub mod tool_db;

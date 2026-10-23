@@ -122,6 +122,35 @@ impl OAuth {
             .context("OAuth API answer is not JSON")
     }
 
+    /// A file upload (multipart POST) to a wiki's action API. As in the old
+    /// tools, only the OAuth parameters are signed, not the form fields.
+    pub async fn api_upload(
+        &self,
+        api_url: &str,
+        token: &Token,
+        fields: &[(&str, String)],
+        file: reqwest::multipart::Part,
+    ) -> Result<Value> {
+        let header = self.authorization("POST", api_url, &[], Some(token))?;
+        let form = fields
+            .iter()
+            .fold(reqwest::multipart::Form::new(), |form, (k, v)| form.text(k.to_string(), v.clone()))
+            .text("format", "json")
+            .part("file", file);
+        self.http
+            .post(api_url)
+            .header(reqwest::header::USER_AGENT, &self.consumer.agent)
+            .header(reqwest::header::AUTHORIZATION, header)
+            .multipart(form)
+            .send()
+            .await
+            .and_then(reqwest::Response::error_for_status)
+            .context("upload request failed")?
+            .json()
+            .await
+            .context("upload answer is not JSON")
+    }
+
     /// The `Authorization: OAuth …` header for a request whose body (or
     /// query) is `params`.
     pub fn authorization(
