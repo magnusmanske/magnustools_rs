@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Files in a Commons category tree that no Wikimedia wiki uses in an article.</p>
+<form method="get" action="unused_files.php">
+  <label>Commons category <input type="text" name="category" value="{{ category }}" required></label>
+  <label>Subcategory depth
+    <input type="number" name="depth" min="0" max="20" value="{{ depth }}" style="max-width:6rem">
+  </label>
+  <label>Only check these wikis <span class="hint">optional; e.g. enwiki,dewikisource</span>
+    <input type="text" name="projects" value="{{ projects }}">
+  </label>
+  <button>Find unused files</button>
+</form>
+{% if results.is_none() %}
+<p class="hint">Example: <a href="unused_files.php?category=Belgrade+Aviation+Museum&amp;depth=12">Belgrade Aviation Museum</a></p>
+{% endif %}
+{% if let Some(results) = results %}
+<h2>{{ results.unused }} unused files</h2>
+<p class="muted">Out of {{ results.total }} files in the category tree.{% if results.files.len() < results.unused %} The first {{ results.files.len() }} are shown.{% endif %}</p>
+<div class="table-wrap">
+<table>
+{% for file in results.files %}
+  <tr>
+    <td style="width:{{ thumb_size }}px">
+      {% if let Some(thumbnail) = file.thumbnail %}<a href="{{ file.url }}"><img loading="lazy" src="{{ thumbnail }}" alt="" style="margin-left:{{ file.thumb_padding }}px"></a>{% endif %}
+    </td>
+    <td>
+      <strong><a href="{{ file.url }}">{{ file.name }}</a></strong><br>
+      <span class="hint">Find articles to use it in:
+      <a href="{{ file.search_url }}">search Wikipedias for its title</a>
+      (<a href="{{ file.search_any_url }}">any word</a>)</span>
+    </td>
+  </tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Page views in one month of the articles a user started.</p>
+<form method="get" action="metronom.php">
+  <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+  <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  <label>Month <span class="hint">YYYYMM, from 201507</span>
+    <input type="text" name="month" value="{{ month }}" pattern="[0-9]{6}" required>
+  </label>
+  <label>User <input type="text" name="user" value="{{ user }}" required></label>
+  <button name="doit" value="1">Count views</button>
+</form>
+{% if let Some(results) = results %}
+<h2>{{ results.started }} articles started by {{ user }}</h2>
+{% if results.capped %}<p class="muted">Only the first {{ results.articles.len() }} are counted.</p>{% endif %}
+{% if results.failed > 0 %}<p class="error">No view data for {{ results.failed }} articles: the page view service limits how fast it can be asked. They count as none; try again later.</p>{% endif %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Article</th><th>Started</th><th class="num">Views</th></tr></thead>
+  <tbody>
+  {% for article in results.articles %}
+    <tr><td><a href="{{ article.url }}">{{ article.title }}</a></td><td>{{ article.created }}</td>
+      <td class="num">{% if let Some(views) = article.views %}{{ views }}{% else %}–{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><th colspan="2">Total</th><th class="num">{{ results.total }}</th></tr></tfoot>
+</table>
+</div>
+{% endif %}
+{% endblock %}

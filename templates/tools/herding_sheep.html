@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Recent article edits by a group of users: the users with a page in a category, or a list.</p>
+<form method="get" action="herding_sheep.php">
+  <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+  <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  <label>Category of user pages
+    <input type="text" name="category" value="{{ request.category }}">
+  </label>
+  <label>… or users <span class="hint">one per line</span>
+    <textarea name="users" rows="5">{{ request.users }}</textarea>
+  </label>
+  <label>From <span class="hint">YYYYMMDDHHMMSS, or the start of it, e.g. 2024 or 202403</span>
+    <input type="text" name="timestamp" value="{{ request.timestamp }}" pattern="[0-9]{0,14}">
+  </label>
+  <label>Until
+    <input type="text" name="timestamp_stop" value="{{ request.timestamp_stop }}" pattern="[0-9]{0,14}">
+  </label>
+  <label>Edits <input type="number" name="limit" min="1" max="5000" value="{{ limit }}" style="max-width:8rem"></label>
+  <button name="doit" value="1">Show edits</button>
+</form>
+{% if let Some(results) = results %}
+<h2>Edits</h2>
+<p>{{ results.users }} users{% if let Some(url) = results.category_url %} in <a href="{{ url }}">{{ request.category }}</a>{% endif %};
+the latest {{ results.edits.len() }} of their article edits.</p>
+{% if !results.edits.is_empty() %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Article</th><th>User</th><th>Time (UTC)</th></tr></thead>
+  <tbody>
+  {% for edit in results.edits %}
+    <tr><td><a href="{{ edit.page_url }}">{{ edit.page }}</a></td><td><a href="{{ edit.user_url }}">{{ edit.user }}</a></td><td>{{ edit.time }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if let Some(url) = results.next_url %}<p><a href="{{ url }}">Older edits</a></p>{% endif %}
+<h2>Edits per user</h2>
+<table>
+  <thead><tr><th>User</th><th class="num">Edits</th></tr></thead>
+  <tbody>
+  {% for (user, url, count) in results.per_user %}
+    <tr><td><a href="{{ url }}">{{ user }}</a></td><td class="num">{{ count }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+{% endblock %}
