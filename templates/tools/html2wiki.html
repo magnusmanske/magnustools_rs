@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Converts HTML tables, and simple tags like <code>&lt;b&gt;</code> and <code>&lt;br&gt;</code>, to wiki markup.
+After a script by Borislav Manolov.</p>
+<form method="post" action="html2wiki.php">
+  <label>HTML
+    <textarea class="code" name="html" rows="12" required>{{ html }}</textarea>
+  </label>
+  <label>Dashes per row separator
+    <input type="number" name="dashes" min="1" max="20" value="{{ options.dashes }}" style="max-width:6rem">
+  </label>
+  <label class="check"><input type="checkbox" name="oneline" value="1"{% if options.oneline %} checked{% endif %}> Cells of a row on one line</label>
+  <label class="check"><input type="checkbox" name="escape" value="1"{% if options.escape %} checked{% endif %}> Replace <code>!</code> and <code>|</code> in the text with HTML entities</label>
+  <label class="check"><input type="checkbox" name="otherhtml" value="1"{% if options.other_html %} checked{% endif %}> Also convert other HTML tags where possible</label>
+  <button>Convert</button>
+</form>
+{% if let Some(wikitext) = wikitext %}
+<h2>Wiki markup</h2>
+<textarea class="code" rows="16" readonly>{{ wikitext }}</textarea>
+{% endif %}
+{% endblock %}

@@ -12,6 +12,9 @@ pub struct Config {
     /// The PHP tool's `public_html`, whose static files are served as they are.
     /// Relative paths are relative to the config file.
     pub public_html: PathBuf,
+    /// The Flickr API key, alone in a file; without it, `flickrfree.php` is unavailable.
+    #[serde(default)]
+    pub flickr_key_file: Option<PathBuf>,
     /// Service dashboard push; the token may also come from `$DASHBOARD_TOKEN`.
     #[serde(default)]
     pub telemetry: TelemetryConfig,
@@ -25,6 +28,7 @@ impl Config {
             serde_json::from_str(&text).with_context(|| format!("invalid config file {}", path.display()))?;
         let dir = path.parent().unwrap_or(Path::new("."));
         config.public_html = dir.join(&config.public_html);
+        config.flickr_key_file = config.flickr_key_file.map(|f| dir.join(f));
         Ok(config)
     }
 }

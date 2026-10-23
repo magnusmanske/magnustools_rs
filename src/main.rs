@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use magnustools_rs::{config::Config, web};
+use magnustools_rs::{config::Config, state::AppState, web};
 use std::path::PathBuf;
 use std::sync::Arc;
 use wikimisc::telemetry::Telemetry;
@@ -30,6 +30,7 @@ async fn main() -> Result<()> {
         .install_or_log();
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", cli.port)).await?;
     tracing::info!("listening on http://{}", listener.local_addr()?);
-    wikimisc::server::serve(listener, web::router(Arc::new(config))).await?;
+    let state = AppState::new(config)?;
+    wikimisc::server::serve(listener, web::router(Arc::new(state))).await?;
     Ok(())
 }

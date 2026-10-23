@@ -4,11 +4,14 @@
 mod error;
 mod legacy;
 mod page;
+mod params;
 mod static_files;
 
 pub use error::AppError;
+pub use page::{jsonp, render};
+pub use params::Params;
 
-use crate::config::Config;
+use crate::state::AppState;
 use axum::Router;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::IntoResponse;
@@ -21,11 +24,14 @@ use tower_http::set_header::SetResponseHeaderLayer;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const HEALTH_PATH: &str = "/healthz";
 
-pub fn router(config: Arc<Config>) -> Router {
-    let router = legacy::routes()
+pub fn router(state: Arc<AppState>) -> Router {
+    let static_files = static_files::service(&state.config.public_html);
+    let router = crate::tools::routes()
         .route(HEALTH_PATH, get(wikimisc::server::health::ok))
         .route(page::STYLESHEET_PATH, get(page::stylesheet))
-        .fallback_service(static_files::service(&config.public_html))
+        .with_state(state)
+        .merge(legacy::routes())
+        .fallback_service(static_files)
         .layer(header_layer(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
         .layer(header_layer(header::REFERRER_POLICY, "strict-origin-when-cross-origin"));
     let router = wikimisc::server::timeout(router, REQUEST_TIMEOUT, StatusCode::GATEWAY_TIMEOUT);
@@ -58,9 +64,14 @@ pub(crate) mod test_support {
 
     /// The full router, serving static files from `public_html`.
     pub async fn get(public_html: &std::path::Path, uri: &str) -> TestResponse {
-        let config = Config { public_html: public_html.to_path_buf(), telemetry: Default::default() };
+        let config = crate::config::Config {
+            public_html: public_html.to_path_buf(),
+            flickr_key_file: None,
+            telemetry: Default::default(),
+        };
+        let state = AppState::new(config).unwrap();
         let request = Request::get(uri).body(Body::empty()).unwrap();
-        let response = router(Arc::new(config)).oneshot(request).await.unwrap();
+        let response = router(Arc::new(state)).oneshot(request).await.unwrap();
         let status = response.status();
         let headers = response.headers().clone();
         let bytes = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();

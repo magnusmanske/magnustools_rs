@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Copy a table from a spreadsheet, paste it here, and get a wiki table.</p>
+<form method="post" action="tab2wiki.php">
+  <label>Table
+    <textarea class="code" name="text" rows="10" required>{{ text }}</textarea>
+  </label>
+  <label class="check"><input type="checkbox" name="colhead" value="1"{% if options.column_headers %} checked{% endif %}> First row is a header</label>
+  <label class="check"><input type="checkbox" name="rowhead" value="1"{% if options.row_headers %} checked{% endif %}> First column is a header</label>
+  <label class="check"><input type="checkbox" name="compressed" value="1"{% if options.compressed %} checked{% endif %}> One line per row <span class="hint">(not with a header column)</span></label>
+  <label class="check"><input type="checkbox" name="sortable" value="1"{% if options.sortable %} checked{% endif %}> Sortable</label>
+  <button name="doit" value="1">Convert</button>
+</form>
+{% if let Some(wikitext) = wikitext %}
+<h2>Wiki table</h2>
+<textarea class="code" rows="16" readonly>{{ wikitext }}</textarea>
+{% endif %}
+{% endblock %}
