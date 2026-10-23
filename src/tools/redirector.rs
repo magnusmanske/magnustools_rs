@@ -142,14 +142,8 @@ async fn results(
     // What the wiki has of them, and how often its articles link to them.
     let all: Vec<String> =
         candidates.values().flat_map(|c| c.keys().cloned()).collect::<BTreeSet<_>>().into_iter().collect();
-    let mut conn = state.replicas.conn(wiki, &["page"]).await?;
-    let sql = "SELECT page_title FROM page WHERE page_namespace=0 AND page_title IN";
-    let existing: BTreeSet<String> = select_in(&mut conn, sql, "", &[], &all).await?.into_iter().collect();
-    let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget"]).await?;
-    let sql = "SELECT lt_title, COUNT(*) FROM linktarget JOIN pagelinks ON pl_target_id=lt_id
-        WHERE lt_namespace=0 AND pl_from_namespace=0 AND lt_title IN";
-    let counts: HashMap<String, u64> =
-        select_in(&mut conn, sql, "GROUP BY lt_title", &[], &all).await?.into_iter().collect();
+    let existing = state.replicas.existing(wiki, 0, &all).await?;
+    let counts = state.replicas.link_counts(wiki, &all, true).await?;
 
     let rows = pages
         .iter()

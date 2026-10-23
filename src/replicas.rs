@@ -6,7 +6,7 @@
 
 use crate::wiki::Wiki;
 use anyhow::{Context, Result};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::Duration;
 use wikimisc::mysql_async::prelude::{FromRow, Queryable};
@@ -108,6 +108,32 @@ impl Replicas {
         params.extend(categories.into_iter().take(CHUNK).map(Value::from));
         let title: Option<Vec<u8>> = conn.exec_first(sql, Params::Positional(params)).await?;
         Ok(title.map(|t| String::from_utf8_lossy(&t).into_owned()))
+    }
+
+    /// Those of `titles` (database form) that exist in `namespace`.
+    pub async fn existing(&self, wiki: &Wiki, namespace: i64, titles: &[String]) -> Result<HashSet<String>> {
+        let mut conn = self.conn(wiki, &["page"]).await?;
+        let sql = "SELECT page_title FROM page WHERE page_namespace=? AND page_title IN";
+        let rows: Vec<String> = select_in(&mut conn, sql, "", &[namespace.into()], titles).await?;
+        Ok(rows.into_iter().collect())
+    }
+
+    /// How many links each of `titles` (database form, namespace 0) has;
+    /// with `from_articles`, only links from articles count.
+    pub async fn link_counts(
+        &self,
+        wiki: &Wiki,
+        titles: &[String],
+        from_articles: bool,
+    ) -> Result<HashMap<String, u64>> {
+        let mut conn = self.conn(wiki, &["pagelinks", "linktarget"]).await?;
+        let from = if from_articles { "AND pl_from_namespace=0" } else { "" };
+        let sql = format!(
+            "SELECT lt_title, COUNT(*) FROM linktarget JOIN pagelinks ON pl_target_id=lt_id
+             WHERE lt_namespace=0 {from} AND lt_title IN"
+        );
+        let rows: Vec<(String, u64)> = select_in(&mut conn, &sql, "GROUP BY lt_title", &[], titles).await?;
+        Ok(rows.into_iter().collect())
     }
 }
 

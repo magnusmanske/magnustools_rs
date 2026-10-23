@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The red links on some pages, ranked by how often the whole wiki links to them: the most wanted missing articles.</p>
+<form method="get" action="/misstake/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <label>Pages <span class="hint">one per line, any namespace; a category stands for the pages in it</span>
+    <textarea name="page" rows="4" required>{{ request.page }}</textarea>
+  </label>
+  <button name="doit" value="1">Rank red links</button>
+</form>
+{% if results.is_none() %}
+<p class="hint">Example: <a href="/misstake/?language=en&amp;project=wikipedia&amp;page=List+of+shipwrecks+in+1850">List of shipwrecks in 1850</a></p>
+{% endif %}
+{% if let Some(results) = results %}
+<h2>{{ results.red_links }} red links</h2>
+<p class="muted">From {{ results.pages }} pages.{% if results.wanted.len() < results.red_links %} The {{ results.wanted.len() }} most wanted are shown.{% endif %}</p>
+<div class="table-wrap">
+<table>
+  <tr><th>Missing article</th><th class="num">Links</th></tr>
+{% for w in results.wanted %}
+  <tr><td><a href="{{ w.links_url }}">{{ w.title }}</a></td><td class="num">{{ w.links }}</td></tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
+{% endblock %}
