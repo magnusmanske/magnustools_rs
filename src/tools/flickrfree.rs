@@ -1,6 +1,7 @@
 //! `flickrfree.php`: the latest photos on Flickr under a licence that
 //! allows uploading them to Commons.
 
+use crate::cache::TimedCache;
 use crate::state::AppState;
 use crate::web::{AppError, render};
 use anyhow::Context;
@@ -9,9 +10,8 @@ use axum::extract::State;
 use axum::response::Html;
 use chrono::DateTime;
 use serde::Deserialize;
-use std::sync::{Arc, LazyLock};
-use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use std::sync::Arc;
+use std::time::Duration;
 
 const FLICKR_API: &str = "https://api.flickr.com/services/rest/";
 /// Flickr is asked at most this often; everyone in between sees the same list.
@@ -87,22 +87,10 @@ struct Page {
     photos: Arc<Vec<Photo>>,
 }
 
-/// The last list, and when it was fetched.
-type Cached = Option<(Instant, Arc<Vec<Photo>>)>;
-
-static CACHE: LazyLock<Mutex<Cached>> = LazyLock::new(|| Mutex::new(None));
+static CACHE: TimedCache<Vec<Photo>> = TimedCache::new(CACHE_FOR);
 
 pub async fn handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
-    let mut cache = CACHE.lock().await;
-    let photos = match cache.as_ref() {
-        Some((fetched, photos)) if fetched.elapsed() < CACHE_FOR => photos.clone(),
-        _ => {
-            let photos = Arc::new(latest_photos(&state).await?);
-            *cache = Some((Instant::now(), photos.clone()));
-            photos
-        }
-    };
-    drop(cache);
+    let photos = CACHE.get_or_fetch(async || latest_photos(&state).await).await?;
     render(&Page { title: "FlickrFree", photos })
 }
 

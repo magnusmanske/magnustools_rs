@@ -2,6 +2,7 @@
 
 mod authority_control;
 mod cas;
+mod commonsapi;
 mod flickrfree;
 mod get_article_intro;
 mod html2wiki;
@@ -20,6 +21,7 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/authority_control.php", get(authority_control::handler).post(authority_control::handler))
         .route("/cas.php", get(cas::handler))
+        .route("/commonsapi.php", get(commonsapi::handler))
         .route("/flickrfree.php", get(flickrfree::handler))
         .route("/get_article_intro.php", get(get_article_intro::handler))
         .route("/html2wiki.php", get(html2wiki::handler).post(html2wiki::handler))

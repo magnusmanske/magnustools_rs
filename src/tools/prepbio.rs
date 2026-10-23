@@ -136,8 +136,9 @@ const AUTHORITY_CONTROL: &[(&str, &str)] = &[
     ("NDL", "P349"),
 ];
 
-/// Label languages tried, in order, when pre-filling from Wikidata.
-const LANGUAGES: &[&str] = &["en", "de", "fr", "es", "it", "nl"];
+/// Label languages tried, in order, when pre-filling from Wikidata;
+/// `mul` holds names that are the same in all languages.
+const LANGUAGES: &[&str] = &["en", "mul", "de", "fr", "es", "it", "nl"];
 
 fn key(label: &str) -> String {
     label.replace(' ', "").to_lowercase()
@@ -550,7 +551,7 @@ mod tests {
     #[test]
     fn prefill_from_an_item() {
         let item = json!({
-            "labels": {"en": {"value": "Douglas Adams"}},
+            "labels": {"mul": {"value": "Douglas Adams"}, "de": {"value": "Douglas Noël Adams"}},
             "aliases": {"en": [{"value": "Douglas Noel Adams"}]},
             "claims": {
                 "P569": [{"mainsnak": {"datavalue": {"value": {"time": "+1952-03-11T00:00:00Z", "precision": 11}}}}],
