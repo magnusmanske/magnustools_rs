@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Opens a random {% if site.is_some() %}article{% else %}file on Commons{% endif %} from a category and its subcategories.</p>
+<form method="get" action="{{ action }}">
+{% if let Some((language, project)) = site %}
+  <label>Language <input type="text" name="lang" value="{{ language }}" required></label>
+  <label>Project <input type="text" name="family" value="{{ project }}" required></label>
+{% endif %}
+  <label>Category <input type="text" name="{{ category_field }}" value="{{ category }}" required></label>
+  <label>Subcategory depth
+    <input type="number" name="d" min="0" max="15" value="{{ depth }}" style="max-width:6rem">
+  </label>
+  <button>Open a random one</button>
+</form>
+{% if let Some(error) = error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+{% endblock %}

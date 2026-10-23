@@ -1,6 +1,7 @@
 //! What every request handler can use. Shared via `Arc`.
 
 use crate::config::Config;
+use crate::replicas::Replicas;
 use anyhow::Result;
 
 /// Sent with every outbound request, per the Wikimedia User-Agent policy.
@@ -11,10 +12,12 @@ const USER_AGENT: &str =
 pub struct AppState {
     pub config: Config,
     pub http: reqwest::Client,
+    pub replicas: Replicas,
 }
 
 impl AppState {
     pub fn new(config: Config) -> Result<Self> {
-        Ok(Self { config, http: wikimisc::http::client(USER_AGENT)? })
+        let replicas = Replicas::new(&config.replica_credentials)?;
+        Ok(Self { http: wikimisc::http::client(USER_AGENT)?, replicas, config })
     }
 }

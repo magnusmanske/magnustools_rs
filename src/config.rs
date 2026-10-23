@@ -12,12 +12,20 @@ pub struct Config {
     /// The PHP tool's `public_html`, whose static files are served as they are.
     /// Relative paths are relative to the config file.
     pub public_html: PathBuf,
+    /// Database credentials (`replica.my.cnf`, as Toolforge provides it). With
+    /// `local='true'` in it, connections go to SSH tunnels instead.
+    #[serde(default = "default_replica_credentials")]
+    pub replica_credentials: PathBuf,
     /// The Flickr API key, alone in a file; without it, `flickrfree.php` is unavailable.
     #[serde(default)]
     pub flickr_key_file: Option<PathBuf>,
     /// Service dashboard push; the token may also come from `$DASHBOARD_TOKEN`.
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+}
+
+fn default_replica_credentials() -> PathBuf {
+    "replica.my.cnf".into()
 }
 
 impl Config {
@@ -29,6 +37,7 @@ impl Config {
         let dir = path.parent().unwrap_or(Path::new("."));
         config.public_html = dir.join(&config.public_html);
         config.flickr_key_file = config.flickr_key_file.map(|f| dir.join(f));
+        config.replica_credentials = dir.join(&config.replica_credentials);
         Ok(config)
     }
 }
@@ -50,6 +59,7 @@ mod tests {
         let (config, dir) = load(r#"{"public_html": "php/public_html"}"#);
         let config = config.unwrap();
         assert_eq!(config.public_html, dir.path().join("php/public_html"));
+        assert_eq!(config.replica_credentials, dir.path().join("replica.my.cnf"));
         assert!(config.telemetry.token.is_none());
     }
 

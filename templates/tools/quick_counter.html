@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">A user's live and deleted edits, per namespace.</p>
+<form method="get" action="quick_counter.php">
+  <label>User <input type="text" name="user" value="{{ user }}" required></label>
+  <label>Wiki <span class="hint">e.g. en.wikipedia, de.wikisource, commons.wikimedia</span>
+    <input type="text" name="project" value="{{ project }}" required>
+  </label>
+  <button>Count edits</button>
+</form>
+{% if let Some(error) = error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+{% if let Some(totals) = totals %}
+<h2>Edits by {{ user }} on {{ project }}</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Namespace</th><th class="num">Live</th><th class="num">Deleted</th><th class="num">Total</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr><td>{{ row.namespace }}</td><td class="num">{{ row.live }}</td><td class="num">{{ row.deleted }}</td><td class="num">{{ row.total }}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><th>{{ totals.namespace }}</th><th class="num">{{ totals.live }}</th><th class="num">{{ totals.deleted }}</th><th class="num">{{ totals.total }}</th></tr></tfoot>
+</table>
+</div>
+{% endif %}
+{% endblock %}

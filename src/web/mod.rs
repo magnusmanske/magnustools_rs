@@ -8,7 +8,7 @@ mod params;
 mod static_files;
 
 pub use error::AppError;
-pub use page::{jsonp, render};
+pub use page::{jsonp, render, thousands};
 pub use params::Params;
 
 use crate::state::AppState;
@@ -64,8 +64,12 @@ pub(crate) mod test_support {
 
     /// The full router, serving static files from `public_html`.
     pub async fn get(public_html: &std::path::Path, uri: &str) -> TestResponse {
+        // Credentials are only read here; nothing connects.
+        let credentials = public_html.join("test.my.cnf");
+        std::fs::write(&credentials, "[client]\nuser=test\npassword=test\n").unwrap();
         let config = crate::config::Config {
             public_html: public_html.to_path_buf(),
+            replica_credentials: credentials,
             flickr_key_file: None,
             telemetry: Default::default(),
         };

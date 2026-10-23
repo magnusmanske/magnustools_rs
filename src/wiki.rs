@@ -8,19 +8,20 @@ use std::fmt;
 const LANGUAGE_PROJECTS: &[&str] =
     &["wikipedia", "wiktionary", "wikisource", "wikibooks", "wikinews", "wikiquote", "wikiversity", "wikivoyage"];
 
-/// "Languages" that name a single wiki, whatever the project.
-const SPECIAL_WIKIS: &[(&str, &str)] = &[
-    ("commons", "commons.wikimedia.org"),
-    ("meta", "meta.wikimedia.org"),
-    ("species", "species.wikimedia.org"),
-    ("incubator", "incubator.wikimedia.org"),
-    ("wikidata", "www.wikidata.org"),
-    ("mediawiki", "www.mediawiki.org"),
+/// "Languages" that name a single wiki, whatever the project: name, host, database.
+const SPECIAL_WIKIS: &[(&str, &str, &str)] = &[
+    ("commons", "commons.wikimedia.org", "commonswiki"),
+    ("meta", "meta.wikimedia.org", "metawiki"),
+    ("species", "species.wikimedia.org", "specieswiki"),
+    ("incubator", "incubator.wikimedia.org", "incubatorwiki"),
+    ("wikidata", "www.wikidata.org", "wikidatawiki"),
+    ("mediawiki", "www.mediawiki.org", "mediawikiwiki"),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Wiki {
     host: String,
+    dbname: String,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -35,27 +36,46 @@ impl Wiki {
     pub fn new(language: &str, project: &str) -> Result<Self, UnknownWiki> {
         let language = language.trim().to_lowercase();
         let project = project.trim().to_lowercase();
-        let special = SPECIAL_WIKIS.iter().find(|(name, _)| *name == language || *name == project);
-        let host = match special {
-            Some((_, host)) => Some(host.to_string()),
+        let special = SPECIAL_WIKIS.iter().find(|(name, ..)| *name == language || *name == project);
+        match special {
+            Some((name, ..)) => Ok(Self::special(name)),
             None if LANGUAGE_PROJECTS.contains(&project.as_str()) && is_language_code(&language) => {
-                Some(format!("{language}.{project}.org"))
+                let family = if project == "wikipedia" { "wiki" } else { &project };
+                Ok(Self {
+                    host: format!("{language}.{project}.org"),
+                    dbname: format!("{}{family}", language.replace('-', "_")),
+                })
             }
-            None => None,
-        };
-        host.map(|host| Self { host }).ok_or(UnknownWiki { language, project })
+            None => Err(UnknownWiki { language, project }),
+        }
+    }
+
+    /// From the old tools' `en.wikipedia` form.
+    pub fn from_domain_prefix(prefix: &str) -> Result<Self, UnknownWiki> {
+        let (language, project) = prefix.trim().split_once('.').unwrap_or((prefix, ""));
+        Self::new(language, project)
+    }
+
+    fn special(name: &str) -> Self {
+        let (_, host, dbname) = SPECIAL_WIKIS.iter().find(|(n, ..)| *n == name).copied().unwrap_or(SPECIAL_WIKIS[0]);
+        Self { host: host.to_string(), dbname: dbname.to_string() }
     }
 
     pub fn commons() -> Self {
-        Self { host: "commons.wikimedia.org".to_string() }
+        Self::special("commons")
     }
 
     pub fn wikidata() -> Self {
-        Self { host: "www.wikidata.org".to_string() }
+        Self::special("wikidata")
     }
 
     pub fn host(&self) -> &str {
         &self.host
+    }
+
+    /// The database name on the replicas, e.g. `enwiki`, `dewikisource`.
+    pub fn dbname(&self) -> &str {
+        &self.dbname
     }
 
     pub fn api_url(&self) -> String {
@@ -140,6 +160,18 @@ mod tests {
         ] {
             assert_eq!(host(language, project), None, "{language}.{project}");
         }
+    }
+
+    #[test]
+    fn database_names() {
+        let dbname = |l: &str, p: &str| Wiki::new(l, p).unwrap().dbname().to_string();
+        assert_eq!(dbname("en", "wikipedia"), "enwiki");
+        assert_eq!(dbname("zh-min-nan", "wikipedia"), "zh_min_nanwiki");
+        assert_eq!(dbname("de", "wikisource"), "dewikisource");
+        assert_eq!(dbname("commons", "wikimedia"), "commonswiki");
+        assert_eq!(dbname("en", "wikidata"), "wikidatawiki");
+        assert_eq!(Wiki::from_domain_prefix("fr.wiktionary").unwrap().dbname(), "frwiktionary");
+        assert!(Wiki::from_domain_prefix("enwiki").is_err());
     }
 
     #[test]
