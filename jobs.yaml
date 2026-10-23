@@ -24,3 +24,10 @@
   schedule: "15,45 * * * *"
   mount: all
   emails: onfailure
+# Still PHP: clears the PHP tools' temporary files.
+- name: cleanup-tmp
+  command: find /data/project/magnustools/tmp/ -mtime +1 -exec rm -rf {} \;
+  image: php8.4
+  schedule: "9 9 * * *"
+  mount: all
+  mem: 100Mi
