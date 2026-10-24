@@ -5,7 +5,7 @@ Triage of the tools on the [main page](https://magnustools.toolforge.org/) that 
 Based on: usage over 30 days (logger uses, dashboard requests), the code (`~/php/<tool>`), live error logs and job status on Toolforge. Toolforge SSH went down mid-analysis, so some log breakdowns are incomplete (marked "not verified"). Many PHP tools are down (503) after a PHP security incident; that is known and not counted against them.
 
 ## Already Rust
-PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria (web, since 2026-10-23), geohack (9.2M requests/30d), autodesc, wdrc, Harvest Templates, wd-infernal, ac2wd, RustCCI, magnustools. BaGLAMa2 is ~95% Rust (`baglama2_rs`; only a thin read API and the add-category action are PHP).
+PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria (web, since 2026-10-23), geohack (9.2M requests/30d), autodesc, wdrc, Harvest Templates, wd-infernal, ac2wd, RustCCI, magnustools, catfood (since 2026-10-24), missingtopics (part of magnustools since 2026-10-24). BaGLAMa2 is ~95% Rust (`baglama2_rs`; only a thin read API and the add-category action are PHP).
 
 The tool table's `webserver_type` was out of date for several of these; fixed 2026-10-23 (see below).
 
@@ -14,12 +14,10 @@ The tool table's `webserver_type` was out of date for several of these; fixed 20
 | # | Tool | Use (30 days) | Why Rust helps | Effort | Status |
 |---|---|---|---|---|---|
 | 1 | WD-FIST (`fist/public_html/wdfist/api.php`) | 307k uses | Hundreds of per-wiki `globalimagelinks` queries one after another into big nested arrays (1 GB, 5 min limits). Rust: concurrent queries on a pool, compact structs; expect several times faster, 5–10× less memory. Risk: Widar/OAuth for edits. | M | |
-| 2 | catfood | 483k uses (feed polls) | Up to 100 sequential imageinfo calls per request, no caching, readers poll the same feeds. Rust: concurrent calls, a feed cache, logger call in the background. 528 lines. Keep item `guid`s identical. | S | |
-| 3 | PagePile | not logged | Infrastructure for PetScan (`render/pagepile.rs`, `datasource/pagepile.rs`) and `tools_interface`. 1,533 out-of-memory fatals in 2026; whole uploads and piles in memory; `run_filters` holds workers up to 20 min. Rust: steady memory, pooled connections, reliable timeouts. Keep all output formats; rusqlite reads the existing SQLite files; PHPUnit tests help with parity. | M | |
-| 4 | Wikidata Game | not logged | Each `get_candidate`: 2+ DB connections, up to 1,000-row random scan, candidates checked one by one (`table=all`: 7 tables). Rust: prefetched candidate queue per table, pooled connections. Batch jobs are broken (`jsub`, removed `wb_terms`); port them too (L). The Distributed Game API is thin; little gain there. | M–L | |
-| 5 | wikidata-todo `sparql_rc.php` | heavy | Most of the tool's fatals (SPARQL timeouts); 2.5 GB limit; unbounded `IN(...)` on `revision_compat`. Rust: stream SPARQL results, chunk lists, bounded concurrent diffs. Reuse `tools_interface/src/sparql_rc.rs`, maybe `wdrc_rs`. | M | |
-| 6 | missingtopics (code only on Toolforge) | 2.4k uses | One `count(*)` per missing title (N+1), 30 min limit, 2,075 fatals in 2026 (1,837 from unparsed input), 17 out-of-memory. Small, self-contained (401 lines). | S–M | Done: `/missingtopics/` (2026-10-24) |
-| 7 | GLAMorous (`glamtools/public_html/glamorous.php`) | 8k uses | Loads every file name of a tree (depth up to 20) into memory just to count them. Rust: stream and aggregate. Mostly a memory gain; lower the max depth either way. | M | |
+| 2 | PagePile | not logged | Infrastructure for PetScan (`render/pagepile.rs`, `datasource/pagepile.rs`) and `tools_interface`. 1,533 out-of-memory fatals in 2026; whole uploads and piles in memory; `run_filters` holds workers up to 20 min. Rust: steady memory, pooled connections, reliable timeouts. Keep all output formats; rusqlite reads the existing SQLite files; PHPUnit tests help with parity. | M | |
+| 3 | Wikidata Game | not logged | Each `get_candidate`: 2+ DB connections, up to 1,000-row random scan, candidates checked one by one (`table=all`: 7 tables). Rust: prefetched candidate queue per table, pooled connections. Batch jobs are broken (`jsub`, removed `wb_terms`); port them too (L). The Distributed Game API is thin; little gain there. | M–L | |
+| 4 | wikidata-todo `sparql_rc.php` | heavy | Most of the tool's fatals (SPARQL timeouts); 2.5 GB limit; unbounded `IN(...)` on `revision_compat`. Rust: stream SPARQL results, chunk lists, bounded concurrent diffs. Reuse `tools_interface/src/sparql_rc.rs`, maybe `wdrc_rs`. | M | |
+| 5 | GLAMorous (`glamtools/public_html/glamorous.php`) | 8k uses | Loads every file name of a tree (depth up to 20) into memory just to count them. Rust: stream and aggregate. Mostly a memory gain; lower the max depth either way. | M | |
 
 ## Not worth porting
 - **Legacy FIST `fist.php`**: the least stable code (~13.4k "max_user_connections" fatals/30d from opening a replica connection per language link, ~4.4k from unmapped wiki names), but many of its scrapers target dead sites. Retire it, or point its JSON at FIST2, instead of porting 3.7k lines.
@@ -33,7 +31,7 @@ The tool table's `webserver_type` was out of date for several of these; fixed 20
 ## Fix now, Rust or not
 
 Security:
-- [ ] catfood: `last` reaches SQL `LIMIT` unescaped; PHP 8 comparison lets `10 UNION …` past the 1–100 check.
+
 - [ ] wikidata-terminator: `Unknown column 'L623145' in 'where clause'` in the log suggests unquoted input in SQL.
 - [ ] Wikidata Game: `update_all_games` is unauthenticated and calls every registered game's `desc` endpoint.
 - [ ] tooltranslate: `store_translation` / `add_tool` in `api.php` may not require a login (not verified).
@@ -49,8 +47,7 @@ Failing jobs:
 Cheap PHP fixes for the worst errors:
 - [ ] PagePile: HTML view of Wikidata piles loads full entities (`magnustools/php/wikidata.php:102`); fetch labels only and cap `max` (`api.php:19`).
 - [ ] `ToolforgeCommon.php:705` (`getSPARQLitems` reads `$row->q` whatever the variable): nearly all of wikidata-todo's 1.6 GB error log.
-- [x] missingtopics: one batched `GROUP BY` instead of one count per title (ported instead).
-- [ ] catfood: thumbnail URLs via `Special:Redirect/file?width=` (already there, commented out), plus HTTP caching headers.
+
 - [ ] FIST `fist.php`: reuse one connection per replica cluster; map wiki names via the site matrix (`zh-min-nan`, `be-x-old`, `zh-yue`).
 - [ ] GLAMorous: reject a non-list `projects` parameter (180 TypeErrors).
 
