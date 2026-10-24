@@ -32,7 +32,7 @@ The tool table's `webserver_type` was out of date for several of these; fixed 20
 
 Security:
 
-- [ ] wikidata-terminator: `Unknown column 'L623145' in 'where clause'` in the log suggests unquoted input in SQL.
+- [x] wikidata-terminator: `Unknown column 'L623145' in 'where clause'` in the log suggests unquoted input in SQL.
 - [ ] Wikidata Game: `update_all_games` is unauthenticated and calls every registered game's `desc` endpoint.
 - [ ] tooltranslate: `store_translation` / `add_tool` in `api.php` may not require a login (not verified).
 
