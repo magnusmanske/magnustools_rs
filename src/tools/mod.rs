@@ -14,6 +14,7 @@ mod html2wiki;
 mod index;
 mod logger;
 mod metronom;
+mod missingtopics;
 mod misstake;
 mod oauth_uploader;
 mod prepbio;
@@ -54,6 +55,7 @@ pub fn routes(state: &State) -> Router<State> {
         ("html2wiki", get(html2wiki::handler).post(html2wiki::handler)),
         ("logger", get(logger::handler).post(logger::handler)),
         ("metronom", get(metronom::handler)),
+        ("missingtopics", get(missingtopics::handler).post(missingtopics::handler)),
         ("misstake", get(misstake::handler).post(misstake::handler)),
         ("oauth_uploader", get(oauth_uploader::handler).post(oauth_uploader::handler)),
         ("prepbio", get(prepbio::handler).post(prepbio::handler)),

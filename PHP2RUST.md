@@ -18,7 +18,7 @@ The tool table's `webserver_type` was out of date for several of these; fixed 20
 | 3 | PagePile | not logged | Infrastructure for PetScan (`render/pagepile.rs`, `datasource/pagepile.rs`) and `tools_interface`. 1,533 out-of-memory fatals in 2026; whole uploads and piles in memory; `run_filters` holds workers up to 20 min. Rust: steady memory, pooled connections, reliable timeouts. Keep all output formats; rusqlite reads the existing SQLite files; PHPUnit tests help with parity. | M | |
 | 4 | Wikidata Game | not logged | Each `get_candidate`: 2+ DB connections, up to 1,000-row random scan, candidates checked one by one (`table=all`: 7 tables). Rust: prefetched candidate queue per table, pooled connections. Batch jobs are broken (`jsub`, removed `wb_terms`); port them too (L). The Distributed Game API is thin; little gain there. | M–L | |
 | 5 | wikidata-todo `sparql_rc.php` | heavy | Most of the tool's fatals (SPARQL timeouts); 2.5 GB limit; unbounded `IN(...)` on `revision_compat`. Rust: stream SPARQL results, chunk lists, bounded concurrent diffs. Reuse `tools_interface/src/sparql_rc.rs`, maybe `wdrc_rs`. | M | |
-| 6 | missingtopics (code only on Toolforge) | 2.4k uses | One `count(*)` per missing title (N+1), 30 min limit, 2,075 fatals in 2026 (1,837 from unparsed input), 17 out-of-memory. Small, self-contained (401 lines). | S–M | |
+| 6 | missingtopics (code only on Toolforge) | 2.4k uses | One `count(*)` per missing title (N+1), 30 min limit, 2,075 fatals in 2026 (1,837 from unparsed input), 17 out-of-memory. Small, self-contained (401 lines). | S–M | Done: `/missingtopics/` (2026-10-24) |
 | 7 | GLAMorous (`glamtools/public_html/glamorous.php`) | 8k uses | Loads every file name of a tree (depth up to 20) into memory just to count them. Rust: stream and aggregate. Mostly a memory gain; lower the max depth either way. | M | |
 
 ## Not worth porting
@@ -49,7 +49,7 @@ Failing jobs:
 Cheap PHP fixes for the worst errors:
 - [ ] PagePile: HTML view of Wikidata piles loads full entities (`magnustools/php/wikidata.php:102`); fetch labels only and cap `max` (`api.php:19`).
 - [ ] `ToolforgeCommon.php:705` (`getSPARQLitems` reads `$row->q` whatever the variable): nearly all of wikidata-todo's 1.6 GB error log.
-- [ ] missingtopics: one batched `GROUP BY` instead of one count per title.
+- [x] missingtopics: one batched `GROUP BY` instead of one count per title (ported instead).
 - [ ] catfood: thumbnail URLs via `Special:Redirect/file?width=` (already there, commented out), plus HTTP caching headers.
 - [ ] FIST `fist.php`: reuse one connection per replica cluster; map wiki names via the site matrix (`zh-min-nan`, `be-x-old`, `zh-yue`).
 - [ ] GLAMorous: reject a non-list `projects` parameter (180 TypeErrors).

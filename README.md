@@ -35,6 +35,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/html2wiki/`, `/tab2wiki/` | HTML or spreadsheet tables to wiki markup |
 | `/logger/` | Counts tool uses (JSON/JSONP) |
 | `/metronom/` | Page views of the articles a user started |
+| `/missingtopics/` | Red links of an article or category tree, ranked by demand (formerly missingtopics.toolforge.org) |
 | `/misstake/` | Red links on some pages, ranked by how wanted they are |
 | `/oauth_uploader/` | Uploads to Commons under the user's account |
 | `/prepbio/` | Wikitext for a new biography |

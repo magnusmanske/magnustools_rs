@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The red links in an article, or in the articles of a category tree, ranked by how often they are linked to: the missing articles most wanted.</p>
+<form method="get" action="/missingtopics/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <label>Article <span class="hint">counts links from all articles of the wiki</span>
+    <input type="text" name="article" value="{{ request.article }}">
+  </label>
+  <fieldset class="row">
+    <legend>… or a category tree <span class="hint">counts links from the articles in the tree</span></legend>
+    <label>Category <input type="text" name="category" value="{{ request.category }}"></label>
+    <label>Subcategory depth <input type="number" name="depth" min="0" max="10" value="{{ options.depth }}"></label>
+  </fieldset>
+  <fieldset class="row">
+    <legend>Output</legend>
+    {%- for (output, label) in outputs %}
+    <label class="check"><input type="radio" name="wikimode" value="{{ output.code() }}"{% if *output == request.wikimode %} checked{% endif %}> {{ label }}</label>
+    {%- endfor %}
+  </fieldset>
+  <label class="check"><input type="checkbox" name="notemplatelinks" value="1"{% if options.skip_template_links %} checked{% endif %}> Leave out links that come from templates</label>
+  <div class="row">
+    <label class="check"><input type="checkbox" name="nosingles" value="1"{% if options.only_wanted %} checked{% endif %}> Only links wanted more than</label>
+    <input type="number" name="limitnum" min="0" value="{{ options.limit }}" style="max-width:6rem" aria-label="times">
+    <span>times</span>
+  </div>
+  <button name="doit" value="1">Find missing topics</button>
+</form>
+{% if results.is_none() %}
+<p class="hint">Example: <a href="/missingtopics/?language=en&amp;project=wikipedia&amp;category=Lighthouses+in+Scotland&amp;depth=1&amp;nosingles=1&amp;limitnum=1&amp;doit=1">Lighthouses in Scotland</a></p>
+{% endif %}
+{% if let Some(results) = results %}
+<h2>{{ results.wanted.len() }} missing articles</h2>
+<p class="muted">
+  {% if request.article.trim().is_empty() %}From the links of {{ results.pages }} articles in the tree.{% else %}From the links in the article.{% endif %}
+  {% if results.truncated %}The category tree is larger; only these were checked.{% endif %}
+  {% if results.template_links > 0 %}{{ results.template_links }} links from templates were left out.{% endif %}
+  {% if results.shown().len() < results.wanted.len() %}The {{ results.shown().len() }} most wanted are shown.{% endif %}
+</p>
+{% if let Some(wikitext) = wikitext %}
+<textarea class="code" rows="20" readonly>{{ wikitext }}</textarea>
+{% else %}
+<div class="table-wrap">
+<table>
+  <tr><th>Missing article</th><th class="num">Wanted</th></tr>
+{% for w in results.shown() %}
+  <tr><td><a href="{{ w.url }}" class="error">{{ w.title }}</a></td><td class="num"><a href="{{ w.links_url }}">{{ w.links_shown() }}</a></td></tr>
+{% endfor %}
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
