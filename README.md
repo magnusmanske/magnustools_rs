@@ -22,6 +22,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | Path | What it does |
 |---|---|
 | `/` | The list of all tools |
+| `/add_information/` | Rewrites a file description into an `{{Information}}` template, for the user to save (formerly add-information.toolforge.org) |
 | `/authority_control/` | VIAF lookup (JSON/JSONP) |
 | `/bong/` | One search box over Wikipedia, Commons, Wikinews, Wiktionary, places |
 | `/cas/` | Links for a CAS registry number |
@@ -37,6 +38,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/metronom/` | Page views of the articles a user started |
 | `/missingtopics/` | Red links of an article or category tree, ranked by demand (formerly missingtopics.toolforge.org) |
 | `/misstake/` | Red links on some pages, ranked by how wanted they are |
+| `/no_information/` | Files without an `{{Information}}` or similar template (formerly add-information.toolforge.org) |
 | `/oauth_uploader/` | Uploads to Commons under the user's account |
 | `/prepbio/` | Wikitext for a new biography |
 | `/quick_counter/` | A user's edits per namespace |

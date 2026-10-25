@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Files without an <em>Information</em> template, or a similar one such as <em>Artwork</em> or <em>Photograph</em>; optionally only those of one uploader.</p>
+<form method="get" action="/no_information/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <label>Starts with <span class="hint">optional</span> <input type="text" name="startswith" value="{{ request.startswith }}"></label>
+  <label>Uploader <span class="hint">optional</span> <input type="text" name="user" value="{{ request.user }}"></label>
+  <input type="hidden" name="max" value="{{ max }}">
+  <button name="doit" value="1">Find files</button>
+</form>
+{% if let Some(results) = results %}
+<h2>{{ results.files.len() }} files</h2>
+<p class="muted">Out of {{ results.scanned }} files looked at.
+{% if let Some(next_url) = results.next_url %}There are more: <a href="{{ next_url }}">go on</a>.{% endif %}</p>
+<ol>
+{% for file in results.files %}
+  <li><a href="{{ file.url }}">File:{{ file.name }}</a> <span class="hint">(<a href="{{ file.add_url }}">add information</a>)</span></li>
+{% endfor %}
+</ol>
+{% if let Some(next_url) = results.next_url %}<p><a href="{{ next_url }}">Next {{ max }}</a></p>{% endif %}
+{% endif %}
+{% endblock %}

@@ -1,5 +1,6 @@
 //! The tools, one module each, at the URLs of their PHP originals.
 
+mod add_information;
 mod authority_control;
 mod bong;
 mod cas;
@@ -16,6 +17,7 @@ mod logger;
 mod metronom;
 mod missingtopics;
 mod misstake;
+mod no_information;
 mod oauth_uploader;
 mod prepbio;
 mod quick_counter;
@@ -42,6 +44,7 @@ type State = Arc<AppState>;
 
 pub fn routes(state: &State) -> Router<State> {
     let tools: Vec<(&str, MethodRouter<State>)> = vec![
+        ("add_information", get(add_information::handler).post(add_information::handler)),
         ("authority_control", get(authority_control::handler).post(authority_control::handler)),
         ("bong", get(bong::handler)),
         ("cas", get(cas::handler)),
@@ -57,6 +60,7 @@ pub fn routes(state: &State) -> Router<State> {
         ("metronom", get(metronom::handler)),
         ("missingtopics", get(missingtopics::handler).post(missingtopics::handler)),
         ("misstake", get(misstake::handler).post(misstake::handler)),
+        ("no_information", get(no_information::handler)),
         ("oauth_uploader", get(oauth_uploader::handler).post(oauth_uploader::handler)),
         ("prepbio", get(prepbio::handler).post(prepbio::handler)),
         ("quick_counter", get(quick_counter::handler)),

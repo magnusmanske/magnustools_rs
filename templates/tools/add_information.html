@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+{% if let Some(edit) = edit %}
+<p class="lead">The description of <a href="{{ edit.file_url }}">{{ edit.file }}</a>, rewritten into the <em>{{ edit.template }}</em> template.
+{% if edit.submit %}Opening the changes on the wiki…{% else %}Check the text, then open the changes on the wiki to save them there.{% endif %}</p>
+<form id="edit" method="post" action="{{ edit.action_url }}" enctype="multipart/form-data">
+  <textarea class="code" name="wpTextbox1" rows="16">{{ edit.wikitext }}</textarea>
+  <input type="hidden" name="wpSummary" value="{{ edit.summary }}">
+  <input type="hidden" name="wpDiff" value="1">
+  <input type="hidden" name="wpMinoredit" value="1">
+  <input type="hidden" name="wpEdittime" value="{{ edit.edit_time }}">
+  <input type="hidden" name="wpStarttime" value="{{ edit.start_time }}">
+  <input type="hidden" name="wpUltimateParam" value="1">
+  <button>Show the changes on the wiki</button>
+</form>
+{% if edit.submit %}<script>document.getElementById("edit").submit();</script>{% endif %}
+{% else %}
+<p class="lead">Adds an <em>Information</em> template to a file: the tool rewrites the file's description into one, and opens the changes on the wiki, for you to check and save.</p>
+<form method="get" action="/add_information/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <label>File <input type="text" name="image" placeholder="Example.jpg" required></label>
+  <label>Author <span class="hint">optional; for files marked as own work, the uploader by default</span>
+    <input type="text" name="user" value="{{ request.user }}">
+  </label>
+  <label class="check"><input type="checkbox" name="debug" value="1"> Show me the text first</label>
+  <button name="doit" value="1">Add information</button>
+</form>
+<p class="hint">Files that need it: <a href="/no_information/">No information</a>.</p>
+{% endif %}
+{% endblock %}
