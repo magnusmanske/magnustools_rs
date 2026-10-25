@@ -8,7 +8,17 @@
 {% block head %}{% endblock %}
 </head>
 <body>
-<header class="site"><a class="brand" href="/">Magnus' tools</a></header>
+<header class="site">
+<a class="brand" href="/">Magnus' tools</a>
+<details class="menu">
+<summary>Tools</summary>
+<ul>
+{%- for (name, label) in crate::tools::MENU %}
+<li><a href="/{{ name }}/"{% if *label == title %} aria-current="page"{% endif %}>{{ label }}</a></li>
+{%- endfor %}
+</ul>
+</details>
+</header>
 <main>
 <h1>{{ title }}</h1>
 {% block content %}{% endblock %}
@@ -17,5 +27,13 @@
 <a href="https://github.com/magnusmanske/magnustools_rs">Source code</a>
 <a href="/buggregator/">Report an issue</a>
 </footer>
+<script>
+// Closes the tools menu on a click elsewhere, or Escape.
+(() => {
+  const menu = document.querySelector('details.menu');
+  document.addEventListener('click', e => { if (!menu.contains(e.target)) menu.open = false; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') menu.open = false; });
+})();
+</script>
 </body>
 </html>

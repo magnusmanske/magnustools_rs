@@ -50,7 +50,33 @@ main, header.site, footer.site {
 main { flex: 1; padding-bottom: 3rem; }
 
 header.site { padding-top: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+header.site { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 header.site .brand { color: var(--fg); font-weight: 600; text-decoration: none; }
+
+/* The tools menu, at the right of the header. */
+details.menu { position: relative; }
+details.menu summary { cursor: pointer; color: var(--muted); list-style: none; }
+details.menu summary::-webkit-details-marker { display: none; }
+details.menu summary::after { content: " ▾"; }
+details.menu summary:hover, details.menu[open] summary { color: var(--fg); }
+details.menu ul {
+  position: absolute;
+  right: 0;
+  z-index: 10;
+  margin: 0.5rem 0 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  min-width: 16rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+}
+details.menu a { display: block; padding: 0.3rem 1rem; color: var(--fg); }
+details.menu a:hover { background: var(--surface); }
+details.menu a[aria-current="page"] { font-weight: 600; color: var(--accent); }
 
 footer.site {
   display: flex;
