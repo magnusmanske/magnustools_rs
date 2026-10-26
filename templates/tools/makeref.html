@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Fills in a citation template for a reference in a Wikipedia article. The types of reference and their fields come from <a href="{{ config_url }}">{{ config_title }}</a> on Meta, which anyone can extend.</p>
+<nav class="groups">
+{%- for t in types %}
+  <a href="{{ t.url }}"{% if t.current %} aria-current="page" style="font-weight:600"{% endif %}>{{ t.name }}</a>
+{%- endfor %}
+</nav>
+{% if let Some(code) = code %}
+<h2>Wiki code</h2>
+<textarea class="code" rows="3" readonly style="min-height:0">{{ code }}</textarea>
+<p class="hint">Paste it where the footnote marker should be. If the article has no list of references yet, add one at its end:
+<code>== References ==</code> and <code>{{ "{{" }}reflist}}</code>, or <code>&lt;references /&gt;</code>.</p>
+{% endif %}
+<h2>{{ type_name }}</h2>
+{% if prefilled %}<p class="error">Some values were filled in from the BibTeX. Please check them, then make the reference again.</p>{% endif %}
+{% if !missing.is_empty() %}
+<p class="error">Please fill in: {% for m in missing %}{{ m }}{% if !loop.last %}, {% endif %}{% endfor %}.</p>
+{% endif %}
+<form method="post" action="/makeref/">
+  <input type="hidden" name="language" value="{{ language }}">
+  <input type="hidden" name="reftype" value="{{ reftype }}">
+  {%- for input in inputs %}
+  <label><span>{{ input.field.description }}{% if input.field.required %} <span class="error">*</span>{% endif %}</span>
+    {%- if input.field.example.concat().trim() != "" %}
+    <span class="hint">e.g. {% for line in input.field.example %}{{ line }}{% if !loop.last %}<br>{% endif %}{% endfor %}</span>
+    {%- endif %}
+    {%- if input.field.multiline %}
+    <textarea name="{{ input.name }}" rows="5">{{ input.value }}</textarea>
+    {%- else %}
+    <input type="text" name="{{ input.name }}" value="{{ input.value }}">
+    {%- endif %}
+  </label>
+  {%- endfor %}
+  <p class="hint"><span class="error">*</span> required; please fill in as many of the others as you can.</p>
+  <button name="doit" value="1">Make the reference</button>
+</form>
+{% endblock %}

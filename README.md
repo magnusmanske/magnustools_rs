@@ -35,6 +35,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/herding_sheep/` | Recent edits by a group of users |
 | `/html2wiki/`, `/tab2wiki/` | HTML or spreadsheet tables to wiki markup |
 | `/logger/` | Counts tool uses (JSON/JSONP) |
+| `/makeref/` | A citation template filled in from a form; types and fields from `MakeRef/<Language>` on Meta (formerly makeref.toolforge.org) |
 | `/metronom/` | Page views of the articles a user started |
 | `/missingtopics/` | Red links of an article or category tree, ranked by demand (formerly missingtopics.toolforge.org) |
 | `/misstake/` | Red links on some pages, ranked by how wanted they are |

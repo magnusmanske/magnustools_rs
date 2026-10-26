@@ -14,6 +14,7 @@ mod herding_sheep;
 mod html2wiki;
 mod index;
 mod logger;
+mod makeref;
 mod metronom;
 mod missingtopics;
 mod misstake;
@@ -56,6 +57,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("get_article_intro", "Get article intro"),
     ("herding_sheep", "Herding sheep"),
     ("html2wiki", "HTML to wiki"),
+    ("makeref", "MakeRef"),
     ("metronom", "Metronom"),
     ("missingtopics", "Missing topics"),
     ("no_information", "No information"),
@@ -110,6 +112,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("herding_sheep", get(herding_sheep::handler)),
         ("html2wiki", get(html2wiki::handler).post(html2wiki::handler)),
         ("logger", get(logger::handler).post(logger::handler)),
+        ("makeref", get(makeref::handler).post(makeref::handler)),
         ("metronom", get(metronom::handler)),
         ("missingtopics", get(missingtopics::handler).post(missingtopics::handler)),
         ("misstake", get(misstake::handler).post(misstake::handler)),
