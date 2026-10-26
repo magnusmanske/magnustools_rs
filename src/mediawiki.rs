@@ -47,6 +47,57 @@ pub async fn page_html(http: &reqwest::Client, wiki: &Wiki, title: &str) -> Resu
     Ok(Some(html))
 }
 
+/// Wiki text rendered by the wiki, as an HTML fragment with absolute links.
+pub async fn parse_to_html(http: &reqwest::Client, wiki: &Wiki, wikitext: &str) -> Result<String> {
+    let params = [
+        ("action", "parse"),
+        ("format", "json"),
+        ("formatversion", "2"),
+        ("contentmodel", "wikitext"),
+        ("prop", "text"),
+        ("disablelimitreport", "1"),
+        ("disableeditsection", "1"),
+        ("wrapoutputclass", ""),
+        ("text", wikitext),
+    ];
+    let json: Value = http
+        .post(wiki.api_url())
+        .form(&params)
+        .send()
+        .await
+        .and_then(reqwest::Response::error_for_status)
+        .with_context(|| format!("cannot render wiki text on {wiki}"))?
+        .json()
+        .await
+        .with_context(|| format!("API response from {wiki} is not JSON"))?;
+    let html = json["parse"]["text"].as_str().with_context(|| format!("no HTML from {wiki}"))?;
+    let root = format!("=\"https://{}/", wiki.host());
+    Ok(["href", "src"].iter().fold(html.to_string(), |html, attribute| {
+        html.replace(&format!("{attribute}=\"//"), &format!("{attribute}=\"https://"))
+            .replace(&format!("{attribute}=\"/"), &format!("{attribute}{root}"))
+    }))
+}
+
+/// A template parameter value: a bare `|` would end it, so it becomes
+/// `{{!}}`; those in links and nested templates stay.
+pub fn template_value(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut depth = 0usize;
+    let mut chars = value.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '[' | '{' | ']' | '}' if chars.peek() == Some(&c) => {
+                chars.next();
+                depth = if matches!(c, '[' | '{') { depth + 1 } else { depth.saturating_sub(1) };
+                out.extend([c, c]);
+            }
+            '|' if depth == 0 => out.push_str("{{!}}"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 /// Files in a category and its subcategories down to `depth` (0: the
 /// category alone), as titles without namespace; at most `limit` of them.
 pub async fn category_files(
@@ -129,6 +180,13 @@ mod tests {
     #[test]
     fn text_of_html() {
         assert_eq!(html_to_text(r#"A <span class="searchmatch">warthog</span> &amp; &lt;b&gt;"#), "A warthog & <b>");
+    }
+
+    #[test]
+    fn template_values() {
+        assert_eq!(template_value("A | B"), "A {{!}} B");
+        assert_eq!(template_value("[[A|B]] {{lang|de|C}}"), "[[A|B]] {{lang|de|C}}");
+        assert_eq!(template_value("]] x|y"), "]] x{{!}}y");
     }
 
     #[test]

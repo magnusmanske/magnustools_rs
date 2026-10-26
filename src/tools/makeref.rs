@@ -199,8 +199,7 @@ fn clean_bibtex_value(value: &str) -> String {
 fn wiki_code(ref_type: &RefType, values: &HashMap<String, String>) -> String {
     let value = |key: &str| values.get(key).map(String::as_str).unwrap_or_default();
     let code = conditionals(&ref_type.code, &|key| !value(key).is_empty());
-    // A bare "|" would end the template parameter; links may have one.
-    let code = PLACEHOLDER.replace_all(&code, |c: &Captures| value(&c[1]).replace('|', "{{!}}"));
+    let code = PLACEHOLDER.replace_all(&code, |c: &Captures| mediawiki::template_value(value(&c[1])));
     let name = value("refid").replace('"', "");
     let name = match name.trim() {
         "" => String::new(),
@@ -396,12 +395,12 @@ mod tests {
         let t = &parse_config(CONFIG)[0];
         let values = HashMap::from([
             ("refid".to_string(), "Smith \"2001\"".to_string()),
-            ("title".to_string(), "On [[Prion|prions]]".to_string()),
+            ("title".to_string(), "On [[Prion|prions]] | {{lang|de|x}}".to_string()),
             ("url".to_string(), String::new()),
         ]);
         assert_eq!(
             wiki_code(t, &values),
-            "<ref name=\"Smith 2001\">{{cite journal |title=On [[Prion{{!}}prions]] <!-- note --> }}</ref>"
+            "<ref name=\"Smith 2001\">{{cite journal |title=On [[Prion|prions]] {{!}} {{lang|de|x}} <!-- note --> }}</ref>"
         );
         let nested = conditionals("<!a>A<!b>B</!b></!a><!c>C</!c>", &|k| k != "c");
         assert_eq!(nested, "AB");
