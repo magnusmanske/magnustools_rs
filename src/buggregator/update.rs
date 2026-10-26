@@ -26,6 +26,10 @@ const IGNORE_TOOL_NAMES: &[&str] = &["data"];
 const USER_SITES: &[&str] = &["WIKI", "GITHUB"];
 /// Whose replies close a wiki issue after a month without further discussion.
 const MAINTAINER: &str = "Magnus Manske";
+/// Tries per tool for its web status: the Toolforge proxy now and then
+/// answers 503 for a connection it dropped, though the tool is fine.
+const STATUS_ATTEMPTS: usize = 3;
+const STATUS_RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
 
 pub async fn update(state: &AppState) -> Result<()> {
     let mut conn = state.tool_db.conn().await?;
@@ -564,18 +568,28 @@ async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
     Ok(())
 }
 
-/// Sets each tool's `http_status` to what its web address answers (without following redirects).
+/// Sets each tool's `http_status` to what its web address answers, after
+/// redirects; on failure, after a few tries.
 pub async fn web_status(conn: &mut Conn) -> Result<()> {
     let client = reqwest::Client::builder()
         .user_agent(crate::state::USER_AGENT)
-        .redirect(reqwest::redirect::Policy::none())
+        .redirect(reqwest::redirect::Policy::limited(5))
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
     conn.query_drop("UPDATE tool SET http_status=NULL WHERE subdomain=''").await?;
     let subdomains: Vec<String> = conn.query("SELECT DISTINCT subdomain FROM tool WHERE subdomain!=''").await?;
     for subdomain in subdomains {
-        let status =
-            client.head(format!("https://{subdomain}.toolforge.org")).send().await.ok().map(|r| r.status().as_u16());
+        let url = format!("https://{subdomain}.toolforge.org");
+        let mut status = None;
+        for attempt in 0..STATUS_ATTEMPTS {
+            if attempt > 0 {
+                tokio::time::sleep(STATUS_RETRY_AFTER).await;
+            }
+            status = client.head(&url).send().await.ok().map(|r| r.status().as_u16());
+            if status == Some(200) {
+                break;
+            }
+        }
         conn.exec_drop("UPDATE tool SET http_status=? WHERE subdomain=?", (status, &subdomain)).await?;
     }
     Ok(())
