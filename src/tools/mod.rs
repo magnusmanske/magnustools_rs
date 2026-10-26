@@ -27,6 +27,7 @@ mod redirector;
 mod related_places;
 mod spacer;
 mod tab2wiki;
+mod templator;
 mod transparent;
 mod unused_files;
 mod uploader_distribution;
@@ -71,6 +72,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("related_places", "Related places"),
     ("spacer", "Spacer"),
     ("tab2wiki", "Table to wiki"),
+    ("templator", "Templator"),
     ("unused_files", "Unused files"),
     ("uploader_distribution", "Uploader distribution"),
     ("wiki2playlist", "Wiki to playlist"),
@@ -126,6 +128,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("related_places", get(related_places::handler)),
         ("spacer", get(spacer::handler)),
         ("tab2wiki", get(tab2wiki::handler).post(tab2wiki::handler)),
+        ("templator", get(templator::handler).post(templator::handler)),
         ("transparent", get(transparent::handler).post(transparent::handler)),
         ("unused_files", get(unused_files::handler)),
         ("uploader_distribution", get(uploader_distribution::handler)),

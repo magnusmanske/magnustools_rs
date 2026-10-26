@@ -47,6 +47,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/redirector/` | Redirects a Wikipedia may want, from other languages' titles |
 | `/related_places/` | The places a page links to, on a map, as KML or GeoJSON |
 | `/spacer/` | Links for a spacecraft designator |
+| `/templator/` | A template, such as an infobox, filled in from a form; templates from `Templator/<Language>` on Meta (formerly templator.toolforge.org) |
 | `/transparent/` | Find a translator |
 | `/unused_files/` | Commons files not used in articles |
 | `/uploader_distribution/` | Uploaders of a category tree |

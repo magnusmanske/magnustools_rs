@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Fills in a template, such as an infobox, from a form. The templates and their parameters come from <a href="{{ config_url }}">{{ config_title }}</a> on Meta, which anyone can extend.</p>
+{% for group in groups %}
+<nav class="groups templates">
+  {%- if let Some(heading) = group.heading %}<strong>{{ heading }}</strong>{% endif %}
+  {%- for link in group.links %}
+  <a href="{{ link.url }}"{% if link.current %} aria-current="page"{% endif %}>{{ link.name }}</a>
+  {%- endfor %}
+</nav>
+{% endfor %}
+{% for (label, code) in results %}
+<h2>{{ label }}</h2>
+<textarea class="code" rows="{% if code.contains('\n') %}10{% else %}3{% endif %}" readonly style="min-height:0">{{ code }}</textarea>
+{% endfor %}
+<h2>{{ template_name }}</h2>
+{% if let Some(missing) = missing %}<p class="error">{{ missing }}</p>{% endif %}
+<form method="post" action="/templator/">
+  <input type="hidden" name="language" value="{{ language }}">
+  <input type="hidden" name="templatekey" value="{{ template_key }}">
+  <p class="hint">{{ needed }}</p>
+  {%- for input in inputs %}
+  <label><span>{{ input.key }}</span>
+    <input type="text" name="{{ input.name }}" value="{{ input.value }}"
+      {%- if input.required %} class="required{% if input.missing %} missing{% endif %}" required{% endif %}>
+    {%- if !input.description_html.is_empty() %}
+    <div class="hint description">{{ input.description_html|safe }}</div>
+    {%- endif %}
+  </label>
+  {%- endfor %}
+  <button name="doit" value="1">{{ button }}</button>
+</form>
+{% endblock %}

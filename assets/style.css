@@ -158,6 +158,13 @@ ul.hits { list-style: none; padding: 0; }
 ul.hits li { margin: 0 0 1rem; }
 
 .error { color: var(--danger); }
+
+/* Templator: required fields, and the wiki's rendering of descriptions. */
+input.required { background: color-mix(in srgb, #1fb5b5 14%, var(--bg)); }
+input.required.missing { background: color-mix(in srgb, var(--danger) 14%, var(--bg)); }
+.description p, .description ul, .description dl { margin: 0.2rem 0; }
+nav.groups.templates { margin: 0.5rem 0; }
+nav.groups.templates a[aria-current="page"] { font-weight: 600; }
 .muted { color: var(--muted); }
 
 /* Main page */
