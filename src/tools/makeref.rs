@@ -5,7 +5,7 @@
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component, is_language_code};
+use crate::wiki::{Wiki, encode_component, is_language_code, upper_first};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -355,11 +355,6 @@ pub async fn handler(
         prefilled,
         code,
     })
-}
-
-fn upper_first(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
 #[cfg(test)]

@@ -113,6 +113,12 @@ impl fmt::Display for Wiki {
     }
 }
 
+/// `s` with its first letter in upper case, as wikis have page names.
+pub fn upper_first(s: &str) -> String {
+    let mut chars = s.chars();
+    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
+}
+
 /// `en`, `simple`, `zh-min-nan`, `be-tarask`, …
 pub fn is_language_code(code: &str) -> bool {
     (2..=20).contains(&code.len())

@@ -7,7 +7,7 @@ use super::no_information::TEMPLATES;
 use crate::mediawiki::{self, strip_namespace};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_title};
+use crate::wiki::{Wiki, encode_title, upper_first};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -533,11 +533,6 @@ fn replace_ci(text: &str, from: &str, to: &str) -> String {
         Ok(re) => re.replace_all(text, regex::NoExpand(to)).into_owned(),
         Err(_) => text.to_string(),
     }
-}
-
-fn upper_first(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
 #[cfg(test)]
