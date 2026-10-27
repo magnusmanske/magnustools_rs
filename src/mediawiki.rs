@@ -18,6 +18,20 @@ pub async fn api(http: &reqwest::Client, wiki: &Wiki, params: &[(&str, &str)]) -
         .with_context(|| format!("API response from {wiki} is not JSON"))
 }
 
+/// As [`api`], but POSTed: for parameters too long for a URL.
+pub async fn api_post(http: &reqwest::Client, wiki: &Wiki, params: &[(&str, &str)]) -> Result<Value> {
+    http.post(wiki.api_url())
+        .query(&[("format", "json"), ("formatversion", "2")])
+        .form(params)
+        .send()
+        .await
+        .and_then(reqwest::Response::error_for_status)
+        .with_context(|| format!("API request to {wiki} failed"))?
+        .json()
+        .await
+        .with_context(|| format!("API response from {wiki} is not JSON"))
+}
+
 /// The current wikitext of a page, following redirects; `None` if there is no such page.
 pub async fn page_wikitext(http: &reqwest::Client, wiki: &Wiki, title: &str) -> Result<Option<String>> {
     let params = [
@@ -51,8 +65,6 @@ pub async fn page_html(http: &reqwest::Client, wiki: &Wiki, title: &str) -> Resu
 pub async fn parse_to_html(http: &reqwest::Client, wiki: &Wiki, wikitext: &str) -> Result<String> {
     let params = [
         ("action", "parse"),
-        ("format", "json"),
-        ("formatversion", "2"),
         ("contentmodel", "wikitext"),
         ("prop", "text"),
         ("disablelimitreport", "1"),
@@ -60,16 +72,7 @@ pub async fn parse_to_html(http: &reqwest::Client, wiki: &Wiki, wikitext: &str) 
         ("wrapoutputclass", ""),
         ("text", wikitext),
     ];
-    let json: Value = http
-        .post(wiki.api_url())
-        .form(&params)
-        .send()
-        .await
-        .and_then(reqwest::Response::error_for_status)
-        .with_context(|| format!("cannot render wiki text on {wiki}"))?
-        .json()
-        .await
-        .with_context(|| format!("API response from {wiki} is not JSON"))?;
+    let json = api_post(http, wiki, &params).await?;
     let html = json["parse"]["text"].as_str().with_context(|| format!("no HTML from {wiki}"))?;
     let root = format!("=\"https://{}/", wiki.host());
     Ok(["href", "src"].iter().fold(html.to_string(), |html, attribute| {

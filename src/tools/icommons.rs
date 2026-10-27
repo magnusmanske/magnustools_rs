@@ -3,7 +3,7 @@
 //! categories, and random files or categories; in the original look.
 
 use super::commonsapi;
-use crate::mediawiki;
+use crate::mediawiki::{self, strip_namespace};
 use crate::state::AppState;
 use crate::web::{AppError, Params};
 use crate::wiki::{Wiki, encode_component, encode_title, is_language_code, upper_first};
@@ -19,7 +19,7 @@ use std::sync::{Arc, LazyLock};
 const NS_FILE: &str = "6";
 const NS_CATEGORY: &str = "14";
 /// As the API gives them to tools without the bot right.
-const MAX_MEMBERS: &str = "500";
+const MAX_MEMBERS: usize = 500;
 const SEARCH_LIMIT: &str = "10";
 /// Titles per `imageinfo` request.
 const SIZE_BATCH: usize = 50;
@@ -131,7 +131,7 @@ pub async fn handler(
     let search = request.search.trim().to_string();
     let body = match request.mode.as_str() {
         "search" if !search.is_empty() => search_results(http, &search).await?,
-        "desc" => description(http, &request.image).await?,
+        "desc" if !request.image.trim().is_empty() => description(http, &request.image).await?,
         "category" if !request.category.trim().is_empty() => category(http, &request.category).await?,
         "random_image" => match random_page(http, NS_FILE).await? {
             Some(image) => description(http, &image).await?,
@@ -151,11 +151,12 @@ async fn main_page(http: &reqwest::Client, language: &str) -> anyhow::Result<Bod
     let commons = Wiki::commons();
     let language = if is_language_code(language) { language } else { "en" };
     let date = Utc::now().format("%Y-%m-%d");
-    let image = mediawiki::page_wikitext(http, &commons, &format!("Template:Potd/{date}"))
-        .await?
-        .map(|text| NOINCLUDE.replace_all(&text, "").trim().to_string())
-        .unwrap_or_default();
-    let html = mediawiki::page_html(http, &commons, &format!("Template:Potd/{date} ({language})")).await?;
+    let (name_page, description_page) = (format!("Template:Potd/{date}"), format!("Template:Potd/{date} ({language})"));
+    let (wikitext, html) = tokio::try_join!(
+        mediawiki::page_wikitext(http, &commons, &name_page),
+        mediawiki::page_html(http, &commons, &description_page),
+    )?;
+    let image = wikitext.map(|text| NOINCLUDE.replace_all(&text, "").trim().to_string()).unwrap_or_default();
     let description = external_links(&COMMENT.replace_all(&html.unwrap_or_default(), "")).trim().to_string();
     let thumb = match image.is_empty() {
         true => None,
@@ -183,12 +184,14 @@ async fn search_results(http: &reqwest::Client, search: &str) -> anyhow::Result<
 }
 
 async fn description(http: &reqwest::Client, image: &str) -> anyhow::Result<Body> {
-    let image = upper_first(image.trim().replace('_', " ").trim());
+    let image = image.trim();
+    let image = upper_first(strip_namespace(image, &["file", "image"]).unwrap_or(image).replace('_', " ").trim());
     let name = display_name(&image);
-    let thumb = thumbs(http, std::slice::from_ref(&image), LARGE, false).await?.remove(&image);
     let Some(file) = commonsapi::summary(http, &image).await? else {
-        return Ok(Body::Description { name, thumb, rows: vec![("Commons", "No such file.".to_string())] });
+        return Ok(Body::Description { name, thumb: None, rows: vec![("Commons", "No such file.".to_string())] });
     };
+    let size = |s: &str| s.parse().unwrap_or_default();
+    let thumb = thumb(&image, size(&file.width), size(&file.height), LARGE, false);
     let html = |text: &str| external_links(&COMMENT.replace_all(text, ""));
     let escape = |text: &str| wikimisc::escape::html(text).into_owned();
     let extension = image.rsplit_once('.').map_or("", |(_, e)| e).to_uppercase();
@@ -239,7 +242,11 @@ async fn category(http: &reqwest::Client, name: &str) -> anyhow::Result<Body> {
     let commons = Wiki::commons();
     let title = format!("Category:{name}");
     let params = [("action", "query"), ("prop", "categories"), ("titles", title.as_str()), ("cllimit", "max")];
-    let json = mediawiki::api(http, &commons, &params).await?;
+    let (json, subcategories, images) = tokio::try_join!(
+        mediawiki::api(http, &commons, &params),
+        members(http, &title, NS_CATEGORY),
+        members(http, &title, NS_FILE),
+    )?;
     let parents = json["query"]["pages"][0]["categories"]
         .as_array()
         .into_iter()
@@ -247,9 +254,8 @@ async fn category(http: &reqwest::Client, name: &str) -> anyhow::Result<Body> {
         .filter_map(|c| c["title"].as_str())
         .map(|t| category_link(&without_namespace(t)))
         .collect();
-    let subcategories = members(http, &title, NS_CATEGORY).await?.iter().map(|c| category_link(c)).collect();
-    let images = members(http, &title, NS_FILE).await?;
-    let truncated = images.len().to_string() == MAX_MEMBERS;
+    let subcategories = subcategories.iter().map(|c| category_link(c)).collect();
+    let truncated = images.len() == MAX_MEMBERS;
     let mut thumbs = thumbs(http, &images, GRID, true).await?;
     let has_video = images.iter().any(|i| is_ogg(i));
     let cells: Vec<Option<Thumb>> = images.iter().map(|i| thumbs.remove(i)).collect();
@@ -265,12 +271,13 @@ async fn category(http: &reqwest::Client, name: &str) -> anyhow::Result<Body> {
 
 /// Pages of a namespace in a category, without namespace; the first 500.
 async fn members(http: &reqwest::Client, category: &str, namespace: &str) -> anyhow::Result<Vec<String>> {
+    let limit = MAX_MEMBERS.to_string();
     let params = [
         ("action", "query"),
         ("list", "categorymembers"),
         ("cmtitle", category),
         ("cmnamespace", namespace),
-        ("cmlimit", MAX_MEMBERS),
+        ("cmlimit", limit.as_str()),
     ];
     let json = mediawiki::api(http, &Wiki::commons(), &params).await?;
     Ok(json["query"]["categorymembers"]
@@ -289,41 +296,68 @@ async fn random_page(http: &reqwest::Client, namespace: &str) -> anyhow::Result<
     Ok(json["query"]["random"][0]["title"].as_str().map(without_namespace))
 }
 
-/// Thumbnails fitting `(width, height)`, by file name; files the wiki does
-/// not have, or without a size (audio), get none.
+/// Thumbnails fitting `frame`, by file name; files the wiki does not
+/// have, or without a size (audio), get none.
 async fn thumbs(
     http: &reqwest::Client,
     images: &[String],
-    (max_width, max_height): (f64, f64),
+    frame: (f64, f64),
     link: bool,
 ) -> anyhow::Result<HashMap<String, Thumb>> {
-    let mut thumbs = HashMap::new();
+    let mut requests = tokio::task::JoinSet::new();
     for batch in images.chunks(SIZE_BATCH) {
-        let titles = batch.iter().map(|i| format!("File:{i}")).collect::<Vec<_>>().join("|");
-        let params = [("action", "query"), ("prop", "imageinfo"), ("iiprop", "size"), ("titles", titles.as_str())];
-        let json = mediawiki::api(http, &Wiki::commons(), &params).await?;
-        for page in json["query"]["pages"].as_array().into_iter().flatten() {
-            let (Some(title), info) = (page["title"].as_str(), &page["imageinfo"][0]) else { continue };
-            let (Some(width), Some(height)) = (info["width"].as_f64(), info["height"].as_f64()) else { continue };
-            if width == 0.0 || height == 0.0 {
-                continue;
+        let (http, batch) = (http.clone(), batch.to_vec());
+        requests.spawn(async move { sizes(&http, &batch).await });
+    }
+    let mut thumbs = HashMap::new();
+    while let Some(sizes) = requests.join_next().await {
+        for (name, (width, height)) in sizes?? {
+            if let Some(thumb) = thumb(&name, width, height, frame, link) {
+                thumbs.insert(name, thumb);
             }
-            let name = without_namespace(title);
-            let fitted = fit_width(width, height, max_width, max_height);
-            let mut src = format!("//commons.wikimedia.org/wiki/Special:Redirect/file/{}", encode_title(&name));
-            if fitted <= width {
-                src.push_str(&format!("?width={fitted}"));
-            }
-            let link = link.then(|| format!("?mode=desc&image={}", encode_component(&name)));
-            let thumb = Thumb { src, width: fitted as u32, ogg: is_ogg(&name), link };
-            thumbs.insert(name, thumb);
         }
     }
-    // Under the names asked for, as the API may normalise them.
-    Ok(images
-        .iter()
-        .filter_map(|i| thumbs.remove(&upper_first(&i.replace('_', " "))).map(|t| (i.clone(), t)))
+    Ok(thumbs)
+}
+
+/// Widths and heights of files, under the names asked for. POSTed, as 50
+/// long titles can be too much for a URL.
+async fn sizes(http: &reqwest::Client, images: &[String]) -> anyhow::Result<Vec<(String, (f64, f64))>> {
+    let titles = images.iter().map(|i| format!("File:{i}")).collect::<Vec<_>>().join("|");
+    let params = [("action", "query"), ("prop", "imageinfo"), ("iiprop", "size"), ("titles", titles.as_str())];
+    let json = mediawiki::api_post(http, &Wiki::commons(), &params).await?;
+    // The wiki's form of a title, and the form asked for.
+    let asked: HashMap<&str, &str> = json["query"]["normalized"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|n| Some((n["to"].as_str()?, n["from"].as_str()?)))
+        .collect();
+    Ok(json["query"]["pages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|page| {
+            let title = page["title"].as_str()?;
+            let info = &page["imageinfo"][0];
+            let size = (info["width"].as_f64()?, info["height"].as_f64()?);
+            Some((without_namespace(asked.get(title).copied().unwrap_or(title)), size))
+        })
         .collect())
+}
+
+/// A thumbnail of `image` fitting `frame`; none without a size.
+fn thumb(image: &str, width: f64, height: f64, (max_width, max_height): (f64, f64), link: bool) -> Option<Thumb> {
+    if width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let fitted = fit_width(width, height, max_width, max_height);
+    let mut src = format!("//commons.wikimedia.org/wiki/Special:Redirect/file/{}", encode_title(image));
+    if fitted <= width {
+        src.push_str(&format!("?width={fitted}"));
+    }
+    let link = link.then(|| format!("?mode=desc&image={}", encode_component(image)));
+    Some(Thumb { src, width: fitted as u32, ogg: is_ogg(image), link })
 }
 
 /// The width of `width`×`height` scaled to fit the box, rounded down.
@@ -373,6 +407,11 @@ mod tests {
         assert!(is_ogg("Video.OGG") && !is_ogg("Ogg.png"));
         assert_eq!(category_url("Lakes of Scotland"), "?mode=category&category=Lakes%20of%20Scotland");
         assert_eq!(external_links("<a href=\"x\">"), "<a class=\"external\" href=\"x\">");
+        let small = thumb("A b.jpg", 100.0, 50.0, LARGE, true).unwrap();
+        assert_eq!(small.src, "//commons.wikimedia.org/wiki/Special:Redirect/file/A_b.jpg");
+        assert_eq!(small.link.as_deref(), Some("?mode=desc&image=A%20b.jpg"));
+        assert_eq!(thumb("A.jpg", 4000.0, 3000.0, LARGE, false).unwrap().src.rsplit_once('=').unwrap().1, "316");
+        assert!(thumb("Sound.ogg", 0.0, 0.0, LARGE, true).is_none());
     }
 
     #[test]
