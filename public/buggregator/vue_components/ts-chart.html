@@ -1,7 +1,7 @@
 <template id='ts-chart-template'>
 <div>
 	<div class='chart-title'>
-		<span>{{title}} <span class='dash-muted' v-if='series.length==1 && last_values[0]!==null'>· {{fmt(last_values[0])}} now</span></span>
+		<span>{{title}} <span class='dash-muted' v-if='series.length==1 && last_values[0]!==null'>· {{fmt(last_values[0])}} {{latest_label}}</span></span>
 		<a href='#' @click.prevent='show_table=!show_table'>{{show_table?'Chart':'Table'}}</a>
 	</div>
 	<div class='chart-legend' v-if='series.length>1'>
@@ -12,7 +12,7 @@
 			<thead><tr><th style='text-align:left'>Time</th><th v-for='s in series'>{{s.label}}</th></tr></thead>
 			<tbody>
 				<tr v-for='row in table_rows'>
-					<td style='text-align:left'>{{dateTime(row.t)}}</td>
+					<td style='text-align:left'>{{when(row.t)}}</td>
 					<td v-for='v in row.values'>{{fmt(v)}}</td>
 				</tr>
 			</tbody>
@@ -39,7 +39,7 @@
 			</g>
 		</svg>
 		<div v-if='hover_t!==null' class='chart-tooltip' :style='tooltip_style'>
-			<div class='dash-muted'>{{dateTime(hover_t)}}</div>
+			<div class='dash-muted'>{{when(hover_t)}}</div>
 			<div v-for='(s,i) in series'>
 				<span class='line-key' :style='{background:color(s)}'></span><span class='tt-value'>{{fmt(hover_values[i])}}</span> <span class='tt-label'>{{s.label}}</span>
 			</div>
@@ -53,6 +53,7 @@
 
 // A single-axis time series chart. series: [ { label , slot (1-8) , points: [[t,v],…] } ],
 // all in one unit (see dash.format); refs: [ { value , label } ] reference lines, e.g. a limit.
+// With a bucket of a day or more, times are UTC dates.
 Vue.component ( 'ts-chart' , {
 	props : {
 		title : String ,
@@ -63,6 +64,8 @@ Vue.component ( 'ts-chart' , {
 		unit : { type:String , default:'count' } ,
 		refs : { type:Array , default:function(){return[]} } ,
 		height : { type:Number , default:150 } ,
+		// What the latest value is, after it in the title.
+		latest_label : { type:String , default:'now' } ,
 	} ,
 	data : function () { return { width:300 , hover_t:null , show_table:false , margin:{l:48,r:8,t:8,b:18} } } ,
 	mounted : function () {
@@ -73,6 +76,7 @@ Vue.component ( 'ts-chart' , {
 	updated : function () { this.measure() } ,
 	beforeDestroy : function () { window.removeEventListener ( 'resize' , this.resize_handler ) } ,
 	computed : {
+		daily : function () { return this.bucket >= 86400 } ,
 		has_data : function () { return this.series.some ( function(s){ return s.points.length > 0 } ) } ,
 		y_max : function () {
 			let max = 0 ;
@@ -86,8 +90,8 @@ Vue.component ( 'ts-chart' , {
 		} ,
 		x_ticks : function () {
 			let range = this.to - this.from ;
-			let step = [3600,7200,14400,21600,43200,86400,172800,432000].find ( function(s){ return range/s <= 6 } ) || 604800 ;
-			let offset = new Date().getTimezoneOffset() * 60 ; // Ticks on local midnights/hours
+			let step = [3600,7200,14400,21600,43200,86400,172800,432000,604800,1209600,2592000,5184000].find ( function(s){ return range/s <= 6 } ) || 7776000 ;
+			let offset = this.daily ? 0 : new Date().getTimezoneOffset() * 60 ; // Ticks on local midnights/hours, or UTC days
 			let ret = [] ;
 			for ( let t = Math.ceil((this.from-offset)/step)*step+offset ; t <= this.to ; t += step ) ret.push ( t ) ;
 			return ret ;
@@ -166,7 +170,12 @@ Vue.component ( 'ts-chart' , {
 			let start = this.hover_t === null ? this.snap(this.to) : this.hover_t ;
 			this.hover_t = this.snap ( start + ( e.key == 'ArrowLeft' ? -1 : 1 ) * this.bucket ) ;
 		} ,
+		// A time as the table and the tooltip show it.
+		when : function ( t ) {
+			return this.daily ? new Date(t*1000).toISOString().slice(0,10) : this.dateTime(t) ;
+		} ,
 		xLabel : function ( t ) {
+			if ( this.daily ) return new Date(t*1000).toISOString().slice(5,10) ;
 			let d = new Date ( t*1000 ) ;
 			let pad = function(n){ return (n<10?'0':'')+n } ;
 			if ( this.to - this.from > 172800 ) return pad(d.getMonth()+1) + '-' + pad(d.getDate()) ;

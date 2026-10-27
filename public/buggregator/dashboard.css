@@ -98,3 +98,12 @@
 .dash table.by-tool .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dash .badge-deploy { background: #cde2fb; color: #184f95; font-weight: normal; }
 .dash .events .event-message { white-space: pre-wrap; word-break: break-word; font-family: SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }
+
+/* Usage (logger) dashboard */
+.dash table.usage td, .dash table.usage th { font-size: 0.85rem; padding: 0.25rem 0.5rem; vertical-align: middle; }
+.dash table.usage .num { text-align: right; font-variant-numeric: tabular-nums; }
+.dash table.usage > tbody > tr:not(.detail) { cursor: pointer; }
+.dash table.usage tr.selected > td { background: var(--surface-1); font-weight: 600; }
+.dash table.usage tr.stopped > td { color: var(--text-muted); }
+.dash table.usage tr.detail > td { background: var(--page); padding: 0.75rem 1rem; }
+.dash svg.sparkline path { fill: none; stroke: var(--series-1); stroke-width: 1.5; }

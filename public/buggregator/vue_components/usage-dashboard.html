@@ -1,0 +1,190 @@
+<template id='usage-dashboard-template'>
+<div class='container-fluid dash'>
+	<tool-navbar>
+		<div slot='right'>
+			<widar></widar>
+		</div>
+	</tool-navbar>
+
+	<div class='dash-filters'>
+		<h2 class='h4 mb-0 mr-3'>Usage</h2>
+		<div class='btn-group btn-group-sm' role='group' aria-label='Time range'>
+			<button v-for='r in ranges' type='button' :class='"btn btn-outline-secondary"+(r==range?" active":"")' @click='setRange(r)'>{{r}}</button>
+		</div>
+		<span class='dash-muted ml-2'>Uses counted by the logger, per day (UTC) up to yesterday.</span>
+		<router-link to='/' class='ml-auto'>Issues</router-link>
+		<router-link to='/dashboard'>Service dashboard</router-link>
+	</div>
+
+	<div v-if='error' class='alert alert-warning'>{{error}}</div>
+	<div v-else-if='data===null'><i>Loading…</i></div>
+	<div v-else :class='{"dash-loading":loading}'>
+		<div class='kpis'>
+			<div class='kpi'>
+				<div class='kpi-label'>Uses</div>
+				<div class='kpi-value'>{{fmt(total)}}</div>
+				<div class='kpi-sub' :class='changeClass(total,previous_total)'>{{change(total,previous_total)}} on the {{range}} before</div>
+			</div>
+			<div class='kpi'>
+				<div class='kpi-label'>Tools used</div>
+				<div class='kpi-value'>{{used_count}}</div>
+				<div class='kpi-sub' v-if='stopped_count'>{{stopped_count}} used before, not now</div>
+			</div>
+			<div class='kpi' v-if='busiest'>
+				<div class='kpi-label'>Busiest day</div>
+				<div class='kpi-value'>{{fmt(busiest[1])}}</div>
+				<div class='kpi-sub'>{{day(busiest[0])}}</div>
+			</div>
+		</div>
+
+		<ts-chart title='Uses per day, all tools' unit='count' latest_label='yesterday' :series='[{label:"Uses",slot:1,points:data.totals}]'
+			:from='data.from' :to='data.to' :bucket='86400'></ts-chart>
+
+		<table class='table table-sm usage mt-3'>
+			<thead><tr>
+				<th>Tool</th><th class='num'>Uses</th><th class='num'>Share</th><th class='num'>Change</th>
+				<th class='num' title='Days with uses in the range'>Days</th><th>Last use</th><th>Per day</th>
+			</tr></thead>
+			<tbody>
+				<template v-for='t in data.tools'>
+					<tr :class='{selected:selected==t.name, stopped:t.uses==0}' @click='select(t.name)'>
+						<td><a href='#' @click.prevent>{{t.name}}</a></td>
+						<td class='num'>{{fmt(t.uses)}}</td>
+						<td class='num'>{{share(t.uses,total)}}</td>
+						<td class='num' :class='changeClass(t.uses,t.previous)'>{{change(t.uses,t.previous)}}</td>
+						<td class='num'>{{t.days_used}}</td>
+						<td :class='{"dash-muted":t.last_used < data.from}'>{{t.last_used ? day(t.last_used) : '–'}}</td>
+						<td><svg class='sparkline' width='120' height='22'><path :d='sparkline(t.points)' /></svg></td>
+					</tr>
+					<tr v-if='selected==t.name' class='detail'>
+						<td colspan='7'>
+							<div v-if='detail===null'><i>Loading…</i></div>
+							<div v-else>
+								<ts-chart :title='"Uses per day: "+t.name' unit='count' latest_label='yesterday' :series='detail_series'
+									:from='data.from' :to='data.to' :bucket='86400'></ts-chart>
+								<table class='table table-sm usage' v-if='detail.methods.length>1 || detail.methods[0].name'>
+									<thead><tr><th>Method</th><th class='num'>Uses</th><th class='num'>Share</th><th class='num'>Change</th><th class='num'>Days</th><th>Last use</th></tr></thead>
+									<tbody>
+										<tr v-for='m in detail.methods' :class='{stopped:m.uses==0}'>
+											<td>{{m.name || '(none)'}}</td>
+											<td class='num'>{{fmt(m.uses)}}</td>
+											<td class='num'>{{share(m.uses,t.uses)}}</td>
+											<td class='num' :class='changeClass(m.uses,m.previous)'>{{change(m.uses,m.previous)}}</td>
+											<td class='num'>{{m.days_used}}</td>
+											<td :class='{"dash-muted":m.last_used < data.from}'>{{m.last_used ? day(m.last_used) : '–'}}</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</td>
+					</tr>
+				</template>
+			</tbody>
+		</table>
+	</div>
+</div>
+</template>
+
+<script>
+'use strict';
+
+// What the logger counted: uses per tool and day, and per method of a tool.
+let UsageDashboard = Vue.extend ( {
+	props : [] ,
+	data : function () { return {
+		data : null , range : '30d' , ranges : [ '7d' , '30d' , '90d' , '365d' ] ,
+		selected : null , detail : null , loading : false , error : '' ,
+	} } ,
+	created : function () {
+		let query = this.$route.query ;
+		if ( this.ranges.includes ( query.range ) ) this.range = query.range ;
+		this.selected = query.tool || null ;
+		this.load() ;
+	} ,
+	computed : {
+		total : function () { return this.data.tools.reduce ( function(a,t){ return a + t.uses } , 0 ) } ,
+		previous_total : function () { return this.data.tools.reduce ( function(a,t){ return a + t.previous } , 0 ) } ,
+		used_count : function () { return this.data.tools.filter ( function(t){ return t.uses > 0 } ).length } ,
+		stopped_count : function () { return this.data.tools.filter ( function(t){ return t.uses == 0 } ).length } ,
+		busiest : function () {
+			return this.data.totals.reduce ( function(a,p){ return !a || p[1] > a[1] ? p : a } , null ) ;
+		} ,
+		// The methods of the selected tool: the 7 most used, the rest as "other".
+		detail_series : function () {
+			let methods = this.detail.methods.filter ( function(m){ return m.uses > 0 } ) ;
+			let series = methods.slice ( 0 , 7 ).map ( function ( m , i ) {
+				return { label:m.name || '(none)' , slot:i+1 , points:m.points } ;
+			} ) ;
+			let rest = methods.slice ( 7 ) ;
+			if ( rest.length ) {
+				let points = rest[0].points.map ( function ( p , i ) {
+					return [ p[0] , rest.reduce ( function(a,m){ return a + m.points[i][1] } , 0 ) ] ;
+				} ) ;
+				series.push ( { label:'other (' + rest.length + ')' , slot:8 , points:points } ) ;
+			}
+			return series ;
+		} ,
+	} ,
+	methods : {
+		load : function () {
+			let me = this ;
+			me.loading = true ;
+			dash.api ( { action:'usage' , range:me.range } )
+				.then ( function ( data ) { me.data = data ; me.error = '' ; if ( me.selected ) me.loadDetail() } )
+				.catch ( function ( e ) { me.error = e } )
+				.finally ( function () { me.loading = false } ) ;
+		} ,
+		loadDetail : function () {
+			let me = this , name = me.selected ;
+			me.detail = null ;
+			dash.api ( { action:'usage_tool' , tool:name , range:me.range } )
+				.then ( function ( detail ) { if ( me.selected == name ) me.detail = detail } )
+				.catch ( function ( e ) { me.error = e } ) ;
+		} ,
+		setRange : function ( range ) {
+			this.range = range ;
+			this.updateUrl() ;
+			this.load() ;
+		} ,
+		select : function ( name ) {
+			this.selected = this.selected == name ? null : name ;
+			this.updateUrl() ;
+			if ( this.selected ) this.loadDetail() ;
+		} ,
+		// Range and tool in the URL, to link to and reload.
+		updateUrl : function () {
+			let query = { range:this.range } ;
+			if ( this.selected ) query.tool = this.selected ;
+			this.$router.replace ( { path:'/usage' , query:query } ).catch ( function(){} ) ;
+		} ,
+		share : function ( part , whole ) {
+			if ( !part || !whole ) return '' ;
+			return part / whole < 0.001 ? '<0.1%' : this.percent ( part / whole ) ;
+		} ,
+		// "+12%", "−40%", "new" (nothing before), "gone" (nothing now).
+		change : function ( now , before ) {
+			if ( !before ) return now ? 'new' : '' ;
+			if ( !now ) return 'gone' ;
+			let p = Math.round ( ( now - before ) / before * 100 ) ;
+			return ( p > 0 ? '+' : p < 0 ? '−' : '±' ) + Math.abs(p) + '%' ;
+		} ,
+		// Big drops and tools that stopped stand out.
+		changeClass : function ( now , before ) {
+			if ( before && !now ) return 'status-critical' ;
+			if ( before && now < before / 2 ) return 'status-warning' ;
+			return '' ;
+		} ,
+		sparkline : function ( points ) {
+			let max = points.reduce ( function(a,p){ return Math.max ( a , p[1] ) } , 0 ) || 1 ;
+			let step = points.length > 1 ? 118 / ( points.length - 1 ) : 0 ;
+			return points.map ( function ( p , i ) {
+				return ( i ? 'L' : 'M' ) + ( 1 + i * step ).toFixed(1) + ',' + ( 21 - p[1] / max * 20 ).toFixed(1) ;
+			} ).join ( '' ) ;
+		} ,
+		day : function ( t ) { return new Date(t*1000).toISOString().slice(0,10) } ,
+		fmt : function ( v ) { return dash.format ( v , 'count' ) } ,
+		percent : function ( v ) { return dash.format ( v , 'percent' ) } ,
+	} ,
+	template : '#usage-dashboard-template'
+} ) ;
+</script>

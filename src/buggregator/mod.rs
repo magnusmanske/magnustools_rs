@@ -8,6 +8,7 @@ mod ingest;
 pub mod issues;
 mod toolinfo;
 pub mod update;
+mod usage;
 
 use crate::state::AppState;
 use crate::web::moved;

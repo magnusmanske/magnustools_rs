@@ -3,6 +3,7 @@
 
 use super::dashboard::{self, admin, query};
 use super::issues::{self, IssueQuery, PRIORITIES, SITES, SORT_BY, STATUSES};
+use super::usage;
 use crate::oauth::{OAuth, Session, Token};
 use crate::state::AppState;
 use crate::web::{Params, is_same_origin};
@@ -160,6 +161,17 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
                     }
                 };
                 out.insert("status".to_string(), status.into());
+            }
+            "usage" | "usage_tool" => {
+                let mut conn = self.state.tool_db.conn().await?;
+                // Complete days only: today's count is still growing.
+                let today = chrono::Utc::now().date_naive();
+                let (days, last) = (usage::range(&text("range")), today.pred_opt().unwrap_or(today));
+                let data = match action {
+                    "usage" => usage::overview(&mut conn, days, last).await?,
+                    _ => usage::tool(&mut conn, &text("tool"), days, last).await?,
+                };
+                out.insert("data".to_string(), data);
             }
             _ => {
                 out.insert("status".to_string(), format!("Unknown action '{action}'").into());

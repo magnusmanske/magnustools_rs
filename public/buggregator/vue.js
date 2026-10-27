@@ -17,6 +17,7 @@ $(document).ready ( function () {
 			'vue_components/restart-timeline.html',
 			'vue_components/service-card.html',
 			'vue_components/service-dashboard.html',
+			'vue_components/usage-dashboard.html',
 			] ) ,
 		new Promise(function(resolve, reject) {
 			$.get ( './api.php' , {action:'get_config'} , function(d) {
@@ -29,6 +30,7 @@ $(document).ready ( function () {
 			const routes = [
 			  { path: '/', component: IssueList , props:true },
 			  { path: '/dashboard', component: ServiceDashboard },
+			  { path: '/usage', component: UsageDashboard },
 			] ;
 			router = new VueRouter({routes}) ;
 			app = new Vue ( { router } ) .$mount('#app') ;

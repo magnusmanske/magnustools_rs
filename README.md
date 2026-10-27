@@ -54,7 +54,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/uploader_distribution/` | Uploaders of a category tree |
 | `/wiki2playlist/` | M3U playlist from a wiki page or category |
 | `/wp_data_url/` | An article with its images inlined |
-| `/buggregator/api/` | Buggregator API (the front-end is static) |
+| `/buggregator/api/` | Buggregator API; the front-end (`public/buggregator/`) has the issues, the service dashboard, and the usage dashboard (what the logger counted) |
 | `/buggregator/ingest.php` | Service dashboard pushes from `wikimisc` telemetry (also `/buggregator/ingest/`; not a redirect, as the client does not follow those) |
 | `/toolinfo_buggregator.json` | Toolinfo for tools not on Toolhub yet |
 
