@@ -9,7 +9,8 @@ use crate::web::{AppError, Params};
 use crate::wiki::{Wiki, encode_component, encode_title, is_language_code, upper_first};
 use askama::Template;
 use axum::extract::State;
-use axum::response::Html;
+use axum::http::HeaderName;
+use axum::response::{Html, IntoResponse};
 use chrono::Utc;
 use regex::Regex;
 use serde::Deserialize;
@@ -28,6 +29,8 @@ const LARGE: (f64, f64) = (320.0, 356.0 * 2.0 / 3.0);
 const SMALL: (f64, f64) = (150.0, 100.0);
 const GRID: (f64, f64) = (320.0 / 4.0 - 2.0, 320.0 / 4.0 - 2.0);
 const GRID_COLUMNS: usize = 4;
+/// A copy of Commons: nothing for search engines to index or crawl.
+const ROBOTS: (HeaderName, &str) = (HeaderName::from_static("x-robots-tag"), "noindex, nofollow");
 
 static COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<!--.*?-->").expect("valid regex"));
 static NOINCLUDE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<noinclude.*</noinclude>").expect("valid regex"));
@@ -126,7 +129,7 @@ struct Page {
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     Params(request): Params<Request>,
-) -> Result<Html<String>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let http = &state.http;
     let search = request.search.trim().to_string();
     let body = match request.mode.as_str() {
@@ -144,7 +147,8 @@ pub async fn handler(
         _ => main_page(http, &request.language).await?,
     };
     let page = Page { body, search };
-    page.render().map(Html).map_err(|e| AppError::Internal(format!("template: {e}")))
+    let html = page.render().map_err(|e| AppError::Internal(format!("template: {e}")))?;
+    Ok(([ROBOTS], Html(html)))
 }
 
 async fn main_page(http: &reqwest::Client, language: &str) -> anyhow::Result<Body> {
