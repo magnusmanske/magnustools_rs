@@ -1,4 +1,5 @@
-//! The PHP tool's static files (`public_html`), served as they are.
+//! The PHP tool's static files (`public_html`), if configured, served as
+//! they are, after the apps' own files (`super::apps`).
 //!
 //! `public_html` holds much that must never go out: PHP and Perl source,
 //! `.git` and `.svn` directories, keys. So only files with an allowlisted
@@ -24,13 +25,16 @@ const EXTENSIONS: &[&str] = &[
 
 /// A router serving the apps (built in), then the files under
 /// `public_html`, with the themed 404 page for everything else.
-pub fn service(public_html: &Path) -> Router {
-    let files = ServeDir::new(public_html).not_found_service(super::not_found.into_service());
-    let root = Arc::new(public_html.to_path_buf());
-    Router::new()
-        .fallback_service(files)
-        .layer(middleware::from_fn_with_state(root, only_public))
-        .layer(middleware::from_fn(super::apps::serve))
+pub fn service(public_html: Option<&Path>) -> Router {
+    let router = match public_html {
+        Some(public_html) => {
+            let files = ServeDir::new(public_html).not_found_service(super::not_found.into_service());
+            let root = Arc::new(public_html.to_path_buf());
+            Router::new().fallback_service(files).layer(middleware::from_fn_with_state(root, only_public))
+        }
+        None => Router::new().fallback(super::not_found),
+    };
+    router.layer(middleware::from_fn(super::apps::serve))
 }
 
 async fn only_public(State(root): State<Arc<PathBuf>>, request: Request, next: Next) -> Response {
@@ -106,6 +110,16 @@ mod tests {
         std::fs::write(root.join("tool.php"), "<?php secret").unwrap();
         std::fs::write(root.join("key.pem"), "secret").unwrap();
         dir
+    }
+
+    #[tokio::test]
+    async fn without_public_html_only_the_apps() {
+        use tower::ServiceExt;
+        let request = |uri: &str| axum::http::Request::get(uri).body(axum::body::Body::empty()).unwrap();
+        let app = service(None).oneshot(request("/ts2/css/tablesorter/blue/asc.gif")).await.unwrap();
+        assert_eq!(app.status().as_u16(), 200);
+        let other = service(None).oneshot(request("/resources/js/common.js")).await.unwrap();
+        assert_eq!(other.status().as_u16(), 404);
     }
 
     #[tokio::test]

@@ -1,7 +1,7 @@
 //! The tools with their own interface (the Buggregator, The Talk Page,
-//! GeneaWiki): their HTML, JavaScript and CSS live in `public/` and are
-//! built into the binary. Their other files (images) and everything else
-//! static still come from the PHP checkout.
+//! GeneaWiki), and the files Commons' Commander gadget loads (`commcomm/`):
+//! all they need lives in `public/` and is built into the binary, so they
+//! work without the PHP checkout.
 
 use axum::extract::Request;
 use axum::http::{HeaderValue, StatusCode, header};
@@ -76,8 +76,9 @@ mod tests {
         assert!(component.body.contains("by_tool"));
         assert_eq!(get(dir.path(), "/ts2/geneawiki2").await.headers["location"], "/ts2/geneawiki2/");
         assert_eq!(get(dir.path(), "/ts2/css/common.css").await.status.as_u16(), 200);
+        assert_eq!(get(dir.path(), "/ts2/css/tablesorter/blue/asc.gif").await.status.as_u16(), 200);
         // Not there: on to the PHP checkout, which has nothing either.
-        assert_eq!(get(dir.path(), "/ts2/css/tablesorter/blue/asc.gif").await.status.as_u16(), 404);
+        assert_eq!(get(dir.path(), "/ts2/js/no_such_file.js").await.status.as_u16(), 404);
         assert_eq!(get(dir.path(), "/thetalkpage/../Cargo.toml").await.status.as_u16(), 404);
     }
 }

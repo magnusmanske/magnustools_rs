@@ -14,9 +14,10 @@ pub use params::Params;
 
 use crate::state::AppState;
 use axum::Router;
+use axum::extract::State;
 use axum::http::Uri;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
-use axum::response::{IntoResponse, Redirect};
+use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{MethodRouter, any, get};
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,11 +31,12 @@ const HEALTH_PATH: &str = "/healthz";
 const UNCOUNTED_PATHS: &[&str] = &[HEALTH_PATH, "/logger/", "/logger.php", "/logger"];
 
 pub fn router(state: Arc<AppState>) -> Router {
-    let static_files = static_files::service(&state.config.public_html);
+    let static_files = static_files::service(state.config.public_html.as_deref());
     let router = crate::tools::routes(&state)
         .merge(crate::buggregator::routes())
         .route(HEALTH_PATH, get(wikimisc::server::health::ok))
         .route(page::STYLESHEET_PATH, get(page::stylesheet))
+        .route("/tool_status.html", get(tool_status))
         .with_state(state)
         .merge(legacy::routes())
         .fallback_service(static_files)
@@ -44,6 +46,14 @@ pub fn router(state: Arc<AppState>) -> Router {
     let router = wikimisc::server::standard_layers(router);
     // Each request's status and duration, for the dashboard.
     wikimisc::server::request_metrics(router, UNCOUNTED_PATHS)
+}
+
+/// The latest page of the `monitor` job.
+async fn tool_status(State(state): State<Arc<AppState>>) -> Response {
+    match tokio::fs::read_to_string(&state.config.monitor.status_page).await {
+        Ok(html) => Html(html).into_response(),
+        Err(_) => AppError::NotFound.into_response(),
+    }
 }
 
 fn header_layer(name: header::HeaderName, value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
@@ -99,6 +109,7 @@ pub(crate) mod test_support {
         std::fs::write(&credentials, "[client]\nuser=test\npassword=test\n").unwrap();
         let config: crate::config::Config = serde_json::from_value(serde_json::json!({
             "public_html": public_html,
+            "monitor": { "status_page": public_html.join("status.html") },
             "replica_credentials": credentials,
             "buggregator_oauth": public_html.join("none.ini"),
             "uploader_oauth": public_html.join("none.ini"),
@@ -148,6 +159,14 @@ mod tests {
         assert_eq!(css.status.as_u16(), 200);
         assert_eq!(css.headers["content-type"], "text/css; charset=utf-8");
         assert_eq!(css.headers["x-content-type-options"], "nosniff");
+    }
+
+    #[tokio::test]
+    async fn the_monitors_status_page() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(get(dir.path(), "/tool_status.html").await.status.as_u16(), 404);
+        std::fs::write(dir.path().join("status.html"), "<p>all well</p>").unwrap();
+        assert_eq!(get(dir.path(), "/tool_status.html").await.body, "<p>all well</p>");
     }
 
     #[tokio::test]

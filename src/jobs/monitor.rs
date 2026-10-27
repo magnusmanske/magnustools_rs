@@ -56,7 +56,7 @@ pub async fn run(state: &AppState) -> Result<()> {
     let now = chrono::Utc::now();
     let page =
         StatusPage { title: "Tool status", alerts: &alerts, updated: now.format("%Y-%m-%d %H:%M:%S UTC").to_string() };
-    tokio::fs::write(state.config.public_html.join("tool_status.html"), page.render()?).await?;
+    tokio::fs::write(&state.config.monitor.status_page, page.render()?).await?;
 
     let config = &state.config.monitor;
     let failing = Alerts(alerts.0.into_iter().filter(|(_, a)| !a.is_empty()).collect());

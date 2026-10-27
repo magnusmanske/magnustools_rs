@@ -10,9 +10,12 @@ use wikimisc::telemetry::TelemetryConfig;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// The PHP tool's `public_html`, whose static files are served as they are.
-    /// Relative paths are relative to the config file.
-    pub public_html: PathBuf,
+    /// The PHP tool's `public_html`, whose static files are served as they
+    /// are: the libraries other tools load (`resources/`) and retired pages.
+    /// The tools here need none of it. Relative paths, here and below, are
+    /// relative to the config file.
+    #[serde(default)]
+    pub public_html: Option<PathBuf>,
     /// Database credentials (`replica.my.cnf`, as Toolforge provides it). With
     /// `local='true'` in it, connections go to SSH tunnels instead.
     #[serde(default = "default_replica_credentials")]
@@ -42,8 +45,7 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
 }
 
-/// The `monitor` job: checks tools, writes `tool_status.html` into
-/// `public_html`, and mails new alerts.
+/// The `monitor` job: checks tools, writes the status page, and mails new alerts.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MonitorConfig {
@@ -60,6 +62,9 @@ pub struct MonitorConfig {
     /// The dashboard services known to be offline, so that each outage is mailed only once.
     #[serde(default = "default_dashboard_state")]
     pub dashboard_state_file: PathBuf,
+    /// The latest results, as a page; served as `/tool_status.html`.
+    #[serde(default = "default_status_page")]
+    pub status_page: PathBuf,
 }
 
 impl Default for MonitorConfig {
@@ -70,6 +75,7 @@ impl Default for MonitorConfig {
             smtp_host: default_smtp_host(),
             state_file: default_monitor_state(),
             dashboard_state_file: default_dashboard_state(),
+            status_page: default_status_page(),
         }
     }
 }
@@ -88,6 +94,10 @@ fn default_monitor_state() -> PathBuf {
 
 fn default_dashboard_state() -> PathBuf {
     "dashboard_alerts_state.txt".into()
+}
+
+fn default_status_page() -> PathBuf {
+    "tool_status.html".into()
 }
 
 fn default_replica_credentials() -> PathBuf {
@@ -113,13 +123,14 @@ impl Config {
         let mut config: Self =
             serde_json::from_str(&text).with_context(|| format!("invalid config file {}", path.display()))?;
         let dir = path.parent().unwrap_or(Path::new("."));
-        config.public_html = dir.join(&config.public_html);
+        config.public_html = config.public_html.map(|p| dir.join(p));
         config.flickr_key_file = config.flickr_key_file.map(|f| dir.join(f));
         config.replica_credentials = dir.join(&config.replica_credentials);
         config.buggregator_oauth = dir.join(&config.buggregator_oauth);
         config.uploader_oauth = dir.join(&config.uploader_oauth);
         config.monitor.state_file = dir.join(&config.monitor.state_file);
         config.monitor.dashboard_state_file = dir.join(&config.monitor.dashboard_state_file);
+        config.monitor.status_page = dir.join(&config.monitor.status_page);
         Ok(config)
     }
 }
@@ -140,20 +151,21 @@ mod tests {
     fn relative_paths_are_relative_to_the_config_file() {
         let (config, dir) = load(r#"{"public_html": "php/public_html"}"#);
         let config = config.unwrap();
-        assert_eq!(config.public_html, dir.path().join("php/public_html"));
+        assert_eq!(config.public_html, Some(dir.path().join("php/public_html")));
         assert_eq!(config.replica_credentials, dir.path().join("replica.my.cnf"));
+        assert_eq!(config.monitor.status_page, dir.path().join("tool_status.html"));
         assert!(config.telemetry.token.is_none());
     }
 
     #[test]
     fn absolute_paths_stay() {
         let (config, _dir) = load(r#"{"public_html": "/data/project/x/public_html"}"#);
-        assert_eq!(config.unwrap().public_html, Path::new("/data/project/x/public_html"));
+        assert_eq!(config.unwrap().public_html.as_deref(), Some(Path::new("/data/project/x/public_html")));
     }
 
     #[test]
-    fn typos_and_omissions_are_errors() {
+    fn typos_are_errors_but_everything_has_a_default() {
         assert!(load(r#"{"public_html": "x", "telemtry": {}}"#).0.is_err());
-        assert!(load("{}").0.is_err());
+        assert!(load("{}").0.unwrap().public_html.is_none());
     }
 }

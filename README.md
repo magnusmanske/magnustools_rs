@@ -63,17 +63,18 @@ Uses of the tools are counted per day in the tool database, as tool
 request counts if it brings parameters and does not fail, so opening an empty
 form does not.
 
-The tools with their own interface keep their HTML, JavaScript and CSS in
-`public/`, built into the binary (`src/web/apps.rs`): the Buggregator
-front-end, and from magnus-toolserver `thetalkpage/` and `ts2/geneawiki/`,
-`ts2/geneawiki2/` (family trees from Wikidata). Changes to them belong here,
-not in the PHP checkout, whose copies are no longer served.
+The tools with their own interface keep their files in `public/`, built into
+the binary (`src/web/apps.rs`): the Buggregator front-end, and from
+magnus-toolserver `thetalkpage/` and `ts2/geneawiki/`, `ts2/geneawiki2/`
+(family trees from Wikidata); also the `commcomm/` files that Commons'
+`MediaWiki:Commander.js` loads. Changes to them belong here, not in the PHP
+checkout, whose copies are no longer served.
 
-Anything else is a static file from the PHP checkout's `public_html` (images
-of those tools too), if its type is on an allowlist
-(`src/web/static_files.rs`); retired pages redirect or answer 410
-(`src/web/legacy.rs`). That includes the `commcomm/` files that Commons'
-`MediaWiki:Commander.js` loads.
+So all tools work without the PHP checkout. If `public_html` is configured,
+anything else comes from there: the libraries other tools load
+(`resources/`), and pages of retired tools, if their type is on an allowlist
+(`src/web/static_files.rs`). Retired addresses redirect or answer 410
+(`src/web/legacy.rs`).
 
 ## Code
 
@@ -94,7 +95,7 @@ cargo clippy --all-targets -- -D warnings
 ## Run locally
 
 ```bash
-cp config.json.template config.json   # point public_html at a magnustools checkout
+cp config.json.template config.json   # public_html (a magnustools checkout) is optional
 cargo run -- --port 8000
 ```
 
