@@ -60,7 +60,29 @@ fn file(path: &'static str, contents: &'static [u8]) -> Response {
 
 #[cfg(test)]
 mod tests {
+    use super::PUBLIC;
     use crate::web::test_support::get;
+    use regex::Regex;
+
+    /// Files from old tools can carry API keys (a Flickr key once came along
+    /// in `ts2/js/common.js`); everything here is public, so none may.
+    #[test]
+    fn no_keys_in_public_files() {
+        let key =
+            Regex::new(r#"(?i)(api[_-]?key|secret|token|password)\w*\s*[:=]\s*['"][A-Za-z0-9_\-]{16,}['"]"#).unwrap();
+        let mut files = vec![];
+        let mut dirs = vec![&PUBLIC];
+        while let Some(dir) = dirs.pop() {
+            files.extend(dir.files());
+            dirs.extend(dir.dirs());
+        }
+        for file in files {
+            let text = String::from_utf8_lossy(file.contents());
+            assert!(!key.is_match(&text), "{} looks like it contains a key", file.path().display());
+        }
+        // What it is there for:
+        assert!(key.is_match("var flickr_api_key = '0123456789abcdef0123' ;"));
+    }
 
     #[tokio::test]
     async fn apps_from_the_binary() {
