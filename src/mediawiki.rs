@@ -61,6 +61,12 @@ pub async fn page_html(http: &reqwest::Client, wiki: &Wiki, title: &str) -> Resu
     Ok(Some(html))
 }
 
+/// Wiki text with its templates expanded, as the wiki would transclude it.
+pub async fn expand_templates(http: &reqwest::Client, wiki: &Wiki, wikitext: &str) -> Result<String> {
+    let json = api(http, wiki, &[("action", "expandtemplates"), ("prop", "wikitext"), ("text", wikitext)]).await?;
+    Ok(json["expandtemplates"]["wikitext"].as_str().unwrap_or_default().to_string())
+}
+
 /// Wiki text rendered by the wiki, as an HTML fragment with absolute links.
 pub async fn parse_to_html(http: &reqwest::Client, wiki: &Wiki, wikitext: &str) -> Result<String> {
     let params = [

@@ -33,7 +33,6 @@ const GRID_COLUMNS: usize = 4;
 const ROBOTS: (HeaderName, &str) = (HeaderName::from_static("x-robots-tag"), "noindex, nofollow");
 
 static COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<!--.*?-->").expect("valid regex"));
-static NOINCLUDE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<noinclude.*</noinclude>").expect("valid regex"));
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -66,6 +65,12 @@ struct Thumb {
 }
 
 impl Thumb {
+    /// With a link to the description here, if `link`.
+    fn new(image: &str, src: String, width: u32, link: bool) -> Self {
+        let link = link.then(|| format!("?mode=desc&image={}", encode_component(image)));
+        Self { src, width, ogg: is_ogg(image), link }
+    }
+
     /// The image, linked if it has a link; Ogg videos get a width for the player.
     fn html(&self) -> String {
         let escape = |s: &str| wikimisc::escape::html(s).into_owned();
@@ -74,7 +79,7 @@ impl Thumb {
             false => String::new(),
         };
         let img = format!(
-            "<img border='0' src=\"{}\" style='display: block; margin-left: auto; margin-right: auto'{width} />",
+            "<img border='0' src=\"{}\" loading='lazy' style='display: block; margin-left: auto; margin-right: auto'{width} />",
             escape(&self.src)
         );
         match &self.link {
@@ -154,14 +159,16 @@ pub async fn handler(
 async fn main_page(http: &reqwest::Client, language: &str) -> anyhow::Result<Body> {
     let commons = Wiki::commons();
     let language = if is_language_code(language) { language } else { "en" };
+    // Transcluded, the day's templates give the file name and the caption.
     let date = Utc::now().format("%Y-%m-%d");
-    let (name_page, description_page) = (format!("Template:Potd/{date}"), format!("Template:Potd/{date} ({language})"));
-    let (wikitext, html) = tokio::try_join!(
-        mediawiki::page_wikitext(http, &commons, &name_page),
-        mediawiki::page_html(http, &commons, &description_page),
+    let image = transclude_if_exists(&format!("Potd/{date}"));
+    let caption = transclude_if_exists(&format!("Potd/{date} ({language})"));
+    let (image, html) = tokio::try_join!(
+        mediawiki::expand_templates(http, &commons, &image),
+        mediawiki::parse_to_html(http, &commons, &caption),
     )?;
-    let image = wikitext.map(|text| NOINCLUDE.replace_all(&text, "").trim().to_string()).unwrap_or_default();
-    let description = external_links(&COMMENT.replace_all(&html.unwrap_or_default(), "")).trim().to_string();
+    let image = image.trim().to_string();
+    let description = external_links(&COMMENT.replace_all(&html, "")).trim().to_string();
     let thumb = match image.is_empty() {
         true => None,
         false => thumbs(http, std::slice::from_ref(&image), LARGE, true).await?.remove(&image),
@@ -195,7 +202,7 @@ async fn description(http: &reqwest::Client, image: &str) -> anyhow::Result<Body
         return Ok(Body::Description { name, thumb: None, rows: vec![("Commons", "No such file.".to_string())] });
     };
     let size = |s: &str| s.parse().unwrap_or_default();
-    let thumb = thumb(&image, size(&file.width), size(&file.height), LARGE, false);
+    let thumb = redirect_thumb(&image, size(&file.width), size(&file.height), LARGE);
     let html = |text: &str| external_links(&COMMENT.replace_all(text, ""));
     let escape = |text: &str| wikimisc::escape::html(text).into_owned();
     let extension = image.rsplit_once('.').map_or("", |(_, e)| e).to_uppercase();
@@ -311,24 +318,36 @@ async fn thumbs(
     let mut requests = tokio::task::JoinSet::new();
     for batch in images.chunks(SIZE_BATCH) {
         let (http, batch) = (http.clone(), batch.to_vec());
-        requests.spawn(async move { sizes(&http, &batch).await });
+        requests.spawn(async move { thumb_urls(&http, &batch, frame).await });
     }
     let mut thumbs = HashMap::new();
-    while let Some(sizes) = requests.join_next().await {
-        for (name, (width, height)) in sizes?? {
-            if let Some(thumb) = thumb(&name, width, height, frame, link) {
-                thumbs.insert(name, thumb);
-            }
+    while let Some(urls) = requests.join_next().await {
+        for (name, url, width) in urls?? {
+            let thumb = Thumb::new(&name, url, width, link);
+            thumbs.insert(name, thumb);
         }
     }
     Ok(thumbs)
 }
 
-/// Widths and heights of files, under the names asked for. POSTed, as 50
-/// long titles can be too much for a URL.
-async fn sizes(http: &reqwest::Client, images: &[String]) -> anyhow::Result<Vec<(String, (f64, f64))>> {
+/// The thumbnail URLs and widths of files that have a size, under the names
+/// asked for: the wiki scales them, so the browser needs no redirect.
+/// POSTed, as 50 long titles can be too much for a URL.
+async fn thumb_urls(
+    http: &reqwest::Client,
+    images: &[String],
+    (max_width, max_height): (f64, f64),
+) -> anyhow::Result<Vec<(String, String, u32)>> {
     let titles = images.iter().map(|i| format!("File:{i}")).collect::<Vec<_>>().join("|");
-    let params = [("action", "query"), ("prop", "imageinfo"), ("iiprop", "size"), ("titles", titles.as_str())];
+    let (width, height) = (max_width.floor().to_string(), max_height.floor().to_string());
+    let params = [
+        ("action", "query"),
+        ("prop", "imageinfo"),
+        ("iiprop", "size|url"),
+        ("iiurlwidth", width.as_str()),
+        ("iiurlheight", height.as_str()),
+        ("titles", titles.as_str()),
+    ];
     let json = mediawiki::api_post(http, &Wiki::commons(), &params).await?;
     // The wiki's form of a title, and the form asked for.
     let asked: HashMap<&str, &str> = json["query"]["normalized"]
@@ -344,14 +363,19 @@ async fn sizes(http: &reqwest::Client, images: &[String]) -> anyhow::Result<Vec<
         .filter_map(|page| {
             let title = page["title"].as_str()?;
             let info = &page["imageinfo"][0];
-            let size = (info["width"].as_f64()?, info["height"].as_f64()?);
-            Some((without_namespace(asked.get(title).copied().unwrap_or(title)), size))
+            // Without a size (audio), the "thumbnail" is a file type icon.
+            info["width"].as_u64().filter(|w| *w > 0)?;
+            info["height"].as_u64().filter(|h| *h > 0)?;
+            let url = info["thumburl"].as_str()?.to_string();
+            let width = u32::try_from(info["thumbwidth"].as_u64()?).ok()?;
+            Some((without_namespace(asked.get(title).copied().unwrap_or(title)), url, width))
         })
         .collect())
 }
 
-/// A thumbnail of `image` fitting `frame`; none without a size.
-fn thumb(image: &str, width: f64, height: f64, (max_width, max_height): (f64, f64), link: bool) -> Option<Thumb> {
+/// A thumbnail of `image` fitting `frame`, by way of `Special:Redirect`,
+/// for a file whose size is known; none without a size.
+fn redirect_thumb(image: &str, width: f64, height: f64, (max_width, max_height): (f64, f64)) -> Option<Thumb> {
     if width <= 0.0 || height <= 0.0 {
         return None;
     }
@@ -360,8 +384,7 @@ fn thumb(image: &str, width: f64, height: f64, (max_width, max_height): (f64, f6
     if fitted <= width {
         src.push_str(&format!("?width={fitted}"));
     }
-    let link = link.then(|| format!("?mode=desc&image={}", encode_component(image)));
-    Some(Thumb { src, width: fitted as u32, ogg: is_ogg(image), link })
+    Some(Thumb::new(image, src, fitted as u32, false))
 }
 
 /// The width of `width`×`height` scaled to fit the box, rounded down.
@@ -391,6 +414,11 @@ fn category_link(name: &str) -> Link {
     Link { name: name.to_string(), url: category_url(name) }
 }
 
+/// `{{template}}`, or nothing if there is no such template (rather than a red link).
+fn transclude_if_exists(template: &str) -> String {
+    format!("{{{{#ifexist:Template:{template}|{{{{{template}}}}}}}}}")
+}
+
 /// Links in Commons' HTML open on Commons, marked as such.
 fn external_links(html: &str) -> String {
     html.replace("<a ", "<a class=\"external\" ")
@@ -410,12 +438,18 @@ mod tests {
         assert_eq!(without_namespace("File:A:b.jpg"), "A:b.jpg");
         assert!(is_ogg("Video.OGG") && !is_ogg("Ogg.png"));
         assert_eq!(category_url("Lakes of Scotland"), "?mode=category&category=Lakes%20of%20Scotland");
+        assert_eq!(
+            transclude_if_exists("Potd/2026-10-27"),
+            "{{#ifexist:Template:Potd/2026-10-27|{{Potd/2026-10-27}}}}"
+        );
         assert_eq!(external_links("<a href=\"x\">"), "<a class=\"external\" href=\"x\">");
-        let small = thumb("A b.jpg", 100.0, 50.0, LARGE, true).unwrap();
+        let small = redirect_thumb("A b.jpg", 100.0, 50.0, LARGE).unwrap();
         assert_eq!(small.src, "//commons.wikimedia.org/wiki/Special:Redirect/file/A_b.jpg");
-        assert_eq!(small.link.as_deref(), Some("?mode=desc&image=A%20b.jpg"));
-        assert_eq!(thumb("A.jpg", 4000.0, 3000.0, LARGE, false).unwrap().src.rsplit_once('=').unwrap().1, "316");
-        assert!(thumb("Sound.ogg", 0.0, 0.0, LARGE, true).is_none());
+        assert_eq!(redirect_thumb("A.jpg", 4000.0, 3000.0, LARGE).unwrap().src.rsplit_once('=').unwrap().1, "316");
+        assert!(redirect_thumb("Sound.ogg", 0.0, 0.0, LARGE).is_none());
+        let linked = Thumb::new("A b.jpg", "x".into(), 10, true);
+        assert_eq!(linked.link.as_deref(), Some("?mode=desc&image=A%20b.jpg"));
+        assert!(linked.html().contains(" loading='lazy' "));
     }
 
     #[test]
