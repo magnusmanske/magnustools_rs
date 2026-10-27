@@ -1,6 +1,7 @@
 //! `cas.php`: links for a CAS registry number (chemistry), from the wiki's
 //! `Template:CasTemplate`, with `{cas}`, `{cas9}` and `{title}` filled in.
 
+use crate::cache::TimedMap;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
@@ -10,10 +11,14 @@ use axum::extract::State;
 use axum::response::Html;
 use serde::Deserialize;
 use std::sync::Arc;
+use std::time::Duration;
 
 const TEMPLATE: &str = "Template:CasTemplate";
 /// The Wikipedias that have the template.
 const WIKIS_WITH_TEMPLATE: &[&str] = &["de", "fr", "it", "pl"];
+/// The template, rendered, per wiki: it rarely changes, and was the one
+/// request each page made.
+static TEMPLATES: TimedMap<String, Option<String>> = TimedMap::new(Duration::from_secs(600), 1000);
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -87,8 +92,13 @@ pub async fn handler(
             None => page.error = Some(format!("“{}” is not a CAS registry number.", page.cas)),
             Some(cas) => {
                 let wiki = Wiki::new(&request.language, &request.project)?;
-                match mediawiki::page_html(&state.http, &wiki, TEMPLATE).await? {
-                    Some(html) => page.links_html = Some(fill_in(&html, &cas, &page.name)),
+                let template = TEMPLATES
+                    .get_or_fetch(wiki.host().to_string(), async || {
+                        mediawiki::page_html(&state.http, &wiki, TEMPLATE).await
+                    })
+                    .await?;
+                match template.as_deref() {
+                    Some(html) => page.links_html = Some(fill_in(html, &cas, &page.name)),
                     None => page.error = Some(format!("{wiki} has no {TEMPLATE}.")),
                 }
             }

@@ -26,6 +26,7 @@ use std::time::Duration;
 const API_VERSION: &str = "0.92";
 const LICENSE_PAGE: &str = "Commons:Commons API";
 const LICENSE_PAGE_CACHE: Duration = Duration::from_secs(3600);
+const LANGUAGE_NAMES_CACHE: Duration = Duration::from_secs(86_400);
 const MAX_IMAGES: usize = 50;
 const EXTMETADATA: &str = "ImageDescription|DateTimeOriginal|Artist|Credit|Permission|GPSLatitude|GPSLongitude";
 /// Output field, `extmetadata` field.
@@ -256,13 +257,21 @@ async fn language_names(
         .filter_map(|(_, f)| f.as_ref())
         .flat_map(|f| descriptions(&f.info))
         .map(|(code, _)| code)
+        .filter(|code| code != "default")
         .collect();
-    let codes: Vec<String> = codes.into_iter().filter(|c| c != "default").collect();
     if codes.is_empty() {
         return Ok(HashMap::new());
     }
-    let codes = codes.join("|");
-    let params = [("action", "query"), ("meta", "languageinfo"), ("liprop", "autonym"), ("licode", codes.as_str())];
+    let autonyms = AUTONYMS.get_or_fetch(async || all_autonyms(http).await).await?;
+    Ok(codes.into_iter().filter_map(|code| autonyms.get(&code).map(|name| (code, name.clone()))).collect())
+}
+
+static AUTONYMS: TimedCache<HashMap<String, String>> = TimedCache::new(LANGUAGE_NAMES_CACHE);
+
+/// The autonyms of all languages the wiki knows (some 1,500), by code: one
+/// request a day instead of one per response.
+async fn all_autonyms(http: &reqwest::Client) -> anyhow::Result<HashMap<String, String>> {
+    let params = [("action", "query"), ("meta", "languageinfo"), ("liprop", "autonym"), ("licode", "*")];
     let json = mediawiki::api(http, &Wiki::commons(), &params).await?;
     Ok(json["query"]["languageinfo"]
         .as_object()

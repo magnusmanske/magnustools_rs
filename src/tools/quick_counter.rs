@@ -1,5 +1,6 @@
 //! `quick_counter.php`: a user's live and deleted edits per namespace.
 
+use crate::cache::TimedMap;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render, thousands};
@@ -10,7 +11,11 @@ use axum::response::Html;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::time::Duration;
 use wikimisc::mysql_async::prelude::Queryable;
+
+/// Namespace names per wiki, which hardly ever change.
+static NAMESPACES: TimedMap<String, HashMap<i64, String>> = TimedMap::new(Duration::from_secs(86_400), 1000);
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -79,7 +84,10 @@ pub async fn handler(
         .exec("SELECT ar_namespace, COUNT(*) FROM archive_userindex WHERE ar_actor=? GROUP BY ar_namespace", (actor,))
         .await
         .map_err(anyhow::Error::from)?;
-    let names = namespace_names(&state.http, &wiki).await.unwrap_or_default();
+    let names = NAMESPACES
+        .get_or_fetch(wiki.dbname().to_string(), async || namespace_names(&state.http, &wiki).await)
+        .await
+        .unwrap_or_default();
     let counts = per_namespace(&live, &deleted);
     page.rows = counts
         .iter()

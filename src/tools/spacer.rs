@@ -2,6 +2,7 @@
 //! designator (COSPAR ID). The databases are listed on a wiki page, as
 //! `* [https://…%ID%… Name]`.
 
+use crate::cache::TimedCache;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
@@ -11,8 +12,10 @@ use axum::extract::State;
 use axum::response::Html;
 use serde::Deserialize;
 use std::sync::Arc;
+use std::time::Duration;
 
 const CONFIG_PAGE: &str = "Benutzer:Magnus Manske/Spacer";
+static CONFIG: TimedCache<String> = TimedCache::new(Duration::from_secs(600));
 
 #[derive(Debug, Default, Deserialize)]
 pub struct Request {
@@ -44,7 +47,11 @@ pub async fn handler(
     let links = match id.is_empty() {
         true => vec![],
         false => {
-            let config = mediawiki::page_wikitext(&state.http, &wiki, CONFIG_PAGE).await?.unwrap_or_default();
+            let config = CONFIG
+                .get_or_fetch(async || {
+                    mediawiki::page_wikitext(&state.http, &wiki, CONFIG_PAGE).await.map(Option::unwrap_or_default)
+                })
+                .await?;
             links(&config, &id)
         }
     };
