@@ -12,6 +12,7 @@ mod get_article_intro;
 mod get_distinct_authors;
 mod herding_sheep;
 mod html2wiki;
+mod icommons;
 mod index;
 mod logger;
 mod makeref;
@@ -58,6 +59,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("get_article_intro", "Get article intro"),
     ("herding_sheep", "Herding sheep"),
     ("html2wiki", "HTML to wiki"),
+    ("icommons", "iCommons"),
     ("makeref", "MakeRef"),
     ("metronom", "Metronom"),
     ("missingtopics", "Missing topics"),
@@ -113,6 +115,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("get_distinct_authors", get(get_distinct_authors::handler).post(get_distinct_authors::handler)),
         ("herding_sheep", get(herding_sheep::handler)),
         ("html2wiki", get(html2wiki::handler).post(html2wiki::handler)),
+        ("icommons", get(icommons::handler).post(icommons::handler)),
         ("logger", get(logger::handler).post(logger::handler)),
         ("makeref", get(makeref::handler).post(makeref::handler)),
         ("metronom", get(metronom::handler)),

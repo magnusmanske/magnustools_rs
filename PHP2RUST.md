@@ -5,7 +5,7 @@ Triage of the tools on the [main page](https://magnustools.toolforge.org/) that 
 Based on: usage over 30 days (logger uses, dashboard requests), the code (`~/php/<tool>`), live error logs and job status on Toolforge. Toolforge SSH went down mid-analysis, so some log breakdowns are incomplete (marked "not verified"). Many PHP tools are down (503) after a PHP security incident; that is known and not counted against them.
 
 ## Already Rust
-PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria (web, since 2026-10-23), geohack (9.2M requests/30d), autodesc, wdrc, Harvest Templates, wd-infernal, ac2wd, RustCCI, magnustools, catfood (since 2026-10-24), missingtopics (part of magnustools since 2026-10-24). add-information (part of magnustools since 2026-10-25). makeref and templator (part of magnustools since 2026-10-26). BaGLAMa2 is ~95% Rust (`baglama2_rs`; only a thin read API and the add-category action are PHP).
+PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria (web, since 2026-10-23), geohack (9.2M requests/30d), autodesc, wdrc, Harvest Templates, wd-infernal, ac2wd, RustCCI, magnustools, catfood (since 2026-10-24), missingtopics (part of magnustools since 2026-10-24). add-information (part of magnustools since 2026-10-25). makeref and templator (part of magnustools since 2026-10-26), icommons (since 2026-10-27). BaGLAMa2 is ~95% Rust (`baglama2_rs`; only a thin read API and the add-category action are PHP).
 
 The tool table's `webserver_type` was out of date for several of these; fixed 2026-10-23 (see below).
 

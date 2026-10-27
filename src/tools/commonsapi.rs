@@ -115,6 +115,59 @@ pub async fn handler(
     Ok(([(header::CONTENT_TYPE, "text/xml; charset=utf-8")], xml).into_response())
 }
 
+/// What other tools show of a file (iCommons): the fields of the XML response.
+pub(super) struct Summary {
+    pub(super) author: String,
+    pub(super) source: String,
+    pub(super) permission: String,
+    pub(super) upload_date: String,
+    pub(super) uploader: String,
+    pub(super) width: String,
+    pub(super) height: String,
+    pub(super) size: String,
+    /// Latitude and longitude.
+    pub(super) location: Option<(String, String)>,
+    /// In English, else the default language; HTML.
+    pub(super) description: String,
+    pub(super) licenses: Vec<String>,
+    /// All of them, licence categories included.
+    pub(super) categories: Vec<String>,
+}
+
+/// The summary of `image` (without namespace); `None` if there is no such file.
+pub(super) async fn summary(http: &reqwest::Client, image: &str) -> anyhow::Result<Option<Summary>> {
+    let options =
+        Options { thumb_width: None, thumb_height: None, languages: vec![], versions: false, meta: false, sdc: false };
+    let license_data = license_data(http).await?;
+    let image = image.trim().replace(' ', "_");
+    let Some(file) = fetch(http, &image, &options).await? else { return Ok(None) };
+    let elements = file_elements(&image, &file, &options, &license_data, &HashMap::new());
+    let element = |name: &str| elements.iter().find(|e| e.name == name);
+    let summary = element("file");
+    let text = |name: &str| summary.and_then(|s| s.child(name)).map(|e| e.text.clone()).unwrap_or_default();
+    let location = summary.and_then(|s| s.child("location")).and_then(|l| {
+        let coordinate = |name: &str| l.child(name).map(|e| e.text.clone());
+        Some((coordinate("lat")?, coordinate("lon")?))
+    });
+    let languages = element("description").map(|d| d.children.as_slice()).unwrap_or_default();
+    let language = |code: &str| languages.iter().find(|l| l.attributes.iter().any(|(k, v)| k == "code" && v == code));
+    let licenses = element("licenses").map(|l| l.children.as_slice()).unwrap_or_default();
+    Ok(Some(Summary {
+        author: text("author"),
+        source: text("source"),
+        permission: text("permission"),
+        upload_date: text("upload_date"),
+        uploader: text("uploader"),
+        width: text("width"),
+        height: text("height"),
+        size: text("size"),
+        location,
+        description: language("en").or_else(|| language("default")).map(|l| l.text.clone()).unwrap_or_default(),
+        licenses: licenses.iter().filter_map(|l| l.child("name")).map(|n| n.text.clone()).collect(),
+        categories: file.categories,
+    }))
+}
+
 /// What the API knows about one file.
 struct File {
     info: Map<String, Value>,
@@ -555,6 +608,10 @@ impl Element {
 
     fn add(&mut self, name: &str, text: &str) {
         self.push(Self::text(name, text));
+    }
+
+    fn child(&self, name: &str) -> Option<&Element> {
+        self.children.iter().find(|c| c.name == name)
     }
 
     fn write_xml(&self, out: &mut String) {

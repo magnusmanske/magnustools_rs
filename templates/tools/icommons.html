@@ -1,0 +1,73 @@
+{#- The original iCommons page, markup and style unchanged. -#}
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta http-equiv='Content-Type' content='text/html; charset=UTF-8' >
+<meta name = 'viewport' content = 'user-scalable=no, width=device-width'>
+<title>iCommons</title>
+<style type='text/css'>
+<!--
+body { -webkit-text-size-adjust:auto ; font-family:Arial,Times; padding:0px; margin:0px; width:99%}
+.head1 { font-size:24pt;text-weight:bold;width:100%;border-bottom:1px solid black; padding:2px; text-align:center }
+.sect1 { font-size:14pt;width:100%;border-bottom:1px solid black; padding:2px; text-align:left }
+.external { color:green }
+-->
+</style>
+<script type='application/x-javascript'>
+
+if (navigator.userAgent.indexOf('iPhone') != -1) {
+        addEventListener("load", function() {
+                setTimeout(hideURLbar, 0);
+        }, false);
+}
+
+function hideURLbar() {
+        window.scrollTo(0, 1);
+}
+
+</script>
+</head>
+<body><div class='head1' onClick='location.href="/icommons/"'>Wikimedia Commons</div>
+{%- match body %}
+{%- when Body::Main { thumb, description } %}
+<div class='sect1'>Picture of the day :{% if let Some(t) = thumb %}{{ t.html()|safe }}{% endif %}{{ description|safe }}</div>
+{%- when Body::Search(hits) %}
+{%- if hits.is_empty() %}
+<div class='sect1'><b>No results</b><br/>Search is currently single-word only...</div>
+{%- else %}
+<table width="100%" cellspacing="0" cellpadding="1">
+{%- for hit in hits %}
+<tr><td bgcolor='{% if loop.index0 % 2 == 0 %}white{% else %}#EEEEEE{% endif %}'>{{ hit.thumb.html()|safe }}</td><td width='100%' style='font-size:10pt' valign='top' bgcolor='{% if loop.index0 % 2 == 0 %}white{% else %}#EEEEEE{% endif %}'><a href="{{ hit.thumb.link.as_deref().unwrap_or_default() }}">{{ hit.name }}</a><br/><br/><a href="{{ hit.file_url }}" class='external'>Description page</a>{% if hit.thumb.ogg %}<br/><i>This is an Ogg Theora video</i>{% endif %}</td></tr>
+{%- endfor %}
+</table>
+{%- endif %}
+{%- when Body::Description { name, thumb, rows } %}
+<div class='sect1'><b>{{ name }}</b></div>
+{%- if let Some(t) = thumb %}{{ t.html()|safe }}{% endif %}
+<table width='100%' cellspacing='0' cellpadding='1'>
+{%- for (heading, value) in rows %}
+<tr valign='top' bgcolor='{% if loop.index0 % 2 == 0 %}white{% else %}#EEEEEE{% endif %}'><th>{{ heading }}</th><td valign='top' bgcolor='{% if loop.index0 % 2 == 0 %}white{% else %}#EEEEEE{% endif %}'>{{ value|safe }}</td></tr>
+{%- endfor %}
+</table>
+{%- when Body::Category { name, parents, subcategories, rows, has_video, truncated } %}
+<div class='sect1'><b>{{ name }}</b></div>
+{%- if !parents.is_empty() %}
+<div class='sect1'><b>Parent categories:</b><br/>{% for c in parents %}<a href="{{ c.url }}">{{ c.name }}</a>{% if !loop.last %}, {% endif %}{% endfor %}</div>
+{%- endif %}
+{%- if !subcategories.is_empty() %}
+<div class='sect1'><b>Subcategories:</b><br/>{% for c in subcategories %}<a href="{{ c.url }}">{{ c.name }}</a>{% if !loop.last %}, {% endif %}{% endfor %}</div>
+{%- endif %}
+{%- if rows.is_empty() %}
+<div class='sect1'>Found no images in this category.</div>
+{%- else %}
+<table width='100%' cellspacing='0' cellpadding='1'>
+{%- for row in rows %}
+<tr>{% for cell in row %}<td{% if let Some(t) = cell %}{% if t.ogg %} style="border:2px solid red"{% endif %}>{{ t.html()|safe }}{% else %}>{% endif %}</td>{% endfor %}</tr>
+{%- endfor %}
+</table>
+{%- if *has_video %}<i>The red border indicates Ogg Theora videos</i>{% endif %}
+{%- if *truncated %}(first 500 images displayed){% endif %}
+{%- endif %}
+{%- endmatch %}
+<form method="post" action="?" style="padding:2px;width:100%"><input type="hidden" name="mode" value="search" /><table width="100%" cellpadding="0" cellspacing="0"><tr><td width="100%"><input type="text" name="search" value="{{ search }}" style="width:100%" /></td><td><input type="submit" name="doit" value="Search" style="-webkit-border-radius:10px;" /></td></tr></table><a href="?mode=random_image">Random image</a> &nbsp; <a href="?mode=random_category">Random category</a></form></body></html>

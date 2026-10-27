@@ -34,6 +34,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/get_distinct_authors/` | Who edited a set of articles |
 | `/herding_sheep/` | Recent edits by a group of users |
 | `/html2wiki/`, `/tab2wiki/` | HTML or spreadsheet tables to wiki markup |
+| `/icommons/` | Commons for small screens: picture of the day, search, files, categories (formerly icommons.toolforge.org) |
 | `/logger/` | Counts tool uses (JSON/JSONP) |
 | `/makeref/` | A citation template filled in from a form; types and fields from `MakeRef/<Language>` on Meta (formerly makeref.toolforge.org) |
 | `/metronom/` | Page views of the articles a user started |
