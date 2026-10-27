@@ -1,0 +1,323 @@
+<template id='service-card-template'>
+<div class='card card-service' :id='"service-"+service.name'>
+	<div class='card-header'>
+		<h3>{{service.label}}</h3>
+		<span v-if='current_status'><span :class='"status-icon status-"+current_status.severity'>{{icon(current_status.severity)}}</span>{{current_status.label}}</span>
+		<a v-if='service.url' :href='service.url' target='_blank' class='dash-muted'>{{service.url}}</a>
+		<router-link v-if='service.tool_id' :to='{path:"/",query:{tool:service.tool_id}}'>Issues</router-link>
+		<div v-if='component_names.length>1' class='btn-group btn-group-sm ml-auto' role='group' aria-label='Component'>
+			<button v-for='c in component_names' type='button' :class='"btn btn-outline-secondary"+(c==component?" active":"")' @click='component=c'>{{c}}</button>
+		</div>
+		<span v-else class='ml-auto dash-muted'>{{component}}</span>
+		<span v-if='comp && comp.replicas>1' class='dash-muted'>{{comp.replicas}} replicas</span>
+	</div>
+	<div class='card-body' :class='{"dash-loading":loading}'>
+		<ul class='nav nav-tabs mb-3'>
+			<li class='nav-item' v-for='t in tabs'>
+				<a href='#' :class='"nav-link"+(t.id==tab?" active":"")' @click.prevent='setTab(t.id)'>{{t.label}}</a>
+			</li>
+		</ul>
+		<div v-if='error' class='alert alert-warning'>{{error}}</div>
+
+		<div v-if='tab=="overview" && comp'>
+			<div class='kpis'>
+				<div class='kpi'>
+					<div class='kpi-label'>{{comp.status=="up"?"Up for":"Last report"}}</div>
+					<div class='kpi-value'>{{comp.status=="up"?duration(now-comp.current.started_at):ago(comp.current.last_seen)}}</div>
+					<div class='kpi-sub'>started {{dateTime(comp.current.started_at)}}</div>
+				</div>
+				<div class='kpi'>
+					<div class='kpi-label'>Uptime, 24 h</div>
+					<div class='kpi-value'>{{percent(comp.uptime_24h)}}</div>
+					<div class='kpi-sub'>7 d: {{percent(comp.uptime_7d)}}</div>
+				</div>
+				<div class='kpi'>
+					<div class='kpi-label'>Restarts, 24 h</div>
+					<div class='kpi-value'>{{total(comp.restarts_24h)}}</div>
+					<div class='kpi-sub'>{{breakdown(comp.restarts_24h)||"none"}} · 7 d: {{total(comp.restarts_7d)}}</div>
+				</div>
+				<div class='kpi'>
+					<div class='kpi-label'>Version</div>
+					<div class='kpi-value'>{{comp.current.version||"–"}}</div>
+					<div class='kpi-sub'>deployed {{ago(comp.deployed_at)}}</div>
+				</div>
+				<div class='kpi'>
+					<div class='kpi-label'>Memory{{comp.replicas>1?' (highest replica)':''}}</div>
+					<div class='kpi-value'>{{fmt(comp.current.rss_bytes,"bytes")}}</div>
+					<div class='kpi-sub' v-if='comp.current.mem_limit_bytes'>{{percent(memory_fraction)}} of {{fmt(comp.current.mem_limit_bytes,"bytes")}}</div>
+					<div v-if='comp.current.mem_limit_bytes' :class='"meter"+meterClass(memory_fraction)'><div :style='{width:Math.min(100,memory_fraction*100)+"%"}'></div></div>
+				</div>
+				<div class='kpi' v-if='cpu.series[0].points.length'>
+					<div class='kpi-label'>CPU (cores)</div>
+					<div class='kpi-value'>{{fmt(last(cpu.series[0]),"cores")}}</div>
+					<div class='kpi-sub' v-if='cpu.refs.length'>of {{fmt(cpu.refs[0].value,"cores")}}</div>
+				</div>
+			</div>
+			<div class='chart-title'>Process runs</div>
+			<restart-timeline v-if='series_data' :instances='instances' :from='series_data.from' :to='series_data.to'></restart-timeline>
+			<div class='charts mt-3' v-if='series_data'>
+				<ts-chart :title='perReplica("Memory (RSS)")' unit='bytes' v-bind='range_props' :series='memory.series' :refs='memory.refs'></ts-chart>
+				<ts-chart :title='perReplica("CPU (cores)")' unit='cores' v-bind='range_props' :series='cpu.series' :refs='cpu.refs'></ts-chart>
+				<ts-chart v-if='traffic' title='Requests' unit='per_min' v-bind='range_props' :series='traffic.requests'></ts-chart>
+			</div>
+		</div>
+
+		<div v-if='tab=="resources" && series_data' class='charts'>
+			<ts-chart :title='perReplica("Memory (RSS)")' unit='bytes' v-bind='range_props' :series='memory.series' :refs='memory.refs'></ts-chart>
+			<ts-chart :title='perReplica("CPU (cores)")' unit='cores' v-bind='range_props' :series='cpu.series' :refs='cpu.refs'></ts-chart>
+			<ts-chart v-for='c in process_counts' :key='c.title' :title='c.title' unit='count' v-bind='range_props' :series='c.series' :height='110'></ts-chart>
+		</div>
+
+		<div v-if='tab=="restarts"'>
+			<restart-timeline v-if='series_data' :instances='instances' :from='series_data.from' :to='series_data.to'></restart-timeline>
+			<table class='table table-sm instances mt-3'>
+				<thead><tr><th>Started</th><th>Ran for</th><th>How it ended</th><th>Version</th><th>Host</th><th>Last memory</th></tr></thead>
+				<tbody>
+					<tr v-for='i in instances'>
+						<td nowrap>{{dateTime(i.started_at)}}</td>
+						<td nowrap>{{duration((i.ended_at||i.last_seen)-i.started_at)}}</td>
+						<td>
+							<span :class='"status-icon status-"+instanceState(i).severity'>{{icon(instanceState(i).severity)}}</span>{{instanceState(i).label}}
+							<div class='detail' v-if='i.end_detail'>{{i.end_detail}}</div>
+						</td>
+						<td>{{i.version}} <span v-if='i.deploy' class='badge badge-deploy'>deploy</span></td>
+						<td class='dash-muted'>{{i.host}}</td>
+						<td nowrap>{{fmt(i.rss_bytes,"bytes")}}<span v-if='i.rss_bytes&&i.mem_limit_bytes' class='dash-muted'> ({{percent(i.rss_bytes/i.mem_limit_bytes)}})</span></td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div v-if='tab=="traffic" && traffic' class='charts'>
+			<ts-chart title='Requests by status' unit='per_min' v-bind='range_props' :series='traffic.by_status'></ts-chart>
+			<ts-chart title='Response time' unit='seconds' v-bind='range_props' :series='traffic.latency'></ts-chart>
+		</div>
+		<div v-if='tab=="traffic" && by_tool.length'>
+			<div class='chart-title mt-3'>Requests by tool</div>
+			<table class='table table-sm by-tool'>
+				<thead><tr><th>Tool</th><th class='num'>Requests</th><th class='num'>Share</th><th class='num'>Client errors</th><th class='num'>Server errors</th></tr></thead>
+				<tbody>
+					<tr v-for='t in by_tool'>
+						<td>{{t.tool}}</td>
+						<td class='num'>{{fmt(t.requests,"count")}}</td>
+						<td class='num'>{{percent(t.share)}}</td>
+						<td class='num'>{{t.client_errors ? fmt(t.client_errors,"count") : ''}}</td>
+						<td class='num'>{{t.server_errors ? fmt(t.server_errors,"count") : ''}}</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div v-if='tab=="metrics"' class='charts'>
+			<ts-chart v-for='c in custom_charts' :key='c.title' :title='c.title' :unit='c.unit' v-bind='range_props' :series='c.series'></ts-chart>
+		</div>
+
+		<div v-if='tab=="events"' class='events'>
+			<div v-if='events_error' class='dash-muted'>Event messages can contain internals, so they are only shown to logged-in maintainers. {{events_error}}</div>
+			<div v-else-if='events.length==0' class='dash-muted'>No events in this period.</div>
+			<table v-else class='table table-sm'>
+				<tr v-for='e in events'>
+					<td nowrap class='dash-muted'>{{dateTime(e.ts)}}</td>
+					<td nowrap><span :class='"status-icon status-"+levelSeverity(e.level)'>{{icon(levelSeverity(e.level))}}</span>{{e.level}}</td>
+					<td class='dash-muted'>{{e.component}}</td>
+					<td class='event-message'>{{e.message}}</td>
+				</tr>
+			</table>
+		</div>
+	</div>
+</div>
+</template>
+
+<script>
+'use strict';
+
+Vue.component ( 'service-card' , {
+	props : [ 'service' , 'range' , 'now' , 'refresh_tick' ] ,
+	data : function () { return {
+		component : Object.keys(this.service.components)[0] || '' ,
+		tab : 'overview' , series_data : null , instances : [] , events : [] , events_error : '' ,
+		loading : false , error : '' ,
+	} } ,
+	created : function () { this.load() } ,
+	watch : {
+		component : function () { this.series_data = null ; this.load() } ,
+		range : function () { this.load() } ,
+		refresh_tick : function () { this.load() } ,
+	} ,
+	computed : {
+		component_names : function () { return Object.keys ( this.service.components ) } ,
+		comp : function () { return this.service.components[this.component] } ,
+		current_status : function () { return this.comp ? dash.STATUS[this.comp.status] : null } ,
+		memory_fraction : function () { return this.comp.current.rss_bytes / this.comp.current.mem_limit_bytes } ,
+		range_props : function () {
+			return { from:this.series_data.from , to:this.series_data.to , bucket:this.series_data.bucket } ;
+		} ,
+		all_series : function () { return this.series_data ? this.series_data.series : [] } ,
+		memory : function () {
+			let limit = this.last ( this.find('process_memory_limit_bytes') ) ;
+			return {
+				series : [ { label:'RSS' , slot:1 , points:this.points('process_resident_memory_bytes') } ] ,
+				refs : limit ? [ { value:limit , label:'limit' } ] : [] ,
+			} ;
+		} ,
+		cpu : function () {
+			// cpu seconds per minute / 60 = cores in use
+			let points = this.points('process_cpu_seconds_total').map ( function(p){ return [ p[0] , p[1]/60 ] } ) ;
+			let limit = this.last ( this.find('process_cpu_limit_cores') ) ;
+			return { series : [ { label:'CPU' , slot:1 , points:points } ] , refs : limit ? [ { value:limit , label:'limit' } ] : [] } ;
+		} ,
+		process_counts : function () {
+			let me = this ;
+			return [ ['process_threads','Threads'] , ['process_open_fds','Open files'] , ['tokio_alive_tasks','Async tasks'] ]
+				.filter ( function(x){ return me.find(x[0]) } )
+				.map ( function(x){ return { title:x[1] , series:[ { label:x[1] , slot:1 , points:me.points(x[0]) } ] } } ) ;
+		} ,
+		traffic : function () {
+			let me = this ;
+			let by_status = me.all_series.filter ( function(s){ return s.name == 'http_requests_total' } ) ;
+			if ( by_status.length == 0 ) return null ;
+			// Each status keeps its colour whatever else is present.
+			let slots = { '2xx':1 , '3xx':3 , '4xx':4 , '429':2 , '5xx':8 , '503':7 , '504':5 , '1xx':6 } ;
+			let order = [ '1xx' , '2xx' , '3xx' , '4xx' , '429' , '5xx' , '503' , '504' ] ; // Not Object.keys: it puts '429' etc. first
+			by_status = by_status.slice().sort ( function(a,b){ return order.indexOf(a.labels.status) - order.indexOf(b.labels.status) } ) ;
+			return {
+				by_status : by_status.map ( function(s){ return { label:s.labels.status , slot:slots[s.labels.status]||6 , points:s.points } } ) ,
+				requests : [ { label:'Requests' , slot:1 , points:me.sumPoints(by_status) } ] ,
+				latency : [
+					{ label:'median' , slot:1 , points:me.points('http_request_duration_seconds_p50') } ,
+					{ label:'95th percentile' , slot:2 , points:me.points('http_request_duration_seconds_p95') } ,
+				] ,
+			} ;
+		} ,
+		// Requests per tool in the range, most first, for services of several
+		// tools (tool_requests_total). Counters come as rates per minute per bucket.
+		by_tool : function () {
+			let series = this.all_series.filter ( function(s){ return s.name == 'tool_requests_total' } ) ;
+			if ( series.length == 0 ) return [] ;
+			let minutes = this.series_data.bucket / 60 ;
+			let tools = {} ;
+			series.forEach ( function ( s ) {
+				let count = s.points.reduce ( function(a,p){ return a + p[1] } , 0 ) * minutes ;
+				let t = tools[s.labels.tool] = tools[s.labels.tool] || { tool:s.labels.tool , requests:0 , client_errors:0 , server_errors:0 } ;
+				t.requests += count ;
+				if ( /^4/.test(s.labels.status) ) t.client_errors += count ;
+				if ( /^5/.test(s.labels.status) ) t.server_errors += count ;
+			} ) ;
+			let total = Object.values(tools).reduce ( function(a,t){ return a + t.requests } , 0 ) ;
+			return Object.values(tools)
+				.filter ( function(t){ return Math.round(t.requests) > 0 } )
+				.map ( function(t){ t.share = total ? t.requests / total : 0 ; return t } )
+				.sort ( function(a,b){ return b.requests - a.requests } ) ;
+		} ,
+		// Everything the service records itself, one chart per metric. Histograms
+		// (name_count/_sum/_p50/_p95/_max) become a rate chart and a distribution chart.
+		custom_charts : function () {
+			let me = this ;
+			let custom = me.all_series.filter ( function(s){ return !/^(process_|tokio_|http_requests_total$|tool_requests_total$|http_request_duration_seconds_)/.test(s.name) } ) ;
+			let names = {} ;
+			custom.forEach ( function(s){ names[s.name] = true } ) ;
+			let charts = {} ;
+			let add = function ( title , unit , label , points ) {
+				if ( !charts[title] ) charts[title] = { title:title , unit:unit , series:[] } ;
+				charts[title].series.push ( { label:label , points:points } ) ;
+			} ;
+			custom.forEach ( function ( s ) {
+				let labels = dash.labelText ( s.labels ) ;
+				let m = s.name.match ( /^(.*)_(count|sum|p50|p95|max)$/ ) ;
+				if ( m && names[m[1]+'_count'] && names[m[1]+'_sum'] ) {
+					if ( m[2] == 'count' ) add ( m[1] + ' (rate)' , 'per_min' , labels || m[1] , s.points ) ;
+					else if ( m[2] != 'sum' ) add ( m[1] , dash.unitFor(m[1]+'_'+m[2],'gauge') , ( labels ? labels+' ' : '' ) + m[2] , s.points ) ;
+				} else {
+					add ( s.name , dash.unitFor(s.name,s.kind) , labels || s.name , s.points ) ;
+				}
+			} ) ;
+			return Object.values(charts).map ( me.capSeries ) ;
+		} ,
+		tabs : function () {
+			let ret = [ { id:'overview' , label:'Overview' } , { id:'resources' , label:'Resources' } , { id:'restarts' , label:'Restarts' } ] ;
+			if ( this.traffic ) ret.push ( { id:'traffic' , label:'Traffic' } ) ;
+			if ( this.custom_charts.length ) ret.push ( { id:'metrics' , label:'Metrics' } ) ;
+			ret.push ( { id:'events' , label:'Events' } ) ;
+			return ret ;
+		} ,
+	} ,
+	methods : {
+		load : function () {
+			let me = this ;
+			if ( !me.component ) return ;
+			let params = { service:me.service.name , component:me.component , range:me.range } ;
+			me.loading = true ;
+			Promise.all ( [
+				dash.api ( $.extend ( { action:'dashboard_series' } , params ) ) ,
+				dash.api ( $.extend ( { action:'dashboard_instances' } , params ) ) ,
+			] ).then ( function ( results ) {
+				me.series_data = results[0] ;
+				me.instances = results[1] ;
+				me.error = '' ;
+			} ).catch ( function ( e ) { me.error = e } )
+			.finally ( function () { me.loading = false } ) ;
+			if ( me.tab == 'events' ) me.loadEvents() ;
+		} ,
+		loadEvents : function () {
+			let me = this ;
+			dash.api ( { action:'dashboard_events' , service:me.service.name , range:me.range } )
+				.then ( function ( events ) { me.events = events ; me.events_error = '' } )
+				.catch ( function ( e ) { me.events_error = e } ) ;
+		} ,
+		setTab : function ( tab ) {
+			this.tab = tab ;
+			if ( tab == 'events' ) this.loadEvents() ;
+		} ,
+		find : function ( name ) {
+			return this.all_series.find ( function(s){ return s.name == name && Object.keys(s.labels||{}).length == 0 } ) ;
+		} ,
+		points : function ( name ) {
+			let s = this.find ( name ) ;
+			return s ? s.points : [] ;
+		} ,
+		last : function ( s ) {
+			return s && s.points.length ? s.points[s.points.length-1][1] : null ;
+		} ,
+		sumPoints : function ( series ) {
+			let sums = {} ;
+			series.forEach ( function(s){ s.points.forEach ( function(p){ sums[p[0]] = ( sums[p[0]] || 0 ) + p[1] } ) } ) ;
+			return Object.keys(sums).map(Number).sort(function(a,b){return a-b}).map ( function(t){ return [ t , sums[t] ] } ) ;
+		} ,
+		// At most 8 series per chart, coloured in a stable (alphabetical) order;
+		// the smallest of the rest are folded into "other".
+		capSeries : function ( chart ) {
+			let series = chart.series ;
+			if ( series.length > 8 ) {
+				let total = function(s){ return s.points.reduce ( function(a,p){ return a + p[1] } , 0 ) } ;
+				series = series.slice().sort ( function(a,b){ return total(b) - total(a) } ) ;
+				let rest = series.splice ( 7 ) ;
+				series.push ( { label:'other (' + rest.length + ')' , points:this.sumPoints(rest) } ) ;
+			}
+			series = series.slice().sort ( function(a,b){ return a.label.localeCompare(b.label) } ) ;
+			series.forEach ( function(s,i){ s.slot = i + 1 } ) ;
+			return { title:chart.title , unit:chart.unit , series:series } ;
+		} ,
+		instanceState : function ( i ) {
+			if ( i.end_reason ) return dash.endReason ( i.end_reason ) ;
+			return i.status == 'up' ? dash.END_REASONS.running : dash.STATUS[i.status] ;
+		} ,
+		// Gauges of a replicated component show the highest replica; say so.
+		perReplica : function ( title ) {
+			return this.comp && this.comp.replicas > 1 ? title + ', highest of ' + this.comp.replicas + ' replicas' : title ;
+		} ,
+		levelSeverity : function ( level ) { return { info:'neutral' , warn:'warning' , error:'critical' }[level] } ,
+		total : function ( counts ) { return Object.values(counts||{}).reduce ( function(a,b){ return a+b } , 0 ) } ,
+		breakdown : function ( counts ) {
+			return Object.keys(counts||{}).map ( function(r){ return counts[r] + ' ' + dash.endReason(r).label.toLowerCase() } ).join ( ' · ' ) ;
+		} ,
+		meterClass : function ( f ) { return f >= 0.9 ? ' meter-critical' : ( f >= 0.75 ? ' meter-warning' : '' ) } ,
+		icon : function ( severity ) { return dash.SEVERITY_ICONS[severity] } ,
+		fmt : function ( v , unit ) { return dash.format ( v , unit ) } ,
+		percent : function ( v ) { return dash.format ( v , 'percent' ) } ,
+		duration : function ( s ) { return dash.duration ( s ) } ,
+		ago : function ( t ) { return dash.ago ( t , this.now ) } ,
+		dateTime : function ( t ) { return dash.dateTime ( t ) } ,
+	} ,
+	template : '#service-card-template'
+} ) ;
+</script>

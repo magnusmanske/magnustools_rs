@@ -1,0 +1,100 @@
+/* ========== Service dashboard ========== */
+
+.dash {
+	--surface-1: #fcfcfb;
+	--page: #f9f9f7;
+	--text-primary: #0b0b0b;
+	--text-secondary: #52514e;
+	--text-muted: #898781;
+	--grid: #e1e0d9;
+	--axis: #c3c2b7;
+	--border: rgba(11,11,11,0.10);
+	--series-1: #2a78d6;
+	--series-2: #eb6834;
+	--series-3: #1baf7a;
+	--series-4: #eda100;
+	--series-5: #e87ba4;
+	--series-6: #008300;
+	--series-7: #6250d6;
+	--series-8: #e34948;
+	--status-good: #0ca30c;
+	--status-warning: #fab219;
+	--status-serious: #ec835a;
+	--status-critical: #d03b3b;
+	--status-neutral: #c3c2b7;
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	color: var(--text-primary);
+}
+
+.dash h2, .dash h3 { font-family: inherit; }
+.dash svg text.status-good { fill: var(--status-good); }
+.dash svg text.status-neutral { fill: var(--text-muted); }
+.dash svg text.status-warning { fill: #b07a00; }
+.dash svg text.status-serious { fill: #c45a2c; }
+.dash svg text.status-critical { fill: var(--status-critical); }
+.dash .dash-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0 1rem 0; }
+.dash .dash-muted { color: var(--text-muted); font-size: 0.85rem; }
+.dash .dash-secondary { color: var(--text-secondary); }
+.dash .dash-loading { opacity: 0.5; transition: opacity 0.2s; }
+
+/* Status: always icon + label, never colour alone */
+.dash .status-icon { display: inline-block; width: 1.1em; text-align: center; font-weight: bold; }
+.dash .status-good { color: var(--status-good); }
+.dash .status-warning { color: #b07a00; }
+.dash .status-serious { color: #c45a2c; }
+.dash .status-critical { color: var(--status-critical); }
+.dash .status-neutral { color: var(--text-muted); }
+
+.dash .attention { list-style: none; padding: 0.5rem 0.75rem; margin: 0 0 1rem 0; background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; }
+.dash .attention li { padding: 0.15rem 0; }
+.dash .attention .close-alert { border: 0; background: none; color: var(--text-muted); font-size: 1.1rem; line-height: 1; padding: 0 0.3rem; margin-left: 0.25rem; cursor: pointer; }
+.dash .attention .close-alert:hover, .dash .attention .close-alert:focus { color: var(--text-primary); }
+
+.dash .wall { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.dash .wall a { display: block; padding: 0.4rem 0.7rem; background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); text-decoration: none; }
+.dash .wall a:hover { background: var(--page); }
+.dash .wall .wall-name { font-weight: 600; }
+.dash .wall .wall-component { font-size: 0.8rem; color: var(--text-secondary); margin-right: 0.5rem; }
+
+.dash .card-service { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1.25rem; }
+.dash .card-service > .card-header { background: transparent; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem; }
+.dash .card-service h3 { font-size: 1.25rem; margin: 0; }
+.dash .card-service .nav-tabs { margin-top: 0.5rem; }
+
+.dash .kpis { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+.dash .kpi { flex: 1 1 9rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
+.dash .kpi-label { font-size: 0.8rem; color: var(--text-secondary); }
+.dash .kpi-value { font-size: 1.4rem; font-weight: 600; line-height: 1.3; }
+.dash .kpi-sub { font-size: 0.8rem; color: var(--text-muted); }
+
+/* Meter: severity fill on a lighter track of the same ramp */
+.dash .meter { height: 6px; border-radius: 3px; background: #cde2fb; margin-top: 0.3rem; overflow: hidden; }
+.dash .meter > div { height: 100%; border-radius: 3px; background: var(--series-1); }
+.dash .meter.meter-warning { background: #fdeac0; }
+.dash .meter.meter-warning > div { background: var(--status-warning); }
+.dash .meter.meter-critical { background: #f6d3d3; }
+.dash .meter.meter-critical > div { background: var(--status-critical); }
+
+.dash .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); gap: 1rem; }
+.dash .chart-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.2rem; display: flex; justify-content: space-between; }
+.dash .chart-title a { font-weight: normal; font-size: 0.8rem; }
+.dash .chart-legend { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem; }
+.dash .line-key { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 4px; border-radius: 1px; }
+.dash .chart-box { position: relative; }
+.dash .chart-box svg { display: block; width: 100%; overflow: visible; }
+.dash .chart-box svg:focus { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.dash .chart-box text { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+.dash .chart-tooltip { position: absolute; top: 0; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border); border-radius: 4px; padding: 0.3rem 0.5rem; font-size: 0.8rem; box-shadow: 0 2px 6px rgba(0,0,0,0.08); white-space: nowrap; z-index: 2; }
+.dash .chart-tooltip .tt-value { font-weight: 600; color: var(--text-primary); }
+.dash .chart-tooltip .tt-label { color: var(--text-secondary); }
+.dash .chart-table { max-height: 16rem; overflow: auto; font-size: 0.8rem; }
+.dash .chart-table td, .dash .chart-table th { padding: 0.1rem 0.5rem; text-align: right; font-variant-numeric: tabular-nums; }
+
+.dash .timeline-legend { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem; }
+.dash .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.dash table.instances td, .dash table.instances th { font-size: 0.85rem; padding: 0.25rem 0.5rem; vertical-align: top; }
+.dash table.instances .detail { max-width: 28rem; color: var(--text-secondary); }
+.dash table.by-tool td, .dash table.by-tool th { font-size: 0.85rem; padding: 0.25rem 0.5rem; }
+.dash table.by-tool .num { text-align: right; font-variant-numeric: tabular-nums; }
+.dash .badge-deploy { background: #cde2fb; color: #184f95; font-weight: normal; }
+.dash .events .event-message { white-space: pre-wrap; word-break: break-word; font-family: SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }

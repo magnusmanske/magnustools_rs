@@ -1,0 +1,56 @@
+<template id='tool-picker-template'>
+<div>
+	<span v-if='active && can_edit'>
+		<div>
+			<input type='text' v-model='query' @keyup='onChange' />
+		</div>
+		<div style='font-size:8pt; max-height:10rem;overflow: auto;white-space: nowrap;'>
+			<div v-for='r in results'>
+				<a href='#' @click.prevent='setToolID(r.id)'>{{r.name}}</a>
+			</div>
+		</div>
+	</span>
+	<span v-else>
+		<span v-if='toolid==0 || !config.tools[toolid]'>
+			???
+		</span>
+		<span v-else>
+			{{config.tools[toolid].name}}
+		</span>
+		<small v-if='can_edit'>[<a href='#' @click.prevent='active=true' tt='edit'></a>]</small>
+	</span>
+</div>
+</template>
+
+<script>
+'use strict';
+
+Vue.component ( 'tool-picker' , {
+	props : [ 'toolid' , 'can_edit' ] ,
+	data : function () { return { active:false , query:'' , results:[] } } ,
+	created : function () {
+	} ,
+	updated : function () { tt.updateInterface(this.$el) } ,
+	mounted : function () { tt.updateInterface(this.$el) } ,
+	methods : {
+		onChange : function () {
+			let me = this ;
+			let query = me.query.toLowerCase() ;
+			let results = [] ;
+			$.each ( config.tools , function ( tool_id , tool ) {
+				if ( tool.name.toLowerCase().indexOf(query)>-1 || tool.subdomain.toLowerCase().indexOf(query)>-1 ) {
+					results.push ( { id:tool_id , name:tool.nice_name } ) ;
+				}
+			} ) ;
+			me.results = results ;
+		} ,
+		setToolID : function ( new_tool_id ) {
+			this.$emit('tool-id-changed',new_tool_id);
+			this.active = false ;
+			this.query = '' ;
+			this.results = [] ;
+		}
+	} ,
+	template : '#tool-picker-template'
+} ) ;
+</script>

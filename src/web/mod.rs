@@ -1,6 +1,7 @@
 //! HTTP layer: the tool's pages, the PHP tool's static files, and what
 //! became of retired URLs.
 
+mod apps;
 mod error;
 mod legacy;
 mod page;

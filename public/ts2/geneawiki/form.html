@@ -1,0 +1,65 @@
+<script src="../js/springy/springy.js"></script>
+<script src="../js/springy/springyui.js"></script>
+
+<style>
+     dl
+     {
+         width: 250px;
+         background: #fff;
+         border: 1px solid #000;
+         padding: 5px 15px;
+      }
+
+      dt, dd
+      {
+         display: inline;
+      }  
+</style>
+
+<div class="row">
+	<div class="span12">
+	
+		<div class='well well-small form-inline' id='topbox_container'>
+			<div id='topbox'>
+			
+				<div style='float:right'>
+					<div>Examples</div>
+					<ul>
+						<li><a href='#' onclick='loadQ("Q1339");return false'>Johann Sebastian Bach</a></li>
+					</ul>
+				</div>
+			
+				<div id='main_controls'>
+					<input type='text' id='q' class='span4' /> 
+					<button class='btn btn-primary' id='load_q' onclick='loadQ();return false'>Load person item</button>
+				</div>
+				
+				<div id='options' style='margin-top:5px'>
+					<div id='permalink_container' style='display:none'><a id='permalink' href='#'>Permalink</a> to the current page</div>
+				</div>
+			
+			</div>
+
+		</div>
+
+	</div>
+</div>
+
+
+<div class="row" id='result_container' style='display:none'>
+	<div class="span12" id='results'>
+		<div id='loading_status' style='display:none'></div>
+		<canvas id="graph" width="1024" height="768" />
+		<div id='legend'>
+			<dl>
+				<dt><span style='background-color:#3923D6'>&nbsp;</span></dt> <dd>Father of</dd>
+				<dt><span style='background-color:#FF4848'>&nbsp;</span></dt> <dd>Mother of</dd>
+				<dt><span style='background-color:#888888'>&nbsp;</span></dt> <dd>Child of</dd>
+			</dl>
+		</div>
+		<div id='last_sel' style='display:none'>
+			Last selection : <a href='' target='_blank'></a>
+			<span id='recenter' style='display:none'></span>
+		</div>
+	</div>
+</div>

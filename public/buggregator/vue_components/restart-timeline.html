@@ -1,0 +1,72 @@
+<template id='restart-timeline-template'>
+<div>
+	<div class='chart-box' ref='box'>
+		<svg :width='width' height='44' role='img' aria-label='Process runs and how they ended' @mouseleave='hover=null'>
+			<rect v-for='(seg,i) in segments' :x='seg.x' y='14' :width='seg.w' height='12' rx='2'
+				:fill='i==hover?"#5598e7":"#86b6ef"' tabindex='0' @mouseenter='hover=i' @focus='hover=i' @blur='hover=null' />
+			<text v-for='seg in segments' v-if='seg.end' :x='seg.x+seg.w+1' y='10' text-anchor='middle' :class='"status-"+seg.end.severity' style='font-size:11px;font-weight:bold'>{{icon(seg.end.severity)}}</text>
+			<text v-for='seg in segments' v-if='seg.deploy' :x='seg.x' y='40' text-anchor='middle'>↑</text>
+		</svg>
+		<div v-if='hover!==null && segments[hover]' class='chart-tooltip' :style='tooltip_style'>
+			<div class='tt-value'>{{dateTime(segments[hover].i.started_at)}} – {{segments[hover].i.ended_at?dateTime(segments[hover].i.ended_at):(segments[hover].running?'now':'last report '+dateTime(segments[hover].i.last_seen))}}</div>
+			<div class='tt-label'>ran {{duration(segments[hover].i)}}<span v-if='segments[hover].i.version'>, version {{segments[hover].i.version}}</span><span v-if='segments[hover].deploy'> (deploy)</span></div>
+			<div v-if='segments[hover].end'><span :class='"status-icon status-"+segments[hover].end.severity'>{{icon(segments[hover].end.severity)}}</span>{{segments[hover].end.label}}</div>
+		</div>
+	</div>
+	<div class='timeline-legend'>
+		<span><span class='swatch' style='background:#86b6ef'></span>running</span>
+		<span v-for='e in legend'><span :class='"status-icon status-"+e.severity'>{{icon(e.severity)}}</span>{{e.label}}</span>
+		<span v-if='segments.some(function(s){return s.deploy})'>↑ deploy (new version)</span>
+	</div>
+</div>
+</template>
+
+<script>
+'use strict';
+
+// Process runs of one component over [from,to]: one bar per run, and a status
+// icon where (and how) it ended. A run that stopped reporting without ending
+// gets the component's status (stale/down) at its last report.
+Vue.component ( 'restart-timeline' , {
+	props : [ 'instances' , 'from' , 'to' ] ,
+	data : function () { return { width:300 , hover:null } } ,
+	mounted : function () {
+		this.measure() ;
+		this.resize_handler = this.measure.bind(this) ;
+		window.addEventListener ( 'resize' , this.resize_handler ) ;
+	} ,
+	beforeDestroy : function () { window.removeEventListener ( 'resize' , this.resize_handler ) } ,
+	computed : {
+		segments : function () {
+			let me = this ;
+			let scale = ( me.width - 8 ) / ( me.to - me.from ) ;
+			return me.instances.slice().reverse().map ( function ( i ) {
+				let running = !i.end_reason && i.status == 'up' ;
+				let end_info = i.end_reason ? dash.endReason(i.end_reason) : ( running ? null : dash.STATUS[i.status] ) ;
+				let end = i.ended_at || ( running ? me.to : i.last_seen ) ;
+				let x = Math.max ( 0 , ( Math.max(i.started_at,me.from) - me.from ) * scale ) ;
+				let w = Math.max ( 2 , ( Math.min(end,me.to) - me.from ) * scale - x - 2 ) ; // 2px surface gap
+				return { i:i , x:x , w:w , running:running , end:end_info , deploy:i.deploy && i.started_at >= me.from } ;
+			} ) ;
+		} ,
+		legend : function () {
+			let seen = {} ;
+			this.segments.forEach ( function(s){ if ( s.end ) seen[s.end.label] = s.end } ) ;
+			return Object.values ( seen ) ;
+		} ,
+		tooltip_style : function () {
+			let x = this.segments[this.hover].x ;
+			return x > this.width / 2 ? { right:(this.width-x-this.segments[this.hover].w)+'px' , top:'44px' } : { left:x+'px' , top:'44px' } ;
+		} ,
+	} ,
+	methods : {
+		measure : function () {
+			if ( this.$refs.box && this.$refs.box.clientWidth ) this.width = this.$refs.box.clientWidth ;
+		} ,
+		icon : function ( severity ) { return dash.SEVERITY_ICONS[severity] } ,
+		dateTime : function ( t ) { return dash.dateTime ( t ) } ,
+		duration : function ( i ) { return dash.duration ( ( i.ended_at || i.last_seen ) - i.started_at ) } ,
+	} ,
+	template : '#restart-timeline-template'
+} ) ;
+</script>

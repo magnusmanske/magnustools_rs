@@ -11,8 +11,8 @@ whose addresses all redirect to the same path here.
 
 This replaces the PHP version, [magnustools on Codeberg](https://codeberg.org/magnusmanske/magnustools/).
 That repository stays in use for what is not a web service: the PHP library
-other tools include, the shared static files (`public_html/resources/`), and
-the Buggregator front-end, all of which this service serves from its checkout.
+other tools include, and the shared static files (`public_html/resources/`),
+which this service serves from its checkout.
 
 ## Tools
 
@@ -63,15 +63,22 @@ Uses of the tools are counted per day in the tool database, as tool
 request counts if it brings parameters and does not fail, so opening an empty
 form does not.
 
-Anything else is a static file from the PHP checkout's `public_html`, if its
-type is on an allowlist (`src/web/static_files.rs`); retired pages redirect or
-answer 410 (`src/web/legacy.rs`). From magnus-toolserver, the checkout has
-`ts2/geneawiki/` (family trees from Wikidata), `thetalkpage/`, and the
-`commcomm/` files that Commons' `MediaWiki:Commander.js` loads.
+The tools with their own interface keep their HTML, JavaScript and CSS in
+`public/`, built into the binary (`src/web/apps.rs`): the Buggregator
+front-end, and from magnus-toolserver `thetalkpage/` and `ts2/geneawiki/`,
+`ts2/geneawiki2/` (family trees from Wikidata). Changes to them belong here,
+not in the PHP checkout, whose copies are no longer served.
+
+Anything else is a static file from the PHP checkout's `public_html` (images
+of those tools too), if its type is on an allowlist
+(`src/web/static_files.rs`); retired pages redirect or answer 410
+(`src/web/legacy.rs`). That includes the `commcomm/` files that Commons'
+`MediaWiki:Commander.js` loads.
 
 ## Code
 
 - `src/tools/`: one module per tool; `templates/tools/` their pages.
+- `public/`: the HTML, JavaScript and CSS of the tools with their own interface.
 - `src/buggregator/`: API, ingest, dashboard, and the update job.
 - `src/jobs/`: background jobs and admin commands.
 - `src/web/`: routing, errors, parameters, static files. `templates/base.html`

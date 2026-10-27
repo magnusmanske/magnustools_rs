@@ -217,9 +217,9 @@ mod tests {
             location("/commcomm/?category=Birds%20of%20Ohio").await,
             "https://commons.wikimedia.org/w/index.php?title=Special:Commander&pane1=cat&cat1=Birds%20of%20Ohio&run1=1&pane2=cat"
         );
-        // Static pages next to retired ones stay.
-        std::fs::create_dir_all(dir.path().join("ts2/geneawiki")).unwrap();
-        std::fs::write(dir.path().join("ts2/geneawiki/index.html"), "tree").unwrap();
-        assert_eq!(get(dir.path(), "/ts2/geneawiki/").await.body, "tree");
+        // Pages next to retired ones stay.
+        let geneawiki = get(dir.path(), "/ts2/geneawiki/").await;
+        assert_eq!(geneawiki.status.as_u16(), 200);
+        assert!(geneawiki.body.contains("main.js"));
     }
 }

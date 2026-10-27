@@ -1,0 +1,226 @@
+<template id='issue-list-template'>
+<div class='container'>
+	<tool-navbar>
+		<div slot='right'>
+			<widar></widar>
+		</div>
+	</tool-navbar>
+
+	<div class='row'>
+		<h2 tt='issues'></h2>
+		<router-link to='/dashboard' class='ml-auto align-self-center'>Service dashboard</router-link>
+	</div>
+
+	<div class='row mb-1'>
+		<div class="btn-group btn-group-toggle mr-1" data-toggle="buttons" v-for='group in button_groups'>
+			<label v-for='value in config[group]' :class='"btn btn-outline-secondary"+(filters[group][value]?" active":"")'>
+				<input type="checkbox" v-model='filters[group][value]' @change='load_results' /> {{capitalize(value)}}
+  			</label>
+		</div>
+		<div>
+			<select v-model='filters.tool' class='custom-select' @change='load_results'>
+				<option value='' tt='any_tool'></option>
+				<option value='0' tt='tool_not_assigned'></option>
+				<option v-for='tool,tool_id in config.tools' :value='tool_id'>{{tool.nice_name}}</option>
+			</select>
+		</div>
+	</div>
+
+	<div class='row'>
+		<div tt='sort_by' class='mr-1'>
+		</div>
+		<div>
+			<select v-model='filters.sort_by' class="custom-select" @change='load_results'>
+				<option v-for='o in sort_by_options' :tt='o' :value='o'></option>
+			</select>
+		</div>
+		<div>
+			<div class="btn-group btn-group-toggle" data-toggle="buttons">
+				<label v-for='order in sort_orders' :class='"btn btn-outline-secondary"+(filters.sort_order==order?" active":"")'>
+					<input type="radio" v-model='filters.sort_order' :value='order' @change='load_results' /> <span :tt='order'></span>
+				</label>
+			</div>
+		</div>
+	</div>
+
+	<div class='row' v-if='loading'>
+		<i tt='loading'></i>
+	</div>
+	<div class='row' v-else-if='results.length==0'>
+		<i tt='no_results'></i>
+	</div>
+	<div class='row mt-1' v-else>
+		<div class='row mb-1'>
+			<div class='mr-2'>
+				<span tt='this_query'></span>
+				{{stats.this_query}}
+			</div>
+			<div class='mr-2'>
+				<span tt='total_open'></span>
+				{{stats.total_open}}
+			</div>
+			<div class='ml-4'>
+				<span v-if='filters.offset>0' class='mr-1'>
+					<a href='#' @click.prevent='go_to_offset(filters.offset-filters.limit)' tt='prev'></a>
+				</span>
+				<span class='mr-1'>
+					<input style='width: 6rem;' type='number' v-model='filters.offset' @keyup.enter='go_to_offset(filters.offset)' />
+				</span>
+				<span v-if='filters.offset+filters.limit<stats.this_query'>
+					<a href='#' @click.prevent='go_to_offset(filters.offset+filters.limit)' tt='next'></a>
+				</span>
+			</div>
+		</div>
+		<table class='table table-striped'>
+			<tr v-for='r in results'>
+				<td>
+					<a :href='r.url' target='_blank'>
+						<img v-if='typeof image_url[r.site]!="undefined"' border=0 width=64 :title='r.site' :src='image_url[r.site]'/>
+						<span v-else>{{r.site}}</span>
+					</a>
+				</td>
+				<td>
+					{{r.label}}
+				</td>
+				<td style='text-align: center;'>
+					{{r.status}}<br/>
+					{{r.priority}}
+					<div v-if='can_edit()'>
+						<div v-if='r.status=="OPEN"'>
+							[<a href='#' @click.prevent='changeIssueStatus(r.id,"CLOSED")' tt='close_issue'></a>]
+						</div>
+					</div>
+				</td>
+				<td nowrap>
+					<div>{{r.date_created}}</div>
+					<div v-if='r.date_created!=r.date_last'>{{r.date_last}}</div>
+				</td>
+				<td>
+					<div style='font-size: 7pt; max-width: 300pt;'>
+						{{r.description}}
+					</div>
+				</td>
+				<td>
+					<tool-picker :can_edit='can_edit()' :toolid='r.tool' @tool-id-changed='changeToolId(r.id,$event)'></tool-picker>
+				</td>
+			</tr>
+		</table>
+	</div>
+
+</div>
+</template>
+
+<script>
+'use strict';
+
+let IssueList = Vue.extend ( {
+	props : [] ,
+	data : function () { return { filters : { search:'' , status:{} , sort_by:'date_last' , sort_order:'descending' , site:{} , tool:'' , priority:{} , limit:25 , offset:0 } ,
+		results:[] , loading:false , stats:{} ,
+		sort_by_options:['label','status','date_created','date_last','site','tool','priority'] ,
+		button_groups:['site','status','priority'] ,
+		sort_orders:['ascending','descending'] ,
+		image_url:{
+			'WIKI':'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Wikipedia-logo-v2.svg/120px-Wikipedia-logo-v2.svg.png',
+			'WIKIDATA':'https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/120px-Wikidata-logo.svg.png',
+			'TWITTER':'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Font_Awesome_5_brands_Twitter.svg/120px-Font_Awesome_5_brands_Twitter.svg.png',
+			'GITHUB':'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Font_Awesome_5_brands_github-square.svg/120px-Font_Awesome_5_brands_github-square.svg.png',
+			'CODEBERG':'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Codeberg_logo.svg/120px-Codeberg_logo.svg.png',
+			'BITBUCKET':'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Bitbucket-blue-logomark-only.svg/120px-Bitbucket-blue-logomark-only.svg.png'
+		}
+	} } ,
+	created : function () {
+		let me = this ;
+		$.each ( me.button_groups , function ( dummy0 , key ) {
+			$.each ( config[key] , function(dummy,value){Vue.set(me.filters[key],value,false)})
+		} ) ;
+		me.filters.status.OPEN = true ;
+		if ( /^\d+$/.test(me.$route.query.tool||'') ) me.filters.tool = me.$route.query.tool ; // #/?tool=<id>, e.g. from the service dashboard
+		me.load_results();
+		tt.updateInterface(this.$el) ;
+	} ,
+	mounted : function () {
+		tt.updateInterface(this.$el) ;
+	} ,
+    updated : function () { tt.updateInterface(this.$el) ; } ,
+	methods : {
+		load_results : function () {
+			let me = this ;
+			me.loading = true ;
+			me.results = [] ;
+			let params = JSON.parse ( JSON.stringify(me.filters) ) ;
+			$.each ( me.button_groups , function ( dummy , group ) {
+				params[group] = me.collapse_options(params[group]);
+			} ) ;
+			params.action = 'get_issues' ;
+			//console.log(params);
+			$.get('./api.php',params,function(d){
+				//console.log(d) ;
+				if ( d.status == 'OK' ) {
+					me.results = d.data.results ;
+					me.stats = d.data.stats ;
+				} else {
+					alert ( d.status ) ;
+				}
+				me.loading = false ;
+			} ) ;
+		} ,
+		collapse_options : function ( o ) {
+			let ret = [] ;
+			$.each ( o , function ( k , v ) {
+				if ( v ) ret.push(k);
+			} ) ;
+			return ret.join(',');
+		} ,
+		go_to_offset : function ( new_offset ) {
+			this.filters.offset = new_offset*1 ;
+			this.load_results();
+		} ,
+		can_edit : function () {
+			let me = this ;
+			if ( typeof widar == 'undefined' ) return ;
+			if ( !widar.is_logged_in ) return false ;
+			if ( config.write_access.indexOf(widar.getUserName()) == -1 ) return false ;
+			return true ;
+		} ,
+		capitalize : function (s) {
+			if (typeof s !== 'string') return ''
+			return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+		} ,
+		changeIssueStatus : function ( issue_id , new_status ) {
+			let me = this ;
+			$.get ( './api.php' , {
+				action : 'set_issue_status' ,
+				issue_id : issue_id ,
+				new_status : new_status
+			} , function ( d ) {
+				if ( d.status == 'OK' ) {
+					$.each ( me.results , function ( num , r ) {
+						if ( r.id == issue_id ) me.results[num].status = new_status ;
+					} ) ;
+				} else {
+					alert ( d.status ) ;
+				}
+			} , 'json' ) ;
+		} ,
+		changeToolId : function ( issue_id , new_tool_id ) {
+			let me = this ;
+			$.get ( './api.php' , {
+				action : 'set_issue_tool' ,
+				issue_id : issue_id ,
+				new_tool_id : new_tool_id
+			} , function ( d ) {
+				if ( d.status == 'OK' ) {
+					$.each ( me.results , function ( num , r ) {
+						if ( r.id == issue_id ) me.results[num].tool = new_tool_id ;
+					} ) ;
+				} else {
+					alert ( d.status ) ;
+				}
+			} , 'json' ) ;
+		}
+	} ,
+	template : '#issue-list-template'
+} ) ;
+
+</script>

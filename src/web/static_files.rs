@@ -22,12 +22,15 @@ const EXTENSIONS: &[&str] = &[
     "woff", "woff2", "xml",
 ];
 
-/// A router serving the files under `public_html`, with the themed 404 page
-/// for everything else.
+/// A router serving the apps (built in), then the files under
+/// `public_html`, with the themed 404 page for everything else.
 pub fn service(public_html: &Path) -> Router {
     let files = ServeDir::new(public_html).not_found_service(super::not_found.into_service());
     let root = Arc::new(public_html.to_path_buf());
-    Router::new().fallback_service(files).layer(middleware::from_fn_with_state(root, only_public))
+    Router::new()
+        .fallback_service(files)
+        .layer(middleware::from_fn_with_state(root, only_public))
+        .layer(middleware::from_fn(super::apps::serve))
 }
 
 async fn only_public(State(root): State<Arc<PathBuf>>, request: Request, next: Next) -> Response {

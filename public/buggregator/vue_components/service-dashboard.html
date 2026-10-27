@@ -1,0 +1,151 @@
+<template id='service-dashboard-template'>
+<div class='container-fluid dash'>
+	<tool-navbar>
+		<div slot='right'>
+			<widar></widar>
+		</div>
+	</tool-navbar>
+
+	<div class='dash-filters'>
+		<h2 class='h4 mb-0 mr-3'>Service dashboard</h2>
+		<div class='btn-group btn-group-sm' role='group' aria-label='Time range'>
+			<button v-for='r in ranges' type='button' :class='"btn btn-outline-secondary"+(r==range?" active":"")' @click='setRange(r)'>{{r}}</button>
+		</div>
+		<label class='mb-0 ml-2'><input type='checkbox' v-model='auto_refresh' /> refresh every minute</label>
+		<span class='dash-muted ml-2' v-if='now'>updated {{time(now)}}</span>
+		<router-link to='/' class='ml-auto'>Issues</router-link>
+	</div>
+
+	<div v-if='error' class='alert alert-warning'>{{error}}</div>
+	<div v-else-if='services===null'><i>Loading…</i></div>
+	<div v-else-if='services.length==0' class='dash-muted'>No services are reporting yet.</div>
+	<div v-else :class='{"dash-loading":loading}'>
+		<ul class='attention' v-if='shown_alerts.length'>
+			<li v-for='a in shown_alerts' :class='{"dash-muted":a.acked}'>
+				<span :class='"status-icon status-"+a.severity'>{{icon(a.severity)}}</span>
+				<a :href='"#service-"+a.service' @click.prevent='scrollTo(a.service)'>{{a.label}}</a>: {{a.message}}
+				<span v-if='a.acked'>(acknowledged)</span>
+				<button v-else-if='can_edit()' type='button' class='close-alert' title='Acknowledge: hide until this happens again' aria-label='Acknowledge' @click='acknowledge(a)'>×</button>
+			</li>
+		</ul>
+		<div class='attention dash-muted' v-else-if='acked_count'><span class='status-icon status-good'>✓</span>Nothing new needs attention: all current alerts have been acknowledged.</div>
+		<div class='attention dash-muted' v-else><span class='status-icon status-good'>✓</span>Nothing needs attention: all services up, no unplanned restarts in the last 24 hours.</div>
+		<div class='dash-muted mb-3' v-if='acked_count'>
+			<a href='#' @click.prevent='show_acked=!show_acked'>{{show_acked?'Hide':'Show'}} {{acked_count}} acknowledged alert{{acked_count>1?'s':''}}</a>
+		</div>
+
+		<div class='wall'>
+			<a v-for='s in services' :href='"#service-"+s.name' @click.prevent='scrollTo(s.name)'>
+				<div class='wall-name'>{{s.label}}</div>
+				<span v-for='(c,name) in s.components' class='wall-component'>
+					<span :class='"status-icon status-"+status(c).severity'>{{icon(status(c).severity)}}</span>{{name}}<span v-if='c.replicas>1'> ×{{c.replicas}}</span> {{status(c).label.toLowerCase()}}
+				</span>
+			</a>
+		</div>
+
+		<service-card v-for='s in services' :key='s.name' :service='s' :range='range' :now='now' :refresh_tick='refresh_tick'></service-card>
+	</div>
+</div>
+</template>
+
+<script>
+'use strict';
+
+let ServiceDashboard = Vue.extend ( {
+	props : [] ,
+	data : function () { return {
+		services : null , now : 0 , range : '24h' , ranges : Object.keys(dash.RANGES) ,
+		auto_refresh : true , refresh_tick : 0 , loading : false , error : '' , show_acked : false ,
+	} } ,
+	created : function () {
+		let me = this ;
+		me.load() ;
+		me.timer = setInterval ( function () {
+			if ( me.auto_refresh && !document.hidden ) me.refresh() ;
+		} , 60000 ) ;
+	} ,
+	beforeDestroy : function () { clearInterval ( this.timer ) } ,
+	computed : {
+		// What needs a look, most severe first. Each alert has a kind and the time
+		// its trigger last happened (`since`); an acknowledgement at or after
+		// that time hides it, until it happens again.
+		attention : function () {
+			let me = this , ret = [] ;
+			me.services.forEach ( function ( s ) {
+				$.each ( s.components , function ( name , c ) {
+					let label = s.label + ( Object.keys(s.components).length > 1 ? ' / ' + name : '' ) ;
+					let add = function ( kind , since , severity , message ) {
+						let acked = ( c.acks[kind] || 0 ) >= since ;
+						ret.push ( { service:s.name , component:name , label:label , kind:kind , severity:severity , message:message , acked:acked } ) ;
+					} ;
+					if ( c.status != 'up' ) {
+						let since = c.status == 'stopped' ? c.current.ended_at : c.current.last_seen ;
+						add ( 'status' , since , dash.STATUS[c.status].severity , dash.STATUS[c.status].label + ', last report ' + dash.ago(c.current.last_seen,me.now) ) ;
+					}
+					let unplanned_1h = me.unplanned ( c.restarts_1h ) ;
+					let unplanned_24h = me.unplanned ( c.restarts_24h ) ;
+					if ( unplanned_1h.total >= 3 ) add ( 'restarts' , c.last_unplanned_end , 'critical' , 'crash loop, ' + unplanned_1h.total + ' unplanned restarts in the last hour' ) ;
+					else if ( unplanned_24h.total > 0 ) add ( 'restarts' , c.last_unplanned_end , unplanned_24h.severity , unplanned_24h.total + ' unplanned restart' + (unplanned_24h.total>1?'s':'') + ' in 24 h (' + unplanned_24h.text + ')' ) ;
+					let mem = c.current.mem_limit_bytes ? c.current.rss_bytes / c.current.mem_limit_bytes : 0 ;
+					if ( c.status == 'up' && mem >= 0.85 ) add ( 'memory' , c.current.started_at , mem >= 0.95 ? 'critical' : 'warning' , 'memory at ' + dash.format(mem,'percent') + ' of its limit' ) ;
+				} ) ;
+			} ) ;
+			return ret.sort ( function(a,b){ return dash.SEVERITY_RANK[b.severity] - dash.SEVERITY_RANK[a.severity] } ) ;
+		} ,
+		shown_alerts : function () {
+			let me = this ;
+			return me.attention.filter ( function(a){ return me.show_acked || !a.acked } ) ;
+		} ,
+		acked_count : function () {
+			return this.attention.filter ( function(a){ return a.acked } ).length ;
+		} ,
+	} ,
+	methods : {
+		load : function () {
+			let me = this ;
+			me.loading = true ;
+			dash.api ( { action:'dashboard' } ).then ( function ( d ) {
+				me.services = d.services ;
+				me.now = d.now ;
+				me.error = '' ;
+			} ).catch ( function ( e ) { me.error = e } )
+			.finally ( function () { me.loading = false } ) ;
+		} ,
+		refresh : function () {
+			this.load() ;
+			this.refresh_tick++ ;
+		} ,
+		setRange : function ( r ) { this.range = r } ,
+		can_edit : function () {
+			return typeof widar != 'undefined' && widar.is_logged_in && config.write_access.indexOf(widar.getUserName()) != -1 ;
+		} ,
+		acknowledge : function ( a ) {
+			let me = this ;
+			$.post ( './api.php' , { action:'dashboard_ack' , service:a.service , component:a.component , kind:a.kind } , function ( d ) {
+				if ( d.status != 'OK' ) { alert ( d.status ) ; return ; }
+				let s = me.services.find ( function(s){ return s.name == a.service } ) ;
+				Vue.set ( s.components[a.component].acks , a.kind , me.now ) ; // Hide at once; the next load confirms it
+			} , 'json' ) ;
+		} ,
+		unplanned : function ( counts ) {
+			let total = 0 , severity = 'good' , parts = [] ;
+			$.each ( counts || {} , function ( reason , n ) {
+				if ( !dash.isUnplanned(reason) ) return ;
+				let info = dash.endReason ( reason ) ;
+				total += n ;
+				parts.push ( n + ' ' + info.label.toLowerCase() ) ;
+				if ( dash.SEVERITY_RANK[info.severity] > dash.SEVERITY_RANK[severity] ) severity = info.severity ;
+			} ) ;
+			return { total:total , severity:severity , text:parts.join(', ') } ;
+		} ,
+		status : function ( c ) { return dash.STATUS[c.status] } ,
+		icon : function ( severity ) { return dash.SEVERITY_ICONS[severity] } ,
+		time : function ( t ) { return dash.dateTime(t).substr(11) } ,
+		scrollTo : function ( name ) {
+			let el = document.getElementById ( 'service-' + name ) ;
+			if ( el ) el.scrollIntoView ( { behavior:'smooth' } ) ;
+		} ,
+	} ,
+	template : '#service-dashboard-template'
+} ) ;
+</script>

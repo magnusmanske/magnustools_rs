@@ -1,0 +1,181 @@
+<template id='ts-chart-template'>
+<div>
+	<div class='chart-title'>
+		<span>{{title}} <span class='dash-muted' v-if='series.length==1 && last_values[0]!==null'>· {{fmt(last_values[0])}} now</span></span>
+		<a href='#' @click.prevent='show_table=!show_table'>{{show_table?'Chart':'Table'}}</a>
+	</div>
+	<div class='chart-legend' v-if='series.length>1'>
+		<span v-for='(s,i) in series'><span class='line-key' :style='{background:color(s)}'></span>{{s.label}} <span class='dash-muted'>{{fmt(last_values[i])}}</span></span>
+	</div>
+	<div v-if='show_table' class='chart-table'>
+		<table class='table table-sm'>
+			<thead><tr><th style='text-align:left'>Time</th><th v-for='s in series'>{{s.label}}</th></tr></thead>
+			<tbody>
+				<tr v-for='row in table_rows'>
+					<td style='text-align:left'>{{dateTime(row.t)}}</td>
+					<td v-for='v in row.values'>{{fmt(v)}}</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+	<div v-else class='chart-box' ref='box'>
+		<div v-if='!has_data' class='dash-muted' :style='{height:height+"px"}'>No data in this period</div>
+		<svg v-else :width='width' :height='height' tabindex='0' role='img' :aria-label='title'
+			@mousemove='onMove' @mouseleave='hover_t=null' @keydown='onKey' @blur='hover_t=null'>
+			<g v-for='tick in y_ticks'>
+				<line :x1='margin.l' :x2='width-margin.r' :y1='y(tick)' :y2='y(tick)' stroke='#e1e0d9' stroke-width='1' />
+				<text :x='margin.l-4' :y='y(tick)+3' text-anchor='end'>{{fmt(tick)}}</text>
+			</g>
+			<line :x1='margin.l' :x2='width-margin.r' :y1='y(0)' :y2='y(0)' stroke='#c3c2b7' stroke-width='1' />
+			<text v-for='tick in x_ticks' :x='x(tick)' :y='height-4' text-anchor='middle'>{{xLabel(tick)}}</text>
+			<g v-for='r in refs'>
+				<line :x1='margin.l' :x2='width-margin.r' :y1='y(r.value)' :y2='y(r.value)' stroke='#898781' stroke-width='1' />
+				<text :x='width-margin.r' :y='y(r.value)-3' text-anchor='end'>{{r.label}} {{fmt(r.value)}}</text>
+			</g>
+			<path v-for='(s,i) in series' :d='paths[i]' fill='none' :stroke='color(s)' stroke-width='2' stroke-linejoin='round' stroke-linecap='round' />
+			<g v-if='hover_t!==null'>
+				<line :x1='x(hover_t)' :x2='x(hover_t)' :y1='margin.t' :y2='y(0)' stroke='#898781' stroke-width='1' />
+				<circle v-for='(s,i) in series' v-if='hover_values[i]!==null' :cx='x(hover_t)' :cy='y(hover_values[i])' r='4' :fill='color(s)' stroke='#fcfcfb' stroke-width='2' />
+			</g>
+		</svg>
+		<div v-if='hover_t!==null' class='chart-tooltip' :style='tooltip_style'>
+			<div class='dash-muted'>{{dateTime(hover_t)}}</div>
+			<div v-for='(s,i) in series'>
+				<span class='line-key' :style='{background:color(s)}'></span><span class='tt-value'>{{fmt(hover_values[i])}}</span> <span class='tt-label'>{{s.label}}</span>
+			</div>
+		</div>
+	</div>
+</div>
+</template>
+
+<script>
+'use strict';
+
+// A single-axis time series chart. series: [ { label , slot (1-8) , points: [[t,v],…] } ],
+// all in one unit (see dash.format); refs: [ { value , label } ] reference lines, e.g. a limit.
+Vue.component ( 'ts-chart' , {
+	props : {
+		title : String ,
+		series : Array ,
+		from : Number ,
+		to : Number ,
+		bucket : Number ,
+		unit : { type:String , default:'count' } ,
+		refs : { type:Array , default:function(){return[]} } ,
+		height : { type:Number , default:150 } ,
+	} ,
+	data : function () { return { width:300 , hover_t:null , show_table:false , margin:{l:48,r:8,t:8,b:18} } } ,
+	mounted : function () {
+		this.measure() ;
+		this.resize_handler = this.measure.bind(this) ;
+		window.addEventListener ( 'resize' , this.resize_handler ) ;
+	} ,
+	updated : function () { this.measure() } ,
+	beforeDestroy : function () { window.removeEventListener ( 'resize' , this.resize_handler ) } ,
+	computed : {
+		has_data : function () { return this.series.some ( function(s){ return s.points.length > 0 } ) } ,
+		y_max : function () {
+			let max = 0 ;
+			this.series.forEach ( function(s){ s.points.forEach ( function(p){ if ( p[1] > max ) max = p[1] } ) } ) ;
+			this.refs.forEach ( function(r){ if ( r.value > max ) max = r.value } ) ;
+			return this.niceStep ( max / 4 ) * 4 || 1 ;
+		} ,
+		y_ticks : function () {
+			let step = this.y_max / 4 ;
+			return [ step , step*2 , step*3 , step*4 ] ;
+		} ,
+		x_ticks : function () {
+			let range = this.to - this.from ;
+			let step = [3600,7200,14400,21600,43200,86400,172800,432000].find ( function(s){ return range/s <= 6 } ) || 604800 ;
+			let offset = new Date().getTimezoneOffset() * 60 ; // Ticks on local midnights/hours
+			let ret = [] ;
+			for ( let t = Math.ceil((this.from-offset)/step)*step+offset ; t <= this.to ; t += step ) ret.push ( t ) ;
+			return ret ;
+		} ,
+		// Lines break where a point is missing, rather than bridging the gap.
+		paths : function () {
+			let me = this ;
+			return me.series.map ( function ( s ) {
+				let d = '' , last_t = null ;
+				s.points.forEach ( function ( p ) {
+					let gap = last_t === null || p[0] - last_t > me.bucket * 1.5 ;
+					d += ( gap ? 'M' : 'L' ) + me.x(p[0]).toFixed(1) + ',' + me.y(p[1]).toFixed(1) ;
+					last_t = p[0] ;
+				} ) ;
+				return d ;
+			} ) ;
+		} ,
+		by_time : function () {
+			return this.series.map ( function ( s ) {
+				let m = {} ;
+				s.points.forEach ( function(p){ m[p[0]] = p[1] } ) ;
+				return m ;
+			} ) ;
+		} ,
+		hover_values : function () {
+			let t = this.hover_t ;
+			return this.by_time.map ( function(m){ return m[t] === undefined ? null : m[t] } ) ;
+		} ,
+		last_values : function () {
+			return this.series.map ( function(s){ return s.points.length ? s.points[s.points.length-1][1] : null } ) ;
+		} ,
+		table_rows : function () {
+			let me = this , times = {} ;
+			me.series.forEach ( function(s){ s.points.forEach ( function(p){ times[p[0]] = true } ) } ) ;
+			return Object.keys(times).map(Number).sort(function(a,b){return b-a}).map ( function ( t ) {
+				return { t:t , values: me.by_time.map ( function(m){ return m[t] === undefined ? null : m[t] } ) } ;
+			} ) ;
+		} ,
+		tooltip_style : function () {
+			let x = this.x ( this.hover_t ) ;
+			return x > this.width / 2 ? { right:(this.width-x+10)+'px' } : { left:(x+10)+'px' } ;
+		} ,
+	} ,
+	methods : {
+		measure : function () {
+			if ( this.$refs.box && this.$refs.box.clientWidth && this.$refs.box.clientWidth != this.width ) this.width = this.$refs.box.clientWidth ;
+		} ,
+		x : function ( t ) {
+			return this.margin.l + ( t - this.from ) / ( this.to - this.from ) * ( this.width - this.margin.l - this.margin.r ) ;
+		} ,
+		y : function ( v ) {
+			return this.height - this.margin.b - v / this.y_max * ( this.height - this.margin.t - this.margin.b ) ;
+		} ,
+		niceStep : function ( raw ) {
+			if ( raw <= 0 ) return 0 ;
+			if ( this.unit == 'bytes' ) { // Powers of two read better for memory
+				let p = Math.pow ( 2 , Math.ceil ( Math.log2(raw) ) ) ;
+				return p * 0.75 >= raw ? p * 0.75 : p ;
+			}
+			let mag = Math.pow ( 10 , Math.floor ( Math.log10(raw) ) ) ;
+			return [1,2,2.5,5,10].map(function(m){return m*mag}).find(function(s){return s >= raw}) ;
+		} ,
+		snap : function ( t ) {
+			let k = Math.round ( ( t - this.from ) / this.bucket ) ;
+			return Math.min ( this.to , Math.max ( this.from , this.from + k * this.bucket ) ) ;
+		} ,
+		onMove : function ( e ) {
+			let rect = e.currentTarget.getBoundingClientRect() ;
+			let px = e.clientX - rect.left ;
+			let t = this.from + ( px - this.margin.l ) / ( this.width - this.margin.l - this.margin.r ) * ( this.to - this.from ) ;
+			this.hover_t = this.snap ( t ) ;
+		} ,
+		onKey : function ( e ) {
+			if ( e.key != 'ArrowLeft' && e.key != 'ArrowRight' ) return ;
+			e.preventDefault() ;
+			let start = this.hover_t === null ? this.snap(this.to) : this.hover_t ;
+			this.hover_t = this.snap ( start + ( e.key == 'ArrowLeft' ? -1 : 1 ) * this.bucket ) ;
+		} ,
+		xLabel : function ( t ) {
+			let d = new Date ( t*1000 ) ;
+			let pad = function(n){ return (n<10?'0':'')+n } ;
+			if ( this.to - this.from > 172800 ) return pad(d.getMonth()+1) + '-' + pad(d.getDate()) ;
+			return pad(d.getHours()) + ':' + pad(d.getMinutes()) ;
+		} ,
+		color : function ( s ) { return 'var(--series-' + ( s.slot || 1 ) + ')' } ,
+		fmt : function ( v ) { return dash.format ( v , this.unit ) } ,
+		dateTime : function ( t ) { return dash.dateTime ( t ) } ,
+	} ,
+	template : '#ts-chart-template'
+} ) ;
+</script>
