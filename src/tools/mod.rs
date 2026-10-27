@@ -97,8 +97,20 @@ pub fn routes(state: &State) -> Router<State> {
                 },
             )),
         };
+        let handler = handler.layer(middleware::from_fn(move |request: Request, next: Next| async move {
+            let response = next.run(request).await;
+            record_tool_request(name, response.status().as_u16());
+            response
+        }));
         tool(router, name, handler)
     })
+}
+
+/// Requests per tool and status class (`2xx`, …), for the service dashboard;
+/// `http_requests_total` has them for the whole service.
+fn record_tool_request(tool: &'static str, status: u16) {
+    let status = format!("{}xx", status / 100);
+    wikimisc::metrics::counter!("tool_requests_total", "tool" => tool, "status" => status).increment(1);
 }
 
 fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
