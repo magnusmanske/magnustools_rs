@@ -32,9 +32,14 @@ const UNCOUNTED_PATHS: &[&str] = &[HEALTH_PATH, "/logger/", "/logger.php", "/log
 
 pub fn router(state: Arc<AppState>) -> Router {
     let static_files = static_files::service(state.config.public_html.as_deref());
+    // Fails while the database pool is stuck, so the pod is restarted.
+    let health = {
+        let state = state.clone();
+        wikimisc::server::health::readiness(move || !state.tool_db.is_stuck(), "tool database connections are stuck")
+    };
     let router = crate::tools::routes()
         .merge(crate::buggregator::routes())
-        .route(HEALTH_PATH, get(wikimisc::server::health::ok))
+        .route(HEALTH_PATH, health)
         .route(page::STYLESHEET_PATH, get(page::stylesheet))
         .route("/tool_status.html", get(tool_status))
         .with_state(state)
