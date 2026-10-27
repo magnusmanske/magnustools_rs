@@ -32,7 +32,7 @@ const UNCOUNTED_PATHS: &[&str] = &[HEALTH_PATH, "/logger/", "/logger.php", "/log
 
 pub fn router(state: Arc<AppState>) -> Router {
     let static_files = static_files::service(state.config.public_html.as_deref());
-    let router = crate::tools::routes(&state)
+    let router = crate::tools::routes()
         .merge(crate::buggregator::routes())
         .route(HEALTH_PATH, get(wikimisc::server::health::ok))
         .route(page::STYLESHEET_PATH, get(page::stylesheet))

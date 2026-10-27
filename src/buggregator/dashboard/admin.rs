@@ -1,5 +1,5 @@
 //! Service registration, token handling, alert acknowledgements, and the
-//! hourly maintenance (end inference, rollups, retention).
+//! hourly maintenance (end inference, rollups, daily uses, retention).
 
 use super::ingest::{STALE_AFTER, guess_end, hash_token, infer_ends};
 use super::{DAY, INFERRED_REASONS, Instance};
@@ -106,6 +106,7 @@ pub async fn maintenance(conn: &mut Conn, now: i64) -> Result<()> {
         infer_ends(conn, service_id, &component, now).await?;
     }
     rollup(conn, now).await?;
+    super::daily_uses::copy(conn, now).await?;
     purge(conn, now).await
 }
 

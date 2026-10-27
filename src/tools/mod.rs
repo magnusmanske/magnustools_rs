@@ -14,7 +14,7 @@ mod herding_sheep;
 mod html2wiki;
 mod icommons;
 mod index;
-mod logger;
+pub(crate) mod logger;
 mod makeref;
 mod metronom;
 mod missingtopics;
@@ -38,8 +38,9 @@ mod wp_data_url;
 use crate::state::AppState;
 use crate::web::moved;
 use axum::Router;
-use axum::extract::{Request, State as Extract};
+use axum::extract::Request;
 use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::routing::{MethodRouter, get};
 use std::sync::Arc;
 
@@ -81,7 +82,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("wp_data_url", "Wikipedia article with inline images"),
 ];
 
-pub fn routes(state: &State) -> Router<State> {
+pub fn routes() -> Router<State> {
     let router = Router::new()
         .route("/", get(index::handler))
         .route("/index.html", get(index::handler))
@@ -90,28 +91,26 @@ pub fn routes(state: &State) -> Router<State> {
         // The logger is called by the tools themselves: neither a use nor traffic of its own.
         let handler = match name {
             "logger" => handler,
-            _ => handler
-                .layer(middleware::from_fn_with_state(
-                    state.clone(),
-                    move |Extract(state): Extract<State>, request: Request, next: Next| {
-                        logger::count_uses(state, name, request, next)
-                    },
-                ))
-                .layer(middleware::from_fn(move |request: Request, next: Next| async move {
-                    let response = next.run(request).await;
-                    record_tool_request(name, response.status().as_u16());
-                    response
-                })),
+            _ => handler.layer(middleware::from_fn(move |request: Request, next: Next| count(name, request, next))),
         };
         tool(router, name, handler)
     })
 }
 
-/// Requests per tool and status class (`2xx`, …), for the service dashboard;
-/// `http_requests_total` has them for the whole service.
-fn record_tool_request(tool: &'static str, status: u16) {
-    let status = format!("{}xx", status / 100);
-    wikimisc::metrics::counter!("tool_requests_total", "tool" => tool, "status" => status).increment(1);
+/// Counts each request to a tool for the service dashboard, by status
+/// class (`2xx`, …; `http_requests_total` has them for the whole service);
+/// and those that bring parameters and succeed as uses (`tool_uses_total`),
+/// which the dashboard's maintenance copies into the logger's tables daily.
+async fn count(tool: &'static str, request: Request, next: Next) -> Response {
+    let with_parameters = logger::has_parameters(request.method(), request.uri());
+    let response = next.run(request).await;
+    let status = response.status().as_u16();
+    wikimisc::metrics::counter!("tool_requests_total", "tool" => tool, "status" => format!("{}xx", status / 100))
+        .increment(1);
+    if with_parameters && status < 400 {
+        wikimisc::metrics::counter!("tool_uses_total", "tool" => tool).increment(1);
+    }
+    response
 }
 
 fn tools() -> Vec<(&'static str, MethodRouter<State>)> {

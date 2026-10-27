@@ -2,6 +2,7 @@
 //! day, for the buggregator front-end. Coarser than the service dashboard:
 //! uses per day, not requests per minute, but for all tools that log.
 
+use crate::tools::logger::day_number;
 use anyhow::Result;
 use chrono::{Days, NaiveDate};
 use serde_json::{Value, json};
@@ -36,11 +37,6 @@ impl Period {
     fn days(&self) -> Vec<u32> {
         self.first.iter_days().take_while(|d| *d <= self.last).map(day_number).collect()
     }
-}
-
-/// `2026-10-27` as `20261027`.
-fn day_number(day: NaiveDate) -> u32 {
-    day.format("%Y%m%d").to_string().parse().unwrap_or_default()
 }
 
 /// `20261027` as a timestamp (midnight UTC), for the charts.

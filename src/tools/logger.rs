@@ -1,23 +1,22 @@
 //! `logger.php`: counts uses of tools, per tool, method and day. Called by
-//! many tools, from PHP and from JavaScript (as JSONP). The tools here are
-//! counted directly, by [`count_uses`], as tool `magnustools`.
+//! many tools, from PHP and from JavaScript (as JSONP). The Rust services
+//! (this one, wikidata-todo) count theirs in their telemetry instead; the
+//! service dashboard's maintenance copies them here once a day ([`set_uses`]).
 
 use crate::state::AppState;
 use crate::web::{Params, jsonp};
-use axum::extract::{Request as HttpRequest, State};
+use axum::extract::State;
 use axum::http::{HeaderValue, Method, header};
-use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, LazyLock};
+use wikimisc::mysql_async::Conn;
 use wikimisc::mysql_async::prelude::Queryable;
 
 /// The width of the name columns.
 const MAX_NAME: usize = 128;
-/// The log's tool name for the tools here; each is a method of it.
-const THIS_TOOL: &str = "magnustools";
 
 #[derive(Debug, Default, Deserialize)]
 pub struct Request {
@@ -38,7 +37,7 @@ struct Answer {
 pub async fn handler(State(state): State<Arc<AppState>>, Params(request): Params<Request>) -> Response {
     let answer = match ToolMethod::new(&request.tool, &request.method) {
         None => Answer { status: "ERROR", error: Some("No tool name supplied".to_string()) },
-        Some(use_) => match log(&state, &use_, None).await {
+        Some(use_) => match log(&state, &use_).await {
             Ok(()) => Answer { status: "OK", error: None },
             Err(e) => {
                 tracing::warn!("logger: {e:#}");
@@ -52,46 +51,61 @@ pub async fn handler(State(state): State<Arc<AppState>>, Params(request): Params
     response
 }
 
-/// Middleware for a tool here: counts a request as a use if it brings
-/// parameters (not just opening the form) and does not fail.
-pub async fn count_uses(state: Arc<AppState>, tool: &'static str, request: HttpRequest, next: Next) -> Response {
-    let with_parameters = has_parameters(request.method(), request.uri());
-    let response = next.run(request).await;
-    if with_parameters && response.status().as_u16() < 400 {
-        // In the background: counting must not slow down or break the tool.
-        tokio::spawn(async move {
-            let use_ = ToolMethod { tool: THIS_TOOL.to_string(), method: tool.to_string() };
-            if let Err(e) = log(&state, &use_, Some(tool)).await {
-                tracing::warn!("logger: cannot count a use of {tool}: {e:#}");
-            }
-        });
-    }
-    response
-}
-
-fn has_parameters(method: &Method, uri: &axum::http::Uri) -> bool {
+/// Whether a request to a tool is a use: it brings parameters (not just
+/// opening the form). It also has to succeed.
+pub fn has_parameters(method: &Method, uri: &axum::http::Uri) -> bool {
     method == Method::POST || uri.query().is_some_and(|q| !q.is_empty())
 }
 
-/// Counts a use; `main_tool` names this tool's row in the `tool` table, to link the two.
-async fn log(state: &AppState, use_: &ToolMethod, main_tool: Option<&str>) -> anyhow::Result<()> {
-    let today: u32 = Utc::now().format("%Y%m%d").to_string().parse()?;
+/// Counts one use, today.
+async fn log(state: &AppState, use_: &ToolMethod) -> anyhow::Result<()> {
+    let today = day_number(Utc::now().date_naive());
     let mut conn = state.tool_db.conn().await?;
-    // The id of the existing row, or of a new one.
-    conn.exec_drop(
-        "INSERT INTO logging_tools (name, method, start_log, main_tool_id)
-         VALUES (?, ?, ?, (SELECT id FROM tool WHERE subdomain=? AND name=? LIMIT 1))
-         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), main_tool_id=COALESCE(main_tool_id, VALUES(main_tool_id))",
-        (&use_.tool, &use_.method, today, THIS_TOOL, main_tool),
-    )
-    .await?;
-    let tool_id = conn.last_insert_id().ok_or_else(|| anyhow::anyhow!("no logging_tools id"))?;
+    let tool_id = logging_tool_id(&mut conn, use_, today, None).await?;
     conn.exec_drop(
         "INSERT INTO logging_uses (tool_id, date, used) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE used=used+1",
         (tool_id, today),
     )
     .await?;
     Ok(())
+}
+
+/// Sets the uses of a tool and method on a day (`20261027`), whatever was
+/// counted before. The method is linked to the `tool` row of the same name
+/// under the tool's subdomain, for the main page's "most used".
+pub async fn set_uses(conn: &mut Conn, tool: &str, method: &str, day: u32, uses: u64) -> anyhow::Result<()> {
+    let Some(use_) = ToolMethod::new(tool, method) else { return Ok(()) };
+    let tool_id = logging_tool_id(conn, &use_, day, Some((tool, method))).await?;
+    conn.exec_drop(
+        "INSERT INTO logging_uses (tool_id, date, used) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE used=VALUES(used)",
+        (tool_id, day, uses),
+    )
+    .await?;
+    Ok(())
+}
+
+/// The id of the tool and method's row, made if need be; `main_tool` is the
+/// subdomain and name of its row in the `tool` table, to link the two.
+async fn logging_tool_id(
+    conn: &mut Conn,
+    use_: &ToolMethod,
+    day: u32,
+    main_tool: Option<(&str, &str)>,
+) -> anyhow::Result<u64> {
+    let (subdomain, name) = main_tool.unzip();
+    conn.exec_drop(
+        "INSERT INTO logging_tools (name, method, start_log, main_tool_id)
+         VALUES (?, ?, ?, (SELECT id FROM tool WHERE subdomain=? AND name=? LIMIT 1))
+         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), main_tool_id=COALESCE(main_tool_id, VALUES(main_tool_id))",
+        (&use_.tool, &use_.method, day, subdomain, name),
+    )
+    .await?;
+    conn.last_insert_id().ok_or_else(|| anyhow::anyhow!("no logging_tools id"))
+}
+
+/// `2026-10-27` as `20261027`, the log's form of a day.
+pub fn day_number(day: chrono::NaiveDate) -> u32 {
+    day.format("%Y%m%d").to_string().parse().unwrap_or_default()
 }
 
 /// A tool and method name, normalised as the log has always stored them.

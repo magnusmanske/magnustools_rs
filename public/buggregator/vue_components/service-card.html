@@ -213,7 +213,7 @@ Vue.component ( 'service-card' , {
 		// (name_count/_sum/_p50/_p95/_max) become a rate chart and a distribution chart.
 		custom_charts : function () {
 			let me = this ;
-			let custom = me.all_series.filter ( function(s){ return !/^(process_|tokio_|http_requests_total$|tool_requests_total$|http_request_duration_seconds_)/.test(s.name) } ) ;
+			let custom = me.all_series.filter ( function(s){ return !/^(process_|tokio_|http_requests_total$|tool_requests_total$|tool_uses_total$|http_request_duration_seconds_)/.test(s.name) } ) ;
 			let names = {} ;
 			custom.forEach ( function(s){ names[s.name] = true } ) ;
 			let charts = {} ;
