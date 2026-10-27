@@ -58,7 +58,10 @@ impl Default for Request {
 
 struct Thumb {
     src: String,
+    /// As shown. Known before the image loads, so a page full of thumbnails
+    /// takes its final layout at once, and lazy loading loads only those in view.
     width: u32,
+    height: u32,
     ogg: bool,
     /// To the file's description here.
     link: Option<String>,
@@ -66,20 +69,23 @@ struct Thumb {
 
 impl Thumb {
     /// With a link to the description here, if `link`.
-    fn new(image: &str, src: String, width: u32, link: bool) -> Self {
+    fn new(image: &str, src: String, (width, height): (u32, u32), link: bool) -> Self {
         let link = link.then(|| format!("?mode=desc&image={}", encode_component(image)));
-        Self { src, width, ogg: is_ogg(image), link }
+        Self { src, width, height, ogg: is_ogg(image), link }
     }
 
-    /// The image, linked if it has a link; Ogg videos get a width for the player.
+    /// The image, linked if it has a link; Ogg videos a little smaller, inside their red border.
     fn html(&self) -> String {
         let escape = |s: &str| wikimisc::escape::html(s).into_owned();
-        let width = match self.ogg {
-            true => format!(" width='{}'", self.width.saturating_sub(4)),
-            false => String::new(),
+        let (width, height) = match self.ogg {
+            true => {
+                let width = self.width.saturating_sub(4);
+                (width, (u64::from(self.height) * u64::from(width) / u64::from(self.width.max(1))) as u32)
+            }
+            false => (self.width, self.height),
         };
         let img = format!(
-            "<img border='0' src=\"{}\" loading='lazy' style='display: block; margin-left: auto; margin-right: auto'{width} />",
+            "<img border='0' src=\"{}\" width='{width}' height='{height}' loading='lazy' style='display: block; margin-left: auto; margin-right: auto' />",
             escape(&self.src)
         );
         match &self.link {
@@ -322,8 +328,8 @@ async fn thumbs(
     }
     let mut thumbs = HashMap::new();
     while let Some(urls) = requests.join_next().await {
-        for (name, url, width) in urls?? {
-            let thumb = Thumb::new(&name, url, width, link);
+        for (name, url, size) in urls?? {
+            let thumb = Thumb::new(&name, url, size, link);
             thumbs.insert(name, thumb);
         }
     }
@@ -337,7 +343,7 @@ async fn thumb_urls(
     http: &reqwest::Client,
     images: &[String],
     (max_width, max_height): (f64, f64),
-) -> anyhow::Result<Vec<(String, String, u32)>> {
+) -> anyhow::Result<Vec<(String, String, (u32, u32))>> {
     let titles = images.iter().map(|i| format!("File:{i}")).collect::<Vec<_>>().join("|");
     let (width, height) = (max_width.floor().to_string(), max_height.floor().to_string());
     let params = [
@@ -367,8 +373,9 @@ async fn thumb_urls(
             info["width"].as_u64().filter(|w| *w > 0)?;
             info["height"].as_u64().filter(|h| *h > 0)?;
             let url = info["thumburl"].as_str()?.to_string();
-            let width = u32::try_from(info["thumbwidth"].as_u64()?).ok()?;
-            Some((without_namespace(asked.get(title).copied().unwrap_or(title)), url, width))
+            let size = |key: &str| u32::try_from(info[key].as_u64()?).ok();
+            let size = (size("thumbwidth")?, size("thumbheight")?);
+            Some((without_namespace(asked.get(title).copied().unwrap_or(title)), url, size))
         })
         .collect())
 }
@@ -384,7 +391,8 @@ fn redirect_thumb(image: &str, width: f64, height: f64, (max_width, max_height):
     if fitted <= width {
         src.push_str(&format!("?width={fitted}"));
     }
-    Some(Thumb::new(image, src, fitted as u32, false))
+    let fitted_height = (fitted * height / width).floor();
+    Some(Thumb::new(image, src, (fitted as u32, fitted_height as u32), false))
 }
 
 /// The width of `width`×`height` scaled to fit the box, rounded down.
@@ -447,15 +455,16 @@ mod tests {
         assert_eq!(small.src, "//commons.wikimedia.org/wiki/Special:Redirect/file/A_b.jpg");
         assert_eq!(redirect_thumb("A.jpg", 4000.0, 3000.0, LARGE).unwrap().src.rsplit_once('=').unwrap().1, "316");
         assert!(redirect_thumb("Sound.ogg", 0.0, 0.0, LARGE).is_none());
-        let linked = Thumb::new("A b.jpg", "x".into(), 10, true);
+        let linked = Thumb::new("A b.jpg", "x".into(), (10, 5), true);
         assert_eq!(linked.link.as_deref(), Some("?mode=desc&image=A%20b.jpg"));
-        assert!(linked.html().contains(" loading='lazy' "));
+        assert!(linked.html().contains(" width='10' height='5' loading='lazy' "));
+        let large = redirect_thumb("A.jpg", 4000.0, 3000.0, LARGE).unwrap();
+        assert_eq!((large.width, large.height), (316, 237));
     }
 
     #[test]
     fn page_markup() {
-        let thumb =
-            Thumb { src: "//c/x.ogg?width=78".into(), width: 78, ogg: true, link: Some("?mode=desc&image=x".into()) };
+        let thumb = Thumb::new("x.ogg", "//c/x.ogg?width=78".into(), (78, 39), true);
         let body = Body::Category {
             name: "A <b>".into(),
             parents: vec![category_link("P")],
@@ -468,7 +477,7 @@ mod tests {
         assert!(html.contains("<div class='sect1'><b>A &#60;b&#62;</b></div>"));
         assert!(html.contains("<a href=\"?mode=category&#38;category=P\">P</a>"));
         assert!(html.contains("style=\"border:2px solid red\""));
-        assert!(html.contains(" width='74'"));
+        assert!(html.contains(" width='74' height='37'"));
         assert!(html.contains("value=\"&#34;&#62;&#60;x\""));
         assert!(html.contains("The red border indicates Ogg Theora videos"));
     }
