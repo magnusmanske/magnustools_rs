@@ -87,21 +87,22 @@ pub fn routes(state: &State) -> Router<State> {
         .route("/index.html", get(index::handler))
         .route("/main.html", moved("/"));
     tools().into_iter().fold(router, |router, (name, handler)| {
-        // The logger counts other tools' uses, not its own.
+        // The logger is called by the tools themselves: neither a use nor traffic of its own.
         let handler = match name {
             "logger" => handler,
-            _ => handler.layer(middleware::from_fn_with_state(
-                state.clone(),
-                move |Extract(state): Extract<State>, request: Request, next: Next| {
-                    logger::count_uses(state, name, request, next)
-                },
-            )),
+            _ => handler
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    move |Extract(state): Extract<State>, request: Request, next: Next| {
+                        logger::count_uses(state, name, request, next)
+                    },
+                ))
+                .layer(middleware::from_fn(move |request: Request, next: Next| async move {
+                    let response = next.run(request).await;
+                    record_tool_request(name, response.status().as_u16());
+                    response
+                })),
         };
-        let handler = handler.layer(middleware::from_fn(move |request: Request, next: Next| async move {
-            let response = next.run(request).await;
-            record_tool_request(name, response.status().as_u16());
-            response
-        }));
         tool(router, name, handler)
     })
 }

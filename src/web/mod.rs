@@ -24,6 +24,9 @@ use tower_http::set_header::SetResponseHeaderLayer;
 /// Some replica queries legitimately take minutes.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const HEALTH_PATH: &str = "/healthz";
+/// Not counted as traffic: health checks, and the logger, which the tools
+/// themselves call (under its old address too).
+const UNCOUNTED_PATHS: &[&str] = &[HEALTH_PATH, "/logger/", "/logger.php", "/logger"];
 
 pub fn router(state: Arc<AppState>) -> Router {
     let static_files = static_files::service(&state.config.public_html);
@@ -39,7 +42,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     let router = wikimisc::server::timeout(router, REQUEST_TIMEOUT, StatusCode::GATEWAY_TIMEOUT);
     let router = wikimisc::server::standard_layers(router);
     // Each request's status and duration, for the dashboard.
-    wikimisc::server::request_metrics(router, &[HEALTH_PATH])
+    wikimisc::server::request_metrics(router, UNCOUNTED_PATHS)
 }
 
 fn header_layer(name: header::HeaderName, value: &'static str) -> SetResponseHeaderLayer<HeaderValue> {
