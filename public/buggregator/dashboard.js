@@ -79,6 +79,14 @@ const dash = {
 		return dash.compact ( v ) ;
 	} ,
 
+	// "+12%", "−40%", "new" (nothing before), "gone" (nothing now).
+	change ( now , before ) {
+		if ( !before ) return now ? 'new' : '' ;
+		if ( !now ) return 'gone' ;
+		let p = Math.round ( ( now - before ) / before * 100 ) ;
+		return ( p > 0 ? '+' : p < 0 ? '−' : '±' ) + Math.abs(p) + '%' ;
+	} ,
+
 	duration ( seconds ) {
 		seconds = Math.max ( 0 , Math.round(seconds) ) ;
 		let d = Math.floor(seconds/86400) , h = Math.floor(seconds%86400/3600) , m = Math.floor(seconds%3600/60) ;

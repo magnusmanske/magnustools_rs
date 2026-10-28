@@ -35,6 +35,31 @@
 			<a href='#' @click.prevent='show_acked=!show_acked'>{{show_acked?'Hide':'Show'}} {{acked_count}} acknowledged alert{{acked_count>1?'s':''}}</a>
 		</div>
 
+		<div class='kpis'>
+			<div class='kpi'>
+				<div class='kpi-label'>Services up</div>
+				<div class='kpi-value'>{{services.length-not_up.length}} of {{services.length}}</div>
+				<div class='kpi-sub' :class='{"status-critical":not_up.length}'>{{not_up_text}}</div>
+			</div>
+			<template v-if='totals'>
+				<div class='kpi'>
+					<div class='kpi-label'>Requests, {{range}}</div>
+					<div class='kpi-value'>{{fmt(totals.current.requests)}}</div>
+					<div class='kpi-sub'>{{per_minute}} on average<template v-if='requests_change'> · {{requests_change}} on the {{range}} before</template></div>
+				</div>
+				<div class='kpi'>
+					<div class='kpi-label'>Server errors</div>
+					<div class='kpi-value' :class='errorClass(totals.current.server_errors,totals.current.requests)'>{{share(totals.current.server_errors,totals.current.requests)}}</div>
+					<div class='kpi-sub'>{{fmt(totals.current.server_errors)}} requests · client errors {{share(totals.current.client_errors,totals.current.requests)}}</div>
+				</div>
+				<div class='kpi' v-if='totals.current.uses || totals.previous.uses'>
+					<div class='kpi-label'>Tool uses, {{range}}</div>
+					<div class='kpi-value'>{{fmt(totals.current.uses)}}</div>
+					<div class='kpi-sub' v-if='uses_change'>{{uses_change}} on the {{range}} before</div>
+				</div>
+			</template>
+		</div>
+
 		<div class='wall'>
 			<a v-for='s in services' :href='"#service-"+s.name' @click.prevent='scrollTo(s.name)'>
 				<div class='wall-name'>{{s.label}}</div>
@@ -55,7 +80,7 @@
 let ServiceDashboard = Vue.extend ( {
 	props : [] ,
 	data : function () { return {
-		services : null , now : 0 , range : '24h' , ranges : Object.keys(dash.RANGES) ,
+		services : null , totals : null , now : 0 , range : '24h' , ranges : Object.keys(dash.RANGES) ,
 		auto_refresh : true , refresh_tick : 0 , loading : false , error : '' , show_acked : false ,
 	} } ,
 	created : function () {
@@ -66,7 +91,27 @@ let ServiceDashboard = Vue.extend ( {
 		} , 60000 ) ;
 	} ,
 	beforeDestroy : function () { clearInterval ( this.timer ) } ,
+	watch : {
+		range : function () { this.loadTotals() } ,
+	} ,
 	computed : {
+		// Services with a component that is not up
+		not_up : function () {
+			return this.services.filter ( function ( s ) {
+				return Object.values(s.components).some ( function(c){ return c.status != 'up' } ) ;
+			} ).map ( function(s){ return s.label } ) ;
+		} ,
+		// The alerts above name them all; three are enough here
+		not_up_text : function () {
+			let n = this.not_up.length ;
+			if ( n == 0 ) return 'all running' ;
+			return 'not up: ' + this.not_up.slice(0,3).join(', ') + ( n > 3 ? ' and ' + (n-3) + ' more' : '' ) ;
+		} ,
+		per_minute : function () {
+			return dash.format ( this.totals.current.requests / ( ( this.totals.to - this.totals.from ) / 60 ) , 'per_min' ) ;
+		} ,
+		requests_change : function () { return this.change ( 'requests' ) } ,
+		uses_change : function () { return this.change ( 'uses' ) } ,
 		// What needs a look, most severe first. Each alert has a kind and the time
 		// its trigger last happened (`since`); an acknowledgement at or after
 		// that time hides it, until it happens again.
@@ -111,6 +156,14 @@ let ServiceDashboard = Vue.extend ( {
 				me.error = '' ;
 			} ).catch ( function ( e ) { me.error = e } )
 			.finally ( function () { me.loading = false } ) ;
+			me.loadTotals() ;
+		} ,
+		// Without them, the row just shows less: no error of its own
+		loadTotals : function () {
+			let me = this , range = me.range ;
+			dash.api ( { action:'dashboard_totals' , range:range } ).then ( function ( d ) {
+				if ( range == me.range ) me.totals = d ; // Not an answer for a range since left
+			} ) ;
 		} ,
 		refresh : function () {
 			this.load() ;
@@ -138,6 +191,21 @@ let ServiceDashboard = Vue.extend ( {
 				if ( dash.SEVERITY_RANK[info.severity] > dash.SEVERITY_RANK[severity] ) severity = info.severity ;
 			} ) ;
 			return { total:total , severity:severity , text:parts.join(', ') } ;
+		} ,
+		// Against the period before; nothing where there is no data for all of it (null)
+		change : function ( key ) {
+			let before = this.totals.previous[key] ;
+			return before === null ? '' : dash.change ( this.totals.current[key] , before ) ;
+		} ,
+		fmt : function ( v ) { return dash.format ( v , 'count' ) } ,
+		share : function ( part , whole ) {
+			if ( !whole ) return '–' ;
+			return part && part / whole < 0.001 ? '<0.1%' : dash.format ( part / whole , 'percent' ) ;
+		} ,
+		// 1% of requests failing on the server is worth a look, 5% an alarm
+		errorClass : function ( part , whole ) {
+			let f = whole ? part / whole : 0 ;
+			return f >= 0.05 ? 'status-critical' : ( f >= 0.01 ? 'status-warning' : '' ) ;
 		} ,
 		status : function ( c ) { return dash.STATUS[c.status] } ,
 		icon : function ( severity ) { return dash.SEVERITY_ICONS[severity] } ,

@@ -66,6 +66,8 @@
 .dash .kpi-label { font-size: 0.8rem; color: var(--text-secondary); }
 .dash .kpi-value { font-size: 1.4rem; font-weight: 600; line-height: 1.3; }
 .dash .kpi-sub { font-size: 0.8rem; color: var(--text-muted); }
+.dash .kpi-sub.status-warning { color: #b07a00; }
+.dash .kpi-sub.status-critical { color: var(--status-critical); }
 
 /* Meter: severity fill on a lighter track of the same ramp */
 .dash .meter { height: 6px; border-radius: 3px; background: #cde2fb; margin-top: 0.3rem; overflow: hidden; }

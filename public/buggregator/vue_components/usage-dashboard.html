@@ -161,13 +161,7 @@ let UsageDashboard = Vue.extend ( {
 			if ( !part || !whole ) return '' ;
 			return part / whole < 0.001 ? '<0.1%' : this.percent ( part / whole ) ;
 		} ,
-		// "+12%", "−40%", "new" (nothing before), "gone" (nothing now).
-		change : function ( now , before ) {
-			if ( !before ) return now ? 'new' : '' ;
-			if ( !now ) return 'gone' ;
-			let p = Math.round ( ( now - before ) / before * 100 ) ;
-			return ( p > 0 ? '+' : p < 0 ? '−' : '±' ) + Math.abs(p) + '%' ;
-		} ,
+		change : function ( now , before ) { return dash.change ( now , before ) } ,
 		// Big drops and tools that stopped stand out.
 		changeClass : function ( now , before ) {
 			if ( before && !now ) return 'status-critical' ;

@@ -241,6 +241,63 @@ pub async fn series(conn: &mut Conn, service: &str, component: &str, range: i64,
     Ok(json!({"from": from, "to": now, "bucket": bucket, "series": series}))
 }
 
+/// Series name, labels, whether in the current period, count, first point.
+type TotalRow = (String, String, bool, Option<f64>, i64);
+
+/// Requests (all, client and server errors) and tool uses of all active
+/// services in the range, and in the range before it, for the row above the
+/// cards. The range before is null where the data does not reach back that far.
+pub async fn totals(conn: &mut Conn, range: i64, now: i64) -> Result<Value> {
+    let (table, ts, delta) =
+        if range > RAW_MAX_RANGE { ("dash_point_hourly", "hour", "delta_sum") } else { ("dash_point", "ts", "delta") };
+    let from = now - range;
+    let rows: Vec<TotalRow> = conn
+        .exec(
+            format!(
+                "SELECT s.name, s.labels, p.{ts}>=? AS current, SUM(p.{delta}), MIN(p.{ts}) FROM {table} p
+                 JOIN dash_series s ON s.id=p.series_id JOIN dash_service v ON v.id=s.service_id
+                 WHERE v.is_active=1 AND s.name IN ('http_requests_total','tool_uses_total') AND p.{ts}>=?
+                 GROUP BY s.name, s.labels, current"
+            ),
+            (from, from - range),
+        )
+        .await?;
+    Ok(json!({"from": from, "to": now, "current": sum_totals(&rows, None), "previous": sum_totals(&rows, Some(from - range))}))
+}
+
+/// Folds the rows into the totals of the current period (`previous_from`
+/// None) or of the one before, starting at `previous_from`; there, a series
+/// whose first point came later (within an hour) has no total.
+fn sum_totals(rows: &[TotalRow], previous_from: Option<i64>) -> Value {
+    let (mut requests, mut client_errors, mut server_errors, mut uses) = (0.0, 0.0, 0.0, 0.0);
+    for (name, labels, _, count, _) in rows.iter().filter(|r| r.2 == previous_from.is_none()) {
+        let count = count.unwrap_or_default();
+        if name == "tool_uses_total" {
+            uses += count;
+            continue;
+        }
+        requests += count;
+        let labels: Value = serde_json::from_str(labels).unwrap_or_default();
+        match labels["status"].as_str().and_then(|s| s.chars().next()) {
+            Some('4') => client_errors += count,
+            Some('5') => server_errors += count,
+            _ => {}
+        }
+    }
+    let total = |name: &str, v: f64| {
+        let first = rows.iter().filter(|r| r.0 == name).map(|r| r.4).min();
+        let covered = previous_from.is_none_or(|from| first.is_some_and(|first| first <= from + 3600));
+        if covered { json!(v.round() as u64) } else { Value::Null }
+    };
+    let http = "http_requests_total";
+    json!({
+        "requests": total(http, requests),
+        "client_errors": total(http, client_errors),
+        "server_errors": total(http, server_errors),
+        "uses": total("tool_uses_total", uses),
+    })
+}
+
 /// Unchanged counters are not sent, so a bucket without a point after the
 /// series' first one means no increase.
 fn fill_zeros(points: &[(i64, f64)], bucket: i64, now: i64) -> Vec<(i64, f64)> {
@@ -358,6 +415,32 @@ mod tests {
     fn zeros_between_counter_points() {
         assert_eq!(fill_zeros(&[(0, 1.0), (120, 2.0)], 60, 200), vec![(0, 1.0), (60, 0.0), (120, 2.0), (180, 0.0)]);
         assert!(fill_zeros(&[], 60, 200).is_empty());
+    }
+
+    #[test]
+    fn totals_by_period_and_status() {
+        let row = |name: &str, status: &str, current: bool, count: f64, first: i64| {
+            let labels = if status.is_empty() { "{}".to_string() } else { format!(r#"{{"status":"{status}"}}"#) };
+            (name.to_string(), labels, current, Some(count), first)
+        };
+        let rows = [
+            row("http_requests_total", "2xx", true, 90.4, 10_000),
+            row("http_requests_total", "429", true, 3.0, 10_000),
+            row("http_requests_total", "503", true, 2.0, 10_000),
+            row("http_requests_total", "5xx", true, 5.0, 10_000),
+            row("tool_uses_total", "", true, 40.0, 10_000),
+            row("http_requests_total", "2xx", false, 50.0, 1000),
+        ];
+        assert_eq!(
+            sum_totals(&rows, None),
+            json!({"requests": 100, "client_errors": 3, "server_errors": 7, "uses": 40})
+        );
+        // Requests reach back to the period before; uses only began in this one.
+        assert_eq!(
+            sum_totals(&rows, Some(0)),
+            json!({"requests": 50, "client_errors": 0, "server_errors": 0, "uses": null})
+        );
+        assert_eq!(sum_totals(&rows, Some(-5000))["requests"], Value::Null);
     }
 
     #[test]

@@ -128,6 +128,10 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
                 let mut conn = self.state.tool_db.conn().await?;
                 out.insert("data".to_string(), json!({"services": query::overview(&mut conn, now).await?, "now": now}));
             }
+            "dashboard_totals" => {
+                let mut conn = self.state.tool_db.conn().await?;
+                out.insert("data".to_string(), query::totals(&mut conn, query::range(&text("range")), now).await?);
+            }
             "dashboard_series" | "dashboard_instances" => {
                 let mut conn = self.state.tool_db.conn().await?;
                 let (service, component, range) = (text("service"), text("component"), query::range(&text("range")));
