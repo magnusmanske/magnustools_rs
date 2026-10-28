@@ -77,6 +77,9 @@
 <script>
 'use strict';
 
+// Coming back to the tab after this long refreshes it at once
+const STALE_AFTER_MS = 5 * 60 * 1000 ;
+
 let ServiceDashboard = Vue.extend ( {
 	props : [] ,
 	data : function () { return {
@@ -85,12 +88,21 @@ let ServiceDashboard = Vue.extend ( {
 	} } ,
 	created : function () {
 		let me = this ;
+		me.loaded_at = 0 ; // Not reactive: only read on return to the tab
 		me.load() ;
 		me.timer = setInterval ( function () {
 			if ( me.auto_refresh && !document.hidden ) me.refresh() ;
 		} , 60000 ) ;
+		// Hidden tabs are not refreshed; back after a while, do it at once, not at the next tick
+		me.onVisible = function () {
+			if ( me.auto_refresh && !document.hidden && Date.now() - me.loaded_at > STALE_AFTER_MS ) me.refresh() ;
+		} ;
+		document.addEventListener ( 'visibilitychange' , me.onVisible ) ;
 	} ,
-	beforeDestroy : function () { clearInterval ( this.timer ) } ,
+	beforeDestroy : function () {
+		clearInterval ( this.timer ) ;
+		document.removeEventListener ( 'visibilitychange' , this.onVisible ) ;
+	} ,
 	watch : {
 		range : function () { this.loadTotals() } ,
 	} ,
@@ -153,6 +165,7 @@ let ServiceDashboard = Vue.extend ( {
 			dash.api ( { action:'dashboard' } ).then ( function ( d ) {
 				me.services = d.services ;
 				me.now = d.now ;
+				me.loaded_at = Date.now() ; // Browser clock, as for the check on return
 				me.error = '' ;
 			} ).catch ( function ( e ) { me.error = e } )
 			.finally ( function () { me.loading = false } ) ;
