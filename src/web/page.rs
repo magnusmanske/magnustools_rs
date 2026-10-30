@@ -26,18 +26,7 @@ pub fn jsonp<T: Serialize>(value: T, callback: Option<String>) -> Jsonp<T> {
     Jsonp::new(value, callback).rules(CallbackRules { allow_dotted: true, max_len: 128 })
 }
 
-/// `1234567` as `1,234,567`.
-pub fn thousands(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
-}
+pub use wikimisc::format::thousands;
 
 #[cfg(test)]
 mod tests {

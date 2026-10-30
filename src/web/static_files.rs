@@ -11,7 +11,6 @@ use axum::extract::{Request, State};
 use axum::handler::HandlerWithoutStateExt;
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use percent_encoding::percent_decode_str;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tower_http::services::ServeDir;
@@ -47,33 +46,10 @@ async fn only_public(State(root): State<Arc<PathBuf>>, request: Request, next: N
     if public { next.run(request).await } else { AppError::NotFound.into_response() }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum Verdict {
-    Public,
-    Private,
-    /// Public only if this path, relative to `public_html`, is a directory.
-    IfDirectory(String),
-}
+pub use wikimisc::web::static_files::Verdict;
 
 fn classify(uri_path: &str) -> Verdict {
-    let Ok(path) = percent_decode_str(uri_path).decode_utf8() else {
-        return Verdict::Private;
-    };
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-    // A leading dot also covers `..`.
-    if segments.iter().any(|s| s.starts_with('.') || s.contains(['\\', '\0'])) {
-        return Verdict::Private;
-    }
-    match segments.last() {
-        None => Verdict::Public,
-        Some(_) if path.ends_with('/') => Verdict::Public,
-        Some(name) if has_public_extension(name) => Verdict::Public,
-        Some(_) => Verdict::IfDirectory(segments.join("/")),
-    }
-}
-
-fn has_public_extension(name: &str) -> bool {
-    name.rsplit_once('.').is_some_and(|(_, ext)| EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+    wikimisc::web::static_files::classify(uri_path, EXTENSIONS)
 }
 
 #[cfg(test)]

@@ -15,10 +15,9 @@ pub use params::Params;
 use crate::state::AppState;
 use axum::Router;
 use axum::extract::State;
-use axum::http::Uri;
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
-use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::routing::{MethodRouter, any, get};
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::response::{Html, IntoResponse, Response};
+use axum::routing::get;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -65,29 +64,7 @@ fn header_layer(name: header::HeaderName, value: &'static str) -> SetResponseHea
     SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value))
 }
 
-/// A permanent redirect to `to`, keeping the query string. 308, so that
-/// POST requests stay POST requests, with their body.
-pub fn moved<S: Clone + Send + Sync + 'static>(to: &str) -> MethodRouter<S> {
-    let to = to.to_string();
-    any(move |uri: Uri| async move {
-        match uri.query() {
-            Some(query) => Redirect::permanent(&format!("{to}?{query}")),
-            None => Redirect::permanent(&to),
-        }
-    })
-}
-
-/// Whether a request comes from a page of this site: the defence against
-/// cross-site requests for actions that change something.
-pub fn is_same_origin(headers: &HeaderMap) -> bool {
-    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
-    if let Some(site) = header("sec-fetch-site") {
-        return site == "same-origin";
-    }
-    let Some(host) = header("host") else { return false };
-    let from_host = |url: &str| url.split_once("://").is_some_and(|(_, rest)| rest.split('/').next() == Some(host));
-    header("origin").or(header("referer")).is_some_and(from_host)
-}
+pub use wikimisc::server::{is_same_origin, moved};
 
 /// The themed 404 page, for anything no route or file matches.
 async fn not_found() -> impl IntoResponse {
@@ -134,6 +111,7 @@ pub(crate) mod test_support {
 mod tests {
     use super::test_support::get;
     use super::*;
+    use axum::http::HeaderMap;
 
     #[test]
     fn same_origin() {

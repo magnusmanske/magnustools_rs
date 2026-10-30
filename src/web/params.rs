@@ -7,7 +7,6 @@ use axum::body::Bytes;
 use axum::extract::{FromRequest, Request};
 use axum::http::header;
 use serde::de::DeserializeOwned;
-use std::collections::HashMap;
 
 /// Deserializes `T` from query and form parameters; on a repeated name the
 /// last value wins, so the body beats the query string, as in PHP.
@@ -33,12 +32,7 @@ impl<S: Send + Sync, T: DeserializeOwned> FromRequest<S> for Params<T> {
 }
 
 fn merge<T: DeserializeOwned>(query: &str, body: &[u8]) -> Result<T, AppError> {
-    let bad = |e: &dyn std::fmt::Display| AppError::BadRequest(format!("invalid parameters: {e}"));
-    let mut pairs: Vec<(String, String)> = serde_urlencoded::from_str(query).map_err(|e| bad(&e))?;
-    pairs.extend(serde_urlencoded::from_bytes::<Vec<(String, String)>>(body).map_err(|e| bad(&e))?);
-    let last_wins: HashMap<String, String> = pairs.into_iter().collect();
-    let encoded = serde_urlencoded::to_string(&last_wins).map_err(|e| bad(&e))?;
-    serde_urlencoded::from_str(&encoded).map_err(|e| bad(&e))
+    wikimisc::web::params::merge(query, body).map_err(|e| AppError::BadRequest(e.to_string()))
 }
 
 #[cfg(test)]
