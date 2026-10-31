@@ -22,7 +22,7 @@ const FLICKR2COMMONS: &str = "https://flickr2commons.toolforge.org/";
 const GLAMOROUS: &str = "https://glamtools.toolforge.org/glamorous/";
 const TREEVIEWS: &str = "https://glamtools.toolforge.org/treeviews/";
 const COMMONSHELPER: &str = "https://commonshelper.toolforge.org/";
-const PETSCAN: &str = "https://petscan.wmcloud.org/";
+const PETSCAN: &str = "https://petscan.toolforge.org/";
 
 /// Exact paths. A trailing `/*` marks a directory: it and everything below are retired.
 const RETIRED: &[(&str, Fate)] = &[
