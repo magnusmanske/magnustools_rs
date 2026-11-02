@@ -20,9 +20,10 @@ use std::sync::Arc;
 const NS_ARTICLE: i64 = 0;
 const NS_TEMPLATE: i64 = 10;
 const DEFAULT_DEPTH: u32 = 1;
-const MAX_DEPTH: u32 = 10;
+/// As deep as the old tool went; categories can nest that far.
+const MAX_DEPTH: u32 = 30;
 /// Articles of a tree whose links are counted.
-const MAX_PAGES: usize = 10_000;
+const MAX_PAGES: usize = 100_000;
 /// Missing articles on the page and in wiki text; JSON has them all.
 const MAX_SHOWN: usize = 5_000;
 const LINKS_FROM: &str = "SELECT DISTINCT lt_title FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
@@ -77,6 +78,13 @@ pub struct Request {
     doit: Option<String>,
 }
 
+impl Request {
+    /// Links the old tool left in wiki pages have the settings but no `doit`.
+    fn wants_results(&self) -> bool {
+        self.doit.is_some() || !self.article.trim().is_empty() || !self.category.trim().is_empty()
+    }
+}
+
 impl Default for Request {
     fn default() -> Self {
         Self {
@@ -97,11 +105,15 @@ impl Default for Request {
 /// Where the links come from.
 #[derive(Debug, PartialEq, Eq)]
 enum Source {
-    Article(String),
-    Category { name: String, depth: u32 },
+    /// Page ID; the page can be in any namespace.
+    Article(u64),
+    Category {
+        name: String,
+        depth: u32,
+    },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Options {
     depth: u32,
     skip_template_links: bool,
@@ -115,7 +127,7 @@ impl Options {
         Self {
             depth: number(&request.depth).unwrap_or(DEFAULT_DEPTH).min(MAX_DEPTH),
             skip_template_links: request.notemplatelinks.as_deref().is_some_and(|v| !v.is_empty() && v != "0"),
-            only_wanted: request.nosingles.is_some() || request.doit.is_none(),
+            only_wanted: request.nosingles.is_some() || !request.wants_results(),
             limit: number(&request.limitnum).unwrap_or(1),
         }
     }
@@ -127,16 +139,32 @@ impl Options {
 
 impl Source {
     /// An article, if given, beats a category.
-    fn new(request: &Request, options: &Options) -> Option<Self> {
-        let (article, category) = (request.article.trim(), request.category.trim());
+    async fn new(
+        state: &AppState,
+        wiki: &Wiki,
+        request: &Request,
+        options: &Options,
+    ) -> Result<Option<Self>, AppError> {
+        let article = request.article.trim();
         if !article.is_empty() {
-            return Some(Self::Article(db_title(article)));
+            let page = mediawiki::resolve_pages(&state.http, wiki, &[article])
+                .await?
+                .into_iter()
+                .next()
+                .ok_or_else(|| AppError::BadRequest(format!("There is no page {article} on {wiki}.")))?;
+            return Ok(Some(Self::Article(page.0)));
         }
+        Ok(Self::category(request, options))
+    }
+
+    fn category(request: &Request, options: &Options) -> Option<Self> {
+        let category = request.category.trim();
         let category = mediawiki::strip_namespace(category, &["category", "kategorie"]).unwrap_or(category);
         (!category.is_empty()).then(|| Self::Category { name: db_title(category), depth: options.depth })
     }
 }
 
+#[derive(Clone)]
 struct Wanted {
     /// Database form.
     name: String,
@@ -151,7 +179,10 @@ struct Results {
     pages: usize,
     truncated: bool,
     template_links: usize,
+    /// Most wanted first.
     wanted: Vec<Wanted>,
+    /// The shown ones, by title.
+    alphabetical: Vec<Wanted>,
 }
 
 impl Wanted {
@@ -163,6 +194,10 @@ impl Wanted {
 impl Results {
     fn shown(&self) -> &[Wanted] {
         &self.wanted[..self.wanted.len().min(MAX_SHOWN)]
+    }
+
+    fn alphabetical(&self) -> &[Wanted] {
+        &self.alphabetical
     }
 }
 
@@ -177,24 +212,22 @@ struct Page<'a> {
     wikitext: Option<String>,
 }
 
+fn form(request: &Request, options: Options) -> Page<'_> {
+    Page { title: "Missing topics", request, options, outputs: OUTPUTS, results: None, wikitext: None }
+}
+
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     Params(request): Params<Request>,
 ) -> Result<Response, AppError> {
     let options = Options::new(&request);
-    let source = request.doit.as_ref().and_then(|_| Source::new(&request, &options));
-    let Some(source) = source else {
-        let page = Page {
-            title: "Missing topics",
-            request: &request,
-            options,
-            outputs: OUTPUTS,
-            results: None,
-            wikitext: None,
-        };
-        return Ok(render(&page)?.into_response());
-    };
+    if !request.wants_results() {
+        return Ok(render(&form(&request, options))?.into_response());
+    }
     let wiki = Wiki::new(&request.language, &request.project)?;
+    let Some(source) = Source::new(&state, &wiki, &request, &options).await? else {
+        return Ok(render(&form(&request, options))?.into_response());
+    };
     let results = results(&state, &wiki, &source, &options).await?;
     let again = format!("{}/missingtopics/?{}", state.config.public_url, query(&request, &options));
     if request.wikimode == Output::Json {
@@ -217,21 +250,15 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
     let min_links = options.min_links();
     let mut truncated = false;
     let (linking, mut counts) = match source {
-        Source::Article(title) => {
-            let ids = page_ids(state, wiki, NS_ARTICLE, std::slice::from_ref(title)).await?;
-            if ids.is_empty() {
-                return Err(AppError::BadRequest(format!("There is no article {} on {wiki}.", display_title(title))));
-            }
+        Source::Article(id) => {
             let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget"]).await?;
-            let links: Vec<String> = select_in(&mut conn, LINKS_FROM, "", &[], &ids).await?;
+            let links: Vec<String> = select_in(&mut conn, LINKS_FROM, "", &[], std::slice::from_ref(id)).await?;
             let red = without_existing(state, wiki, links).await?;
-            (ids, state.replicas.link_counts(wiki, &red, true).await?)
+            (vec![*id], state.replicas.link_counts(wiki, &red, true).await?)
         }
         Source::Category { name, depth } => {
-            let mut pages =
-                state.replicas.some_pages_in_tree(wiki, name, *depth, NS_ARTICLE, Some(MAX_PAGES + 1)).await?;
-            truncated = pages.len() > MAX_PAGES;
-            pages.truncate(MAX_PAGES);
+            let (pages, capped) = pages_in_tree(state, wiki, name, *depth).await?;
+            truncated = capped;
             let ids = page_ids(state, wiki, NS_ARTICLE, &pages).await?;
             let mut counts = counts_from(state, wiki, &ids).await?;
             // Fewer titles to check for existence.
@@ -250,7 +277,7 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
         counts.retain(|title, _| !in_templates.contains(title));
         template_links = before - counts.len();
     }
-    let wanted = ranked(counts)
+    let wanted: Vec<Wanted> = ranked(counts)
         .into_iter()
         .map(|(name, links)| Wanted {
             title: display_title(&name),
@@ -260,7 +287,8 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
             links,
         })
         .collect();
-    Ok(Results { pages: linking.len(), truncated, template_links, wanted })
+    let alphabetical = alphabetical(&wanted);
+    Ok(Results { pages: linking.len(), truncated, template_links, wanted, alphabetical })
 }
 
 /// Most links first, then by title.
@@ -268,6 +296,41 @@ fn ranked(counts: HashMap<String, u64>) -> Vec<(String, u64)> {
     let mut ranked: Vec<(String, u64)> = counts.into_iter().collect();
     ranked.sort_by(|(a, x), (b, y)| y.cmp(x).then_with(|| a.cmp(b)));
     ranked
+}
+
+/// The shown entries, by title.
+fn alphabetical(wanted: &[Wanted]) -> Vec<Wanted> {
+    let mut alphabetical: Vec<Wanted> = wanted.iter().take(MAX_SHOWN).cloned().collect();
+    alphabetical.sort_by(|a, b| a.title.cmp(&b.title));
+    alphabetical
+}
+
+/// Article pages in the category tree, at most [`MAX_PAGES`]; the flag says
+/// some were left out.
+async fn pages_in_tree(
+    state: &AppState,
+    wiki: &Wiki,
+    category: &str,
+    depth: u32,
+) -> anyhow::Result<(Vec<String>, bool)> {
+    let categories = state.replicas.category_tree(wiki, category, depth).await?;
+    let sql = "SELECT DISTINCT page_title FROM page
+        JOIN categorylinks ON cl_from=page_id JOIN linktarget ON cl_target_id=lt_id
+        WHERE page_namespace=? AND lt_namespace=14 AND lt_title IN";
+    let mut conn = state.replicas.conn(wiki, &["page", "categorylinks", "linktarget"]).await?;
+    let mut seen = HashSet::new();
+    let mut pages = Vec::new();
+    for chunk in categories.chunks(1000) {
+        let remaining = MAX_PAGES + 1 - pages.len();
+        let limit = format!("LIMIT {remaining}");
+        let rows: Vec<String> = select_in(&mut conn, sql, &limit, &[NS_ARTICLE.into()], chunk).await?;
+        pages.extend(rows.into_iter().filter(|p| seen.insert(p.clone())));
+        if pages.len() > MAX_PAGES {
+            pages.truncate(MAX_PAGES);
+            return Ok((pages, true));
+        }
+    }
+    Ok((pages, false))
 }
 
 async fn page_ids(state: &AppState, wiki: &Wiki, namespace: i64, titles: &[String]) -> anyhow::Result<Vec<u64>> {
@@ -387,14 +450,30 @@ mod tests {
     }
 
     #[test]
-    fn sources() {
-        let source = |q: &str| Source::new(&request(q), &Options::new(&request(q)));
-        assert_eq!(source("article=foo bar&category=X"), Some(Source::Article("Foo_bar".into())));
+    fn old_run_again_links_run() {
+        assert!(!request("").wants_results());
+        assert!(!request("language=de").wants_results());
+        assert!(request("doit=1").wants_results());
+        assert!(request("category=X&nosingles=1").wants_results());
+        assert!(request("article=Vorlage:X&wikimode=2").wants_results());
+    }
+
+    #[test]
+    fn categories() {
+        let source = |q: &str| Source::category(&request(q), &Options::new(&request(q)));
         assert_eq!(
             source("category=Kategorie:Leuchtturm in Schottland&depth=2"),
             Some(Source::Category { name: "Leuchtturm_in_Schottland".into(), depth: 2 })
         );
-        assert_eq!(source("article= &category="), None);
+        assert_eq!(source("category="), None);
+    }
+
+    #[test]
+    fn alphabetical_order() {
+        let list = [wanted("C", 3), wanted("A", 1), wanted("B", 2)];
+        let sorted = alphabetical(&list);
+        let titles: Vec<&str> = sorted.iter().map(|w| w.title.as_str()).collect();
+        assert_eq!(titles, ["A", "B", "C"]);
     }
 
     #[test]
@@ -435,6 +514,9 @@ mod tests {
         assert!(form.body.contains(r#"name="nosingles" value="1" checked"#));
         let unknown = get(dir.path(), "/missingtopics/?language=xx.evil&article=A&doit=1").await;
         assert_eq!(unknown.status.as_u16(), 400);
+        // An old "run again" link, without `doit`, must run too.
+        let again = get(dir.path(), "/missingtopics/?language=xx.evil&category=A&nosingles=1").await;
+        assert_eq!(again.status.as_u16(), 400);
         let old = get(dir.path(), "/missingtopics.php?article=A").await;
         assert_eq!(old.headers["location"], "/missingtopics/?article=A");
     }

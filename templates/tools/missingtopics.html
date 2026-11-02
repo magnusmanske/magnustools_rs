@@ -7,13 +7,13 @@
     <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
     <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
   </fieldset>
-  <label>Article <span class="hint">counts links from all articles of the wiki</span>
+  <label>Article or page <span class="hint">counts links from all articles of the wiki</span>
     <input type="text" name="article" value="{{ request.article }}">
   </label>
   <fieldset class="row">
     <legend>… or a category tree <span class="hint">counts links from the articles in the tree</span></legend>
     <label>Category <input type="text" name="category" value="{{ request.category }}"></label>
-    <label>Subcategory depth <input type="number" name="depth" min="0" max="10" value="{{ options.depth }}"></label>
+    <label>Subcategory depth <input type="number" name="depth" min="0" max="30" value="{{ options.depth }}"></label>
   </fieldset>
   <fieldset class="row">
     <legend>Output</legend>
@@ -41,16 +41,49 @@
   {% if results.shown().len() < results.wanted.len() %}The {{ results.shown().len() }} most wanted are shown.{% endif %}
 </p>
 {% if let Some(wikitext) = wikitext %}
-<textarea class="code" rows="20" readonly>{{ wikitext }}</textarea>
+<p><button type="button" data-copy="#wikitext">Copy to clipboard</button></p>
+<textarea id="wikitext" class="code" rows="20" readonly>{{ wikitext }}</textarea>
 {% else %}
+<h2>By demand</h2>
+<p><button type="button" data-copy="#by-demand">Copy ranked list</button></p>
 <div class="table-wrap">
-<table>
+<table id="by-demand">
   <tr><th>Missing article</th><th class="num">Wanted</th></tr>
 {% for w in results.shown() %}
-  <tr><td><a href="{{ w.url }}" class="error">{{ w.title }}</a></td><td class="num"><a href="{{ w.links_url }}">{{ w.links_shown() }}</a></td></tr>
+  <tr data-title="{{ w.title }}"><td><a href="{{ w.url }}" class="error">{{ w.title }}</a></td><td class="num"><a href="{{ w.links_url }}">{{ w.links_shown() }}</a></td></tr>
+{% endfor %}
+</table>
+</div>
+<h2>Alphabetically</h2>
+<p><button type="button" data-copy="#alphabetical">Copy alphabetical list</button></p>
+<div class="table-wrap">
+<table id="alphabetical">
+  <tr><th>Missing article</th><th class="num">Wanted</th></tr>
+{% for w in results.alphabetical() %}
+  <tr data-title="{{ w.title }}"><td><a href="{{ w.url }}" class="error">{{ w.title }}</a></td><td class="num"><a href="{{ w.links_url }}">{{ w.links_shown() }}</a></td></tr>
 {% endfor %}
 </table>
 </div>
 {% endif %}
+<script>
+// Copies the wikitext, or the table's titles as wikilinks, to the clipboard.
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-copy]');
+  if (!button) return;
+  const target = document.querySelector(button.dataset.copy);
+  if (!target) return;
+  const text = target instanceof HTMLTextAreaElement
+    ? target.value
+    : [...target.querySelectorAll('tr[data-title]')].map(row => `[[${row.dataset.title}]]`).join('\n') + '\n';
+  try {
+    await navigator.clipboard.writeText(text);
+    const label = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = label; }, 1500);
+  } catch {
+    button.textContent = 'Copy failed';
+  }
+});
+</script>
 {% endif %}
 {% endblock %}
