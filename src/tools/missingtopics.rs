@@ -22,9 +22,7 @@ const NS_TEMPLATE: i64 = 10;
 const DEFAULT_DEPTH: u32 = 1;
 /// As deep as the old tool went; categories can nest that far.
 const MAX_DEPTH: u32 = 30;
-/// Articles of a tree whose links are counted.
-const MAX_PAGES: usize = 100_000;
-/// Missing articles on the page and in wiki text; JSON has them all.
+/// Missing articles in the HTML tables; wiki text and JSON have them all.
 const MAX_SHOWN: usize = 5_000;
 const LINKS_FROM: &str = "SELECT DISTINCT lt_title FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
     WHERE lt_namespace=0 AND pl_from IN";
@@ -39,6 +37,8 @@ enum Output {
     WikiTable,
     #[serde(rename = "2")]
     WikiList,
+    #[serde(rename = "3")]
+    WikiListByDemand,
     #[serde(rename = "json")]
     Json,
 }
@@ -46,7 +46,8 @@ enum Output {
 const OUTPUTS: &[(Output, &str)] = &[
     (Output::Html, "Links"),
     (Output::WikiTable, "Wiki table"),
-    (Output::WikiList, "Brief wiki list"),
+    (Output::WikiList, "Brief wiki list (alphabetical)"),
+    (Output::WikiListByDemand, "Brief wiki list (by demand)"),
     (Output::Json, "JSON"),
 ];
 
@@ -56,6 +57,7 @@ impl Output {
             Self::Html => "0",
             Self::WikiTable => "1",
             Self::WikiList => "2",
+            Self::WikiListByDemand => "3",
             Self::Json => "json",
         }
     }
@@ -177,11 +179,10 @@ struct Wanted {
 struct Results {
     /// Articles whose links were looked at.
     pages: usize,
-    truncated: bool,
     template_links: usize,
     /// Most wanted first.
     wanted: Vec<Wanted>,
-    /// The shown ones, by title.
+    /// All entries, by title.
     alphabetical: Vec<Wanted>,
 }
 
@@ -196,8 +197,17 @@ impl Results {
         &self.wanted[..self.wanted.len().min(MAX_SHOWN)]
     }
 
-    fn alphabetical(&self) -> &[Wanted] {
-        &self.alphabetical
+    /// As many alphabetically sorted entries as the HTML table shows.
+    fn shown_alphabetical(&self) -> &[Wanted] {
+        &self.alphabetical[..self.alphabetical.len().min(MAX_SHOWN)]
+    }
+
+    /// The entries in the order the output wants them.
+    fn for_output(&self, output: Output) -> &[Wanted] {
+        match output {
+            Output::WikiList => &self.alphabetical,
+            _ => &self.wanted,
+        }
     }
 }
 
@@ -234,7 +244,8 @@ pub async fn handler(
         let ranked: Map<String, Value> = results.wanted.iter().map(|w| (w.name.clone(), w.links.into())).collect();
         return Ok(Json(json!({ "status": "OK", "results": ranked, "url": again })).into_response());
     }
-    let wikitext = wikitext(request.wikimode, results.shown(), &again, &chrono::Utc::now().to_rfc2822());
+    let wikitext =
+        wikitext(request.wikimode, results.for_output(request.wikimode), &again, &chrono::Utc::now().to_rfc2822());
     let page = Page {
         title: "Missing topics",
         request: &request,
@@ -248,7 +259,6 @@ pub async fn handler(
 
 async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Options) -> Result<Results, AppError> {
     let min_links = options.min_links();
-    let mut truncated = false;
     let (linking, mut counts) = match source {
         Source::Article(id) => {
             let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget"]).await?;
@@ -257,9 +267,7 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
             (vec![*id], state.replicas.link_counts(wiki, &red, true).await?)
         }
         Source::Category { name, depth } => {
-            let (pages, capped) = pages_in_tree(state, wiki, name, *depth).await?;
-            truncated = capped;
-            let ids = page_ids(state, wiki, NS_ARTICLE, &pages).await?;
+            let ids = page_ids_in_tree(state, wiki, name, *depth).await?;
             let mut counts = counts_from(state, wiki, &ids).await?;
             // Fewer titles to check for existence.
             counts.retain(|_, n| *n >= min_links);
@@ -288,7 +296,7 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
         })
         .collect();
     let alphabetical = alphabetical(&wanted);
-    Ok(Results { pages: linking.len(), truncated, template_links, wanted, alphabetical })
+    Ok(Results { pages: linking.len(), template_links, wanted, alphabetical })
 }
 
 /// Most links first, then by title.
@@ -298,39 +306,25 @@ fn ranked(counts: HashMap<String, u64>) -> Vec<(String, u64)> {
     ranked
 }
 
-/// The shown entries, by title.
+/// All entries, by title.
 fn alphabetical(wanted: &[Wanted]) -> Vec<Wanted> {
-    let mut alphabetical: Vec<Wanted> = wanted.iter().take(MAX_SHOWN).cloned().collect();
+    let mut alphabetical = wanted.to_vec();
     alphabetical.sort_by(|a, b| a.title.cmp(&b.title));
     alphabetical
 }
 
-/// Article pages in the category tree, at most [`MAX_PAGES`]; the flag says
-/// some were left out.
-async fn pages_in_tree(
-    state: &AppState,
-    wiki: &Wiki,
-    category: &str,
-    depth: u32,
-) -> anyhow::Result<(Vec<String>, bool)> {
+/// Article page IDs in the category tree. Nothing is capped here, so the
+/// result covers the whole tree, as the old tool did.
+async fn page_ids_in_tree(state: &AppState, wiki: &Wiki, category: &str, depth: u32) -> anyhow::Result<Vec<u64>> {
     let categories = state.replicas.category_tree(wiki, category, depth).await?;
-    let sql = "SELECT DISTINCT page_title FROM page
+    let sql = "SELECT DISTINCT page_id FROM page
         JOIN categorylinks ON cl_from=page_id JOIN linktarget ON cl_target_id=lt_id
         WHERE page_namespace=? AND lt_namespace=14 AND lt_title IN";
     let mut conn = state.replicas.conn(wiki, &["page", "categorylinks", "linktarget"]).await?;
-    let mut seen = HashSet::new();
-    let mut pages = Vec::new();
-    for chunk in categories.chunks(1000) {
-        let remaining = MAX_PAGES + 1 - pages.len();
-        let limit = format!("LIMIT {remaining}");
-        let rows: Vec<String> = select_in(&mut conn, sql, &limit, &[NS_ARTICLE.into()], chunk).await?;
-        pages.extend(rows.into_iter().filter(|p| seen.insert(p.clone())));
-        if pages.len() > MAX_PAGES {
-            pages.truncate(MAX_PAGES);
-            return Ok((pages, true));
-        }
-    }
-    Ok((pages, false))
+    let mut ids: Vec<u64> = select_in(&mut conn, sql, "", &[NS_ARTICLE.into()], &categories).await?;
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
 }
 
 async fn page_ids(state: &AppState, wiki: &Wiki, namespace: i64, titles: &[String]) -> anyhow::Result<Vec<u64>> {
@@ -408,10 +402,10 @@ fn wikitext(output: Output, wanted: &[Wanted], again: &str, date: &str) -> Optio
             }
             text.push_str("|}\n");
         }
-        Output::WikiList => {
-            for w in wanted {
-                text.push_str(&format!("[[{}]] -\n", w.title));
-            }
+        Output::WikiList | Output::WikiListByDemand => {
+            let titles: Vec<String> = wanted.iter().map(|w| format!("[[{}]]", w.title)).collect();
+            text.push_str(&titles.join(" - "));
+            text.push('\n');
         }
         Output::Html | Output::Json => return None,
     }
@@ -477,9 +471,16 @@ mod tests {
     }
 
     #[test]
+    fn alphabetical_keeps_entries_beyond_the_html_limit() {
+        let long: Vec<Wanted> = (0..=MAX_SHOWN).map(|i| wanted(&format!("T{i:05}"), 1)).collect();
+        assert_eq!(alphabetical(&long).len(), long.len());
+    }
+
+    #[test]
     fn outputs_parse_and_round_trip() {
         assert_eq!(request("wikimode=json").wikimode, Output::Json);
         assert_eq!(request("wikimode=2").wikimode, Output::WikiList);
+        assert_eq!(request("wikimode=3").wikimode, Output::WikiListByDemand);
         assert!(serde_urlencoded::from_str::<Request>("wikimode=7").is_err());
         let r = request("language=en&category=A b&wikimode=1&doit=1");
         assert_eq!(
@@ -496,13 +497,23 @@ mod tests {
     }
 
     #[test]
+    fn wiki_lists_use_their_order() {
+        let wanted = vec![wanted("B", 2), wanted("A", 1)];
+        let alphabetical = alphabetical(&wanted);
+        let results = Results { pages: 0, template_links: 0, wanted, alphabetical };
+        let titles = |output| results.for_output(output).iter().map(|w| w.title.clone()).collect::<Vec<_>>();
+        assert_eq!(titles(Output::WikiList), ["A", "B"]);
+        assert_eq!(titles(Output::WikiListByDemand), ["B", "A"]);
+    }
+
+    #[test]
     fn wiki_text() {
         let list = [wanted("Foo bar", 3)];
         let again = "https://x.org/missingtopics/?a=1";
         let table = wikitext(Output::WikiTable, &list, again, "D").unwrap();
         assert!(table.starts_with("== Created D by [https://x.org/missingtopics/ the MissingTopics tool]"));
         assert!(table.contains("|-\n| 3 || [[Foo bar]]\n|}"));
-        assert!(wikitext(Output::WikiList, &list, again, "D").unwrap().ends_with("[[Foo bar]] -\n"));
+        assert!(wikitext(Output::WikiList, &list, again, "D").is_some_and(|t| t.ends_with("[[Foo bar]]\n")));
         assert!(wikitext(Output::Html, &list, again, "D").is_none());
     }
 

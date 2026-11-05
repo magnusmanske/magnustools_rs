@@ -36,7 +36,6 @@
 <h2>{{ results.wanted.len() }} missing articles</h2>
 <p class="muted">
   {% if request.article.trim().is_empty() %}From the links of {{ results.pages }} articles in the tree.{% else %}From the links in the article.{% endif %}
-  {% if results.truncated %}The category tree is larger; only these were checked.{% endif %}
   {% if results.template_links > 0 %}{{ results.template_links }} links from templates were left out.{% endif %}
   {% if results.shown().len() < results.wanted.len() %}The {{ results.shown().len() }} most wanted are shown.{% endif %}
 </p>
@@ -59,7 +58,7 @@
 <div class="table-wrap">
 <table id="alphabetical">
   <tr><th>Missing article</th><th class="num">Wanted</th></tr>
-{% for w in results.alphabetical() %}
+{% for w in results.shown_alphabetical() %}
   <tr data-title="{{ w.title }}"><td><a href="{{ w.url }}" class="error">{{ w.title }}</a></td><td class="num"><a href="{{ w.links_url }}">{{ w.links_shown() }}</a></td></tr>
 {% endfor %}
 </table>
