@@ -1,7 +1,6 @@
 //! `subpages.php`: the subpages of a page, for a raw watchlist.
 
 use crate::mediawiki;
-use crate::replicas::{db_title, display_title};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::Wiki;
@@ -9,7 +8,6 @@ use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::sync::Arc;
 use wikimisc::mysql_async::prelude::Queryable;
 
@@ -73,12 +71,18 @@ pub async fn handler(
     render(&page)
 }
 
-async fn results(state: &AppState, request: &Request, namespace: i64) -> Result<Results, AppError> {
+async fn results(state: &AppState, request: &Request, selected: i64) -> Result<Results, AppError> {
     let wiki = Wiki::new(&request.lang, &request.family)?;
-    let names = mediawiki::namespace_names(&state.http, &wiki).await.unwrap_or_default();
-    let (namespace, title) = split_namespace(namespace, &request.title, &names);
+    let api = state.api(&wiki).await?;
+    let parsed = mediawiki::Title::new_from_full(&request.title, &api);
+    let namespace = match (selected, parsed.namespace_id()) {
+        (-1, 0) => -1,
+        (-1, namespace) => namespace,
+        (_, namespace) if namespace != 0 => namespace,
+        (namespace, _) => namespace,
+    };
     let mut conn = state.replicas.conn(&wiki, &["page"]).await?;
-    let title = db_title(&title);
+    let title = parsed.with_underscores();
     let pattern = format!("{}/%", like_escape(&title));
     let namespace_condition = if namespace == -1 { "" } else { "AND page_namespace = ?" };
     let sql = format!(
@@ -91,26 +95,25 @@ async fn results(state: &AppState, request: &Request, namespace: i64) -> Result<
         ns => conn.exec(sql, (pattern, ns)).await,
     }
     .map_err(anyhow::Error::from)?;
-    let parent = mediawiki::title_with_namespace(namespace, &display_title(&title), &names);
+    let parent = if namespace == -1 {
+        parsed.pretty().to_string()
+    } else if namespace == parsed.namespace_id() {
+        parsed.full_pretty(&api).unwrap_or_else(|| parsed.pretty().to_string())
+    } else {
+        let title = mediawiki::Title::new(parsed.pretty(), namespace);
+        title.full_pretty(&api).unwrap_or_else(|| title.pretty().to_string())
+    };
     let count = rows.len();
     let truncated = count as u64 >= MAX_SUBPAGES;
     let mut subpages: Vec<String> = rows
         .into_iter()
-        .map(|(namespace, title)| mediawiki::title_with_namespace(namespace, &display_title(&title), &names))
+        .map(|(namespace, title)| {
+            let title = mediawiki::Title::new(&title, namespace);
+            title.full_pretty(&api).unwrap_or_else(|| title.pretty().to_string())
+        })
         .collect();
     subpages.insert(0, parent.clone());
     Ok(Results { parent, count, subpages: subpages.join("\n"), truncated })
-}
-
-/// A namespace given as a prefix on the title, if the wiki knows it.
-fn split_namespace(namespace: i64, title: &str, names: &HashMap<i64, String>) -> (i64, String) {
-    let Some((prefix, rest)) = title.split_once(':') else {
-        return (namespace, title.to_string());
-    };
-    match names.iter().find(|(id, name)| **id > 0 && name.eq_ignore_ascii_case(prefix)) {
-        Some((id, _)) => (*id, rest.to_string()),
-        None => (namespace, title.to_string()),
-    }
 }
 
 /// `value` for a `LIKE` pattern, with its wildcards taken literally.
@@ -127,13 +130,5 @@ mod tests {
         assert_eq!(like_escape("A_B"), "A!_B");
         assert_eq!(like_escape("100%"), "100!%");
         assert_eq!(like_escape("Hi!"), "Hi!!");
-    }
-
-    #[test]
-    fn titles_can_carry_their_namespace() {
-        let names = HashMap::from([(0, "Article".to_string()), (2, "User".to_string())]);
-        assert_eq!(split_namespace(2, "Magnus_Manske", &names), (2, "Magnus_Manske".to_string()));
-        assert_eq!(split_namespace(0, "User:Magnus_Manske", &names), (2, "Magnus_Manske".to_string()));
-        assert_eq!(split_namespace(0, "Star_Trek:_Voyager", &names), (0, "Star_Trek:_Voyager".to_string()));
     }
 }

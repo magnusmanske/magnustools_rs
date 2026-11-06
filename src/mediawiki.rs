@@ -1,19 +1,40 @@
-//! Common MediaWiki API calls; see [`wikimisc::wiki_api`].
+//! Common MediaWiki API calls; see [`wikimisc::wiki_api`], and the API client
+//! and titles from [`wikimisc::mediawiki`].
 
-use crate::cache::TimedMap;
 use crate::wiki::Wiki;
 use anyhow::Result;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 
+pub use wikimisc::mediawiki::{Api, Title};
 pub use wikimisc::wiki_api::*;
-
-/// Namespace names per wiki, which hardly ever change.
-static NAMESPACES: TimedMap<String, HashMap<i64, String>> = TimedMap::new(Duration::from_secs(86_400), 1000);
 
 /// Titles per `action=query&titles=` request, the API limit for normal users.
 const MAX_TITLES: usize = 50;
+
+/// Namespace names by ID, from the API's cached site info.
+pub fn namespace_names(api: &Api) -> HashMap<i64, String> {
+    api.get_site_info()["query"]["namespaces"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(_, ns)| {
+            let name = ns["*"]
+                .as_str()
+                .or_else(|| ns["canonical"].as_str())
+                .filter(|name| !name.is_empty())
+                .unwrap_or("Article");
+            Some((ns["id"].as_i64()?, name.to_string()))
+        })
+        .collect()
+}
+
+/// `title` without a leading namespace from `names` (case-insensitive).
+///
+/// This is the stricter parser from [`wikimisc::title`], replacing the one in
+/// [`wikimisc::wiki_api`].
+pub fn strip_namespace<'a, S: AsRef<str>>(title: &'a str, names: &[S]) -> Option<&'a str> {
+    wikimisc::title::strip_namespace(title, names)
+}
 
 /// `(page ID, namespace, database title)` of the pages that exist; the API
 /// knows the wiki's namespace names.
@@ -34,39 +55,13 @@ pub async fn resolve_pages(http: &reqwest::Client, wiki: &Wiki, titles: &[&str])
     Ok(pages)
 }
 
-/// Namespace names by ID, for a wiki's pages.
-pub async fn namespace_names(http: &reqwest::Client, wiki: &Wiki) -> Result<Arc<HashMap<i64, String>>> {
-    NAMESPACES.get_or_fetch(wiki.dbname().to_string(), async || fetch_namespace_names(http, wiki).await).await
-}
-
-async fn fetch_namespace_names(http: &reqwest::Client, wiki: &Wiki) -> Result<HashMap<i64, String>> {
-    let json = api(http, wiki, &[("action", "query"), ("meta", "siteinfo"), ("siprop", "namespaces")]).await?;
-    Ok(json["query"]["namespaces"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .filter_map(|(_, ns)| {
-            let name = ns["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("Article");
-            Some((ns["id"].as_i64()?, name.to_string()))
-        })
-        .collect())
-}
-
-/// `title` as it appears on the wiki, with the namespace name (if any).
-pub fn title_with_namespace(namespace: i64, title: &str, names: &HashMap<i64, String>) -> String {
-    match names.get(&namespace).filter(|_| namespace != 0) {
-        Some(name) => format!("{name}:{title}"),
-        None => title.to_string(),
-    }
-}
-
 /// An API title as the database has it: without namespace prefix, with underscores.
 pub fn database_title(namespace: i64, title: &str) -> String {
     let title = match namespace {
         0 => title,
         _ => title.split_once(':').map_or(title, |(_, rest)| rest),
     };
-    title.replace(' ', "_")
+    wikimisc::title::to_db_key(title)
 }
 
 #[cfg(test)]
@@ -77,13 +72,5 @@ mod tests {
     fn database_titles() {
         assert_eq!(database_title(0, "Star Trek: Voyager"), "Star_Trek:_Voyager");
         assert_eq!(database_title(14, "Kategorie:Leuchtturm in Schottland"), "Leuchtturm_in_Schottland");
-    }
-
-    #[test]
-    fn titles_with_namespaces() {
-        let names = HashMap::from([(0, "Article".to_string()), (2, "User".to_string())]);
-        assert_eq!(title_with_namespace(0, "A_b", &names), "A_b");
-        assert_eq!(title_with_namespace(2, "A_b", &names), "User:A_b");
-        assert_eq!(title_with_namespace(4, "A_b", &names), "A_b");
     }
 }

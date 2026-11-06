@@ -1,20 +1,29 @@
 //! What every request handler can use. Shared via `Arc`.
 
+use crate::cache::TimedMap;
 use crate::config::Config;
+use crate::mediawiki::Api;
 use crate::oauth::{Consumer, OAuth};
 use crate::replicas::Replicas;
 use crate::tool_db::ToolDb;
+use crate::wiki::Wiki;
 use anyhow::{Context, Result};
 use axum::http::HeaderMap;
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Key;
 use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
 
 /// Sent with every outbound request, per the Wikimedia User-Agent policy.
 pub const USER_AGENT: &str =
     wikimisc::user_agent!(name = "magnustools", description = "https://magnustools.toolforge.org/");
 
-#[derive(Debug)]
+/// Site info and namespace names change rarely, and are only loaded once per wiki.
+const API_CACHE_FOR: Duration = Duration::from_secs(86_400);
+/// Wikis to keep API clients for; a request rarely touches more than a few.
+const API_CACHE_WIKIS: usize = 128;
+
 pub struct AppState {
     pub config: Config,
     pub http: reqwest::Client,
@@ -23,6 +32,8 @@ pub struct AppState {
     pub cookie_key: Key,
     pub buggregator_oauth: Option<OAuth>,
     pub uploader_oauth: Option<OAuth>,
+    /// API clients with each wiki's cached site info.
+    apis: TimedMap<String, Api>,
 }
 
 impl AppState {
@@ -43,7 +54,24 @@ impl AppState {
             cookie_key,
             http,
             config,
+            apis: TimedMap::new(API_CACHE_FOR, API_CACHE_WIKIS),
         })
+    }
+
+    /// The API client for `wiki`, with its site info cached.
+    ///
+    /// Once the `mediawiki` release with `Api::new_from_client` is out, the
+    /// client can be `self.http.clone()` instead of one per wiki; the current
+    /// release only takes a builder.
+    pub async fn api(&self, wiki: &Wiki) -> Result<Arc<Api>> {
+        let api_url = wiki.api_url();
+        self.apis
+            .get_or_fetch(wiki.dbname().to_string(), async move || {
+                Api::new_from_builder_with_user_agent(&api_url, wikimisc::http::client_builder(USER_AGENT), USER_AGENT)
+                    .await
+                    .map_err(anyhow::Error::from)
+            })
+            .await
     }
 }
 

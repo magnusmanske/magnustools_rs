@@ -2,7 +2,6 @@
 //! templates or with a single author.
 
 use crate::mediawiki;
-use crate::replicas::display_title;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::{Wiki, encode_component};
@@ -108,6 +107,7 @@ async fn results(
     offset: u64,
 ) -> Result<Results, AppError> {
     let wiki = Wiki::new(&request.lang, &request.family)?;
+    let api = state.api(&wiki).await?;
     let mut conn = state.replicas.conn(&wiki, &["page", "templatelinks", "revision"]).await?;
     let namespace_condition = match (namespace, invert) {
         (-1, _) => "",
@@ -129,13 +129,13 @@ async fn results(
         ns => conn.exec(sql, (ns,)).await,
     }
     .map_err(anyhow::Error::from)?;
-    let names = mediawiki::namespace_names(&state.http, &wiki).await.unwrap_or_default();
     let more = rows.len() as u64 == limit;
     let rows = rows
         .into_iter()
         .map(|(namespace, title, length)| {
-            let page = mediawiki::title_with_namespace(namespace, &display_title(&title), &names);
-            Row { url: wiki.page_url(&page), page, length }
+            let title = mediawiki::Title::new(&title, namespace);
+            let page = title.full_pretty(&api).unwrap_or_else(|| title.pretty().to_string());
+            Row { url: crate::wiki::page_url(wiki.host(), &page), page, length }
         })
         .collect();
     let previous_url = (offset > 0).then(|| page_url(request, namespace, invert, limit, offset.saturating_sub(limit)));

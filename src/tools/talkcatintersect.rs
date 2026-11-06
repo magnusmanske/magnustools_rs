@@ -1,7 +1,8 @@
 //! `talkcatintersect.php`: articles in one category tree whose talk pages
 //! are in another category.
 
-use crate::replicas::{db_title, display_title, select_in};
+use crate::mediawiki;
+use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::Wiki;
@@ -81,6 +82,7 @@ pub async fn handler(
 
 async fn results(state: &AppState, request: &Request, depth: u32, limit: u64) -> Result<Results, AppError> {
     let wiki = Wiki::new(&request.lang, &request.family)?;
+    let api = state.api(&wiki).await?;
     let articles =
         state.replicas.some_pages_in_tree(&wiki, request.pcategory.trim(), depth, 0, Some(MAX_ARTICLES)).await?;
     let mut conn = state.replicas.conn(&wiki, &["page", "categorylinks", "linktarget"]).await?;
@@ -90,36 +92,25 @@ async fn results(state: &AppState, request: &Request, depth: u32, limit: u64) ->
         JOIN linktarget lt ON lt.lt_id=cl.cl_target_id
         WHERE p.page_namespace=0 AND lt.lt_namespace=14 AND lt.lt_title=? AND p.page_title IN";
     let suffix = format!("ORDER BY p.page_title LIMIT {limit}");
-    let params = [Value::from(category_title(&request.tpcategory))];
+    let params = [Value::from(category_title(&request.tpcategory, &api))];
     let titles: Vec<String> = select_in(&mut conn, sql, &suffix, &params, &articles).await?;
     let entries = titles
         .into_iter()
         .map(|title| {
             let page = display_title(&title);
-            Entry { page_url: wiki.page_url(&page), talk_url: wiki.page_url(&format!("Talk:{page}")), page }
+            let talk = mediawiki::Title::new(&page, 1);
+            let talk = talk.full_pretty(&api).unwrap_or_else(|| format!("Talk:{page}"));
+            Entry {
+                page_url: crate::wiki::page_url(wiki.host(), &page),
+                talk_url: crate::wiki::page_url(wiki.host(), &talk),
+                page,
+            }
         })
         .collect();
     Ok(Results { entries, wiki: wiki.to_string(), articles: articles.len(), truncated: articles.len() >= MAX_ARTICLES })
 }
 
-/// A category name as the database has it, without a `Category:` prefix.
-fn category_title(input: &str) -> String {
-    let input = input.trim();
-    let input = input
-        .split_once(':')
-        .filter(|(prefix, _)| prefix.eq_ignore_ascii_case("category"))
-        .map_or(input, |(_, rest)| rest);
-    db_title(input)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn category_names() {
-        assert_eq!(category_title("Category:Birds of Ohio"), "Birds_of_Ohio");
-        assert_eq!(category_title("birds of ohio"), "Birds_of_ohio");
-        assert_eq!(category_title("Kategorie:Vögel"), "Kategorie:Vögel");
-    }
+/// A category name as the database has it, without a namespace prefix.
+fn category_title(input: &str, api: &mediawiki::Api) -> String {
+    mediawiki::Title::new_from_full(input.trim(), api).with_underscores()
 }

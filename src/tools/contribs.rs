@@ -2,7 +2,7 @@
 //! by time, so bursts of edits by different accounts stand out.
 
 use crate::mediawiki;
-use crate::replicas::{display_title, format_timestamp, select_in};
+use crate::replicas::{format_timestamp, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::{Wiki, upper_first};
@@ -103,6 +103,7 @@ fn users(input: &str) -> Vec<String> {
 
 async fn results(state: &AppState, request: &Request, limit: u64, oldest_first: bool) -> Result<Results, AppError> {
     let wiki = Wiki::new(&request.lang, &request.family)?;
+    let api = state.api(&wiki).await?;
     let names = users(&request.users);
     let mut conn = state.replicas.conn(&wiki, &["actor", "revision", "page", "comment"]).await?;
     let actors: Vec<(u64, String)> =
@@ -123,11 +124,11 @@ async fn results(state: &AppState, request: &Request, limit: u64, oldest_first: 
 
     let found: std::collections::HashSet<String> = actors.into_iter().map(|(_, name)| name).collect();
     let missing: Vec<String> = names.into_iter().filter(|name| !found.contains(name)).collect();
-    let namespace_names = mediawiki::namespace_names(&state.http, &wiki).await.unwrap_or_default();
     let mut edits: Vec<Edit> = Vec::with_capacity(rows.len());
     let mut previous_time: Option<NaiveDateTime> = None;
     for (user, namespace, title, rev_id, timestamp, minor, bytes, comment, latest) in rows {
-        let full = mediawiki::title_with_namespace(namespace, &display_title(&title), &namespace_names);
+        let title = mediawiki::Title::new(&title, namespace);
+        let full = title.full_pretty(&api).unwrap_or_else(|| title.pretty().to_string());
         let parsed = NaiveDateTime::parse_from_str(&timestamp, "%Y%m%d%H%M%S").ok();
         let gap = match (previous_time, parsed) {
             (Some(previous), Some(current)) => {
@@ -137,7 +138,7 @@ async fn results(state: &AppState, request: &Request, limit: u64, oldest_first: 
             _ => None,
         };
         previous_time = parsed;
-        let encoded = crate::wiki::encode_title(&full);
+        let revision = rev_id.to_string();
         let comment = match (minor, comment.unwrap_or_default()) {
             (true, comment) if comment.is_empty() => "(minor)".to_string(),
             (true, comment) => format!("{comment} (minor)"),
@@ -146,12 +147,12 @@ async fn results(state: &AppState, request: &Request, limit: u64, oldest_first: 
         edits.push(Edit {
             time: format_timestamp(&timestamp),
             user: user.clone(),
-            user_url: wiki.page_url(&format!("User:{user}")),
+            user_url: crate::wiki::page_url(wiki.host(), &format!("User:{user}")),
             page: full.clone(),
-            page_url: wiki.page_url(&full),
-            hist_url: format!("{}?title={encoded}&action=history", wiki.index_url()),
-            diff_url: format!("{}?title={encoded}&diff=prev&oldid={rev_id}", wiki.index_url()),
-            contribs_url: wiki.page_url(&format!("Special:Contributions/{user}")),
+            page_url: crate::wiki::page_url(wiki.host(), &full),
+            hist_url: crate::wiki::index_url(wiki.host(), &full, &[("action", "history")]),
+            diff_url: crate::wiki::index_url(wiki.host(), &full, &[("diff", "prev"), ("oldid", &revision)]),
+            contribs_url: crate::wiki::page_url(wiki.host(), &format!("Special:Contributions/{user}")),
             comment,
             bytes,
             top: latest == rev_id,

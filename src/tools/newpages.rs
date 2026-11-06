@@ -1,7 +1,7 @@
 //! `newpages.php`: pages created within a time range on a wiki.
 
 use crate::mediawiki;
-use crate::replicas::{display_title, format_timestamp};
+use crate::replicas::format_timestamp;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::{Wiki, encode_component};
@@ -125,6 +125,7 @@ async fn results(
     offset: u64,
 ) -> Result<Results, AppError> {
     let wiki = Wiki::new(&request.lang, &request.family)?;
+    let api = state.api(&wiki).await?;
     let mut conn = state.replicas.conn(&wiki, &["revision", "page", "actor", "comment"]).await?;
     let invert = request.invert.as_deref().is_some_and(|v| !v.is_empty() && v != "0");
     let namespace_condition = match (namespace, invert) {
@@ -146,17 +147,17 @@ async fn results(
     }
     let rows: Vec<PageRow> =
         conn.exec(sql, wikimisc::mysql_async::Params::Positional(params)).await.map_err(anyhow::Error::from)?;
-    let names = mediawiki::namespace_names(&state.http, &wiki).await.unwrap_or_default();
     let entries: Vec<Entry> = rows
         .into_iter()
         .map(|(timestamp, user, comment, title, namespace, bytes)| {
-            let page = mediawiki::title_with_namespace(namespace, &display_title(&title), &names);
+            let title = mediawiki::Title::new(&title, namespace);
+            let page = title.full_pretty(&api).unwrap_or_else(|| title.pretty().to_string());
             Entry {
                 time: format_timestamp(&timestamp),
-                page_url: wiki.page_url(&page),
+                page_url: crate::wiki::page_url(wiki.host(), &page),
                 page,
-                user_url: wiki.page_url(&format!("User:{user}")),
-                contribs_url: wiki.page_url(&format!("Special:Contributions/{user}")),
+                user_url: crate::wiki::page_url(wiki.host(), &format!("User:{user}")),
+                contribs_url: crate::wiki::page_url(wiki.host(), &format!("Special:Contributions/{user}")),
                 user,
                 comment: comment.unwrap_or_default(),
                 bytes,

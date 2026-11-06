@@ -79,7 +79,8 @@ pub async fn handler(
         .exec("SELECT ar_namespace, COUNT(*) FROM archive_userindex WHERE ar_actor=? GROUP BY ar_namespace", (actor,))
         .await
         .map_err(anyhow::Error::from)?;
-    let names = mediawiki::namespace_names(&state.http, &wiki).await.unwrap_or_default();
+    let api = state.api(&wiki).await?;
+    let names = mediawiki::namespace_names(&api);
     let counts = per_namespace(&live, &deleted);
     page.rows = counts
         .iter()
