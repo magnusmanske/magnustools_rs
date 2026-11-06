@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Pages created within a time range, newest first.</p>
+<form method="get" action="/newpages/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.lang }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.family }}" placeholder="wikipedia"></label>
+  </div>
+  <div class="row">
+    <label>From (UTC) <input type="text" name="t1" value="{{ request.t1 }}" placeholder="YYYYMMDDhhmmss" pattern="[0-9]{14}"></label>
+    <label>To (UTC) <input type="text" name="t2" value="{{ request.t2 }}" placeholder="YYYYMMDDhhmmss" pattern="[0-9]{14}"></label>
+  </div>
+  <div class="row">
+    <label>Namespace <span class="hint">-1 for all</span> <input type="text" name="namespaces" value="{{ request.namespaces }}" placeholder="0"></label>
+    <label class="check"><input type="checkbox" name="invert" value="1"{% if invert %} checked{% endif %}> All but this namespace</label>
+  </div>
+  <div class="row">
+    <label>Pages <input type="number" name="limit" min="1" max="500" value="{{ limit }}"></label>
+  </div>
+  <button>Show new pages</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(results) = results %}
+<h2>New pages on {{ results.wiki }}</h2>
+{% if results.entries.is_empty() %}
+<p class="muted">No pages were created in this period.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Time (UTC)</th><th>Page</th><th>User</th><th>Comment</th><th class="num">Bytes</th></tr></thead>
+  <tbody>
+  {% for entry in results.entries %}
+    <tr>
+      <td>{{ entry.time }}</td>
+      <td><a href="{{ entry.page_url }}">{{ entry.page }}</a></td>
+      <td><a href="{{ entry.user_url }}">{{ entry.user }}</a> <span class="hint"><a href="{{ entry.contribs_url }}">contribs</a></span></td>
+      <td>{{ entry.comment }}</td>
+      <td class="num">{% if let Some(bytes) = entry.bytes %}{{ bytes }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p>
+{% if let Some(url) = results.previous_url %}<a href="{{ url }}">Previous {{ limit }}</a>{% endif %}
+{% if let Some(url) = results.next_url %}<a href="{{ url }}">Next {{ limit }}</a>{% endif %}
+</p>
+{% endif %}
+{% endif %}
+{% endblock %}

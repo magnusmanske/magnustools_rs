@@ -1,6 +1,5 @@
 //! `quick_counter.php`: a user's live and deleted edits per namespace.
 
-use crate::cache::TimedMap;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render, thousands};
@@ -9,13 +8,9 @@ use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
 use serde::Deserialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 use wikimisc::mysql_async::prelude::Queryable;
-
-/// Namespace names per wiki, which hardly ever change.
-static NAMESPACES: TimedMap<String, HashMap<i64, String>> = TimedMap::new(Duration::from_secs(86_400), 1000);
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -84,10 +79,7 @@ pub async fn handler(
         .exec("SELECT ar_namespace, COUNT(*) FROM archive_userindex WHERE ar_actor=? GROUP BY ar_namespace", (actor,))
         .await
         .map_err(anyhow::Error::from)?;
-    let names = NAMESPACES
-        .get_or_fetch(wiki.dbname().to_string(), async || namespace_names(&state.http, &wiki).await)
-        .await
-        .unwrap_or_default();
+    let names = mediawiki::namespace_names(&state.http, &wiki).await.unwrap_or_default();
     let counts = per_namespace(&live, &deleted);
     page.rows = counts
         .iter()
@@ -117,20 +109,6 @@ fn per_namespace(live: &[(i64, u64)], deleted: &[(i64, u64)]) -> Vec<(i64, (u64,
     let mut counts: Vec<_> = counts.into_iter().collect();
     counts.sort_by_key(|(ns, (l, d))| (std::cmp::Reverse(l + d), *ns));
     counts
-}
-
-async fn namespace_names(http: &reqwest::Client, wiki: &Wiki) -> anyhow::Result<HashMap<i64, String>> {
-    let json =
-        mediawiki::api(http, wiki, &[("action", "query"), ("meta", "siteinfo"), ("siprop", "namespaces")]).await?;
-    Ok(json["query"]["namespaces"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .filter_map(|(_, ns)| {
-            let name = ns["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("Article");
-            Some((ns["id"].as_i64()?, name.to_string()))
-        })
-        .collect())
 }
 
 #[cfg(test)]

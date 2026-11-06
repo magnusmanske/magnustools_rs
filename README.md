@@ -24,9 +24,11 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/` | The list of all tools |
 | `/add_information/` | Rewrites a file description into an `{{Information}}` template, for the user to save (formerly add-information.toolforge.org) |
 | `/authority_control/` | VIAF lookup (JSON/JSONP) |
+| `/blockfinder/` | The global and local blocks that apply to an IP address (formerly erwin85.toolforge.org) |
 | `/bong/` | One search box over Wikipedia, Commons, Wikinews, Wiktionary, places |
 | `/cas/` | Links for a CAS registry number |
 | `/commonsapi/` | XML (or JSON) summary of Commons files |
+| `/contribs/` | The contributions of several users, interleaved by time (formerly erwin85.toolforge.org) |
 | `/coord_gen/` | German Wikipedia's `{{Coordinate}}` from degrees |
 | `/flickrfree/` | Latest freely licensed Flickr photos |
 | `/forest4trees/` | Articles that may be missing from a category tree |
@@ -40,6 +42,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/metronom/` | Page views of the articles a user started |
 | `/missingtopics/` | Red links of an article or category tree, ranked by demand (formerly missingtopics.toolforge.org) |
 | `/misstake/` | Red links on some pages, ranked by how wanted they are |
+| `/newpages/` | Pages created within a time range (formerly erwin85.toolforge.org) |
 | `/no_information/` | Files without an `{{Information}}` or similar template (formerly add-information.toolforge.org) |
 | `/oauth_uploader/` | Uploads to Commons under the user's account |
 | `/prepbio/` | Wikitext for a new biography |
@@ -47,13 +50,17 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/randomarticle/`, `/random_image_commons_subcat/` | A random page from a category tree |
 | `/redirector/` | Redirects a Wikipedia may want, from other languages' titles |
 | `/related_places/` | The places a page links to, on a map, as KML or GeoJSON |
+| `/shortpages/` | Pages shorter than 50 bytes, optionally without templates or with a single author (formerly erwin85.toolforge.org) |
 | `/spacer/` | Links for a spacecraft designator |
+| `/subpages/` | The subpages of a page, one title per line (formerly erwin85.toolforge.org) |
+| `/talkcatintersect/` | Articles in one category tree whose talk pages are in another category (formerly erwin85.toolforge.org) |
 | `/templator/` | A template, such as an infobox, filled in from a form; templates from `Templator/<Language>` on Meta (formerly templator.toolforge.org) |
 | `/transparent/` | Find a translator |
 | `/unused_files/` | Commons files not used in articles |
 | `/uploader_distribution/` | Uploaders of a category tree |
 | `/wiki2playlist/` | M3U playlist from a wiki page or category |
 | `/wp_data_url/` | An article with its images inlined |
+| `/xcontribs/` | How a user's edits are spread over the Wikimedia projects (formerly erwin85.toolforge.org) |
 | `/buggregator/api/` | Buggregator API; the front-end (`public/buggregator/`) has the issues, the service dashboard, and the usage dashboard (what the logger counted) |
 | `/buggregator/ingest.php` | Service dashboard pushes from `wikimisc` telemetry (also `/buggregator/ingest/`; not a redirect, as the client does not follow those) |
 | `/toolinfo_buggregator.json` | Toolinfo for tools not on Toolhub yet |

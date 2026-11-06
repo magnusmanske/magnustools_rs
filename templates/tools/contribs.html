@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The contributions of several users, interleaved by time. A short interval marks edits made in a burst, which is often what one wants to see.</p>
+<form method="get" action="/contribs/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.lang }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.family }}" placeholder="wikipedia"></label>
+  </div>
+  <label>Users <span class="hint">one per line, or separated by | or ,</span>
+    <textarea name="users" rows="5" required>{{ request.users }}</textarea>
+  </label>
+  <div class="row">
+    <label>Order
+      <select name="order">
+        <option value="DESC"{% if !oldest_first %} selected{% endif %}>Newest first</option>
+        <option value="ASC"{% if oldest_first %} selected{% endif %}>Oldest first</option>
+      </select>
+    </label>
+    <label>Edits <input type="number" name="limit" min="1" max="500" value="{{ limit }}"></label>
+  </div>
+  <button>Show contributions</button>
+</form>
+{% if let Some(results) = results %}
+<h2>Contributions on {{ results.wiki }}</h2>
+{% if !results.missing.is_empty() %}
+<p class="muted">No edits found for: {{ results.missing.join(", ") }}.</p>
+{% endif %}
+{% if results.edits.is_empty() %}
+<p class="muted">There are no edits by these users.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Time (UTC)</th><th class="num">Δ</th><th>User</th><th>Page</th><th>Comment</th><th class="num">Bytes</th></tr></thead>
+  <tbody>
+  {% for edit in results.edits %}
+    <tr>
+      <td>{{ edit.time }}</td>
+      <td class="num">{% if let Some(gap) = edit.gap %}{{ gap }}{% endif %}</td>
+      <td>{% if edit.new_user %}<strong>{% endif %}<a href="{{ edit.user_url }}">{{ edit.user }}</a>{% if edit.new_user %}</strong>{% endif %}
+        <span class="hint"><a href="{{ edit.contribs_url }}">contribs</a></span></td>
+      <td><a href="{{ edit.page_url }}">{{ edit.page }}</a>{% if edit.top %} <strong>(top)</strong>{% endif %}
+        <span class="hint">(<a href="{{ edit.diff_url }}">diff</a> | <a href="{{ edit.hist_url }}">hist</a>)</span></td>
+      <td>{{ edit.comment }}</td>
+      <td class="num">{% if let Some(bytes) = edit.bytes %}{{ bytes }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Pages shorter than 50 bytes, shortest first.</p>
+<form method="get" action="/shortpages/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.lang }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.family }}" placeholder="wikipedia"></label>
+  </div>
+  <div class="row">
+    <label>Namespace <span class="hint">-1 for all</span> <input type="text" name="namespaces" value="{{ request.namespaces }}" placeholder="0"></label>
+    <label class="check"><input type="checkbox" name="invert" value="1"{% if invert %} checked{% endif %}> All but this namespace</label>
+  </div>
+  <div class="row">
+    <label>Filter
+      <select name="filter">
+        <option value=""{% if request.filter == "" %} selected{% endif %}>None</option>
+        <option value="su"{% if request.filter == "su" %} selected{% endif %}>Pages with a single author</option>
+        <option value="notemplates"{% if request.filter == "notemplates" %} selected{% endif %}>Pages that do not transclude templates</option>
+      </select>
+    </label>
+    <label>Pages <input type="number" name="limit" min="1" max="500" value="{{ limit }}"></label>
+  </div>
+  <button name="doit" value="1">Show short pages</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(results) = results %}
+<h2>Short pages on {{ results.wiki }}</h2>
+{% if results.rows.is_empty() %}
+<p class="muted">There are no such pages.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Page</th><th class="num">Bytes</th></tr></thead>
+  <tbody>
+  {% for row in results.rows %}
+    <tr><td><a href="{{ row.url }}">{{ row.page }}</a></td><td class="num">{{ row.length }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p>
+{% if let Some(url) = results.previous_url %}<a href="{{ url }}">Previous {{ limit }}</a>{% endif %}
+{% if let Some(url) = results.next_url %}<a href="{{ url }}">Next {{ limit }}</a>{% endif %}
+</p>
+{% endif %}
+{% endif %}
+{% endblock %}

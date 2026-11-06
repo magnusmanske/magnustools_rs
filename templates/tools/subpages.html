@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">All subpages of a page, with the page itself first, one title per line, for a raw watchlist.</p>
+<form method="get" action="/subpages/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.lang }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.family }}" placeholder="wikipedia"></label>
+  </div>
+  <div class="row">
+    <label>Namespace <span class="hint">-1 for all</span> <input type="text" name="namespaces" value="{{ request.namespaces }}" placeholder="0"></label>
+    <label>Page title <input type="text" name="title" value="{{ request.title }}" required></label>
+  </div>
+  <button>Show subpages</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(results) = results %}
+<h2>Subpages of {{ results.parent }}</h2>
+<p>{{ results.count }} subpage{% if results.count != 1 %}s{% endif %}.{% if results.truncated %} Only the first {{ results.count }} are shown.{% endif %}</p>
+<pre>{{ results.subpages }}</pre>
+{% endif %}
+{% endblock %}

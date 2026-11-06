@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The global blocks, and the local blocks on one wiki, that apply to an IP address.</p>
+<form method="get" action="/blockfinder/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.lang }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.family }}" placeholder="wikipedia"></label>
+  </div>
+  <label>IP address <input type="text" name="ip" value="{{ request.ip }}" required></label>
+  <button>Find blocks</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(results) = results %}
+<h2>Global blocks</h2>
+{% if results.global.is_empty() %}
+<p class="muted">None.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When</th><th>By</th><th>Target</th><th>Expiry</th><th>Reason</th></tr></thead>
+  <tbody>
+  {% for block in results.global %}
+    <tr>
+      <td>{{ block.time }}</td>
+      <td><a href="{{ block.by_url }}">{{ block.by }}</a></td>
+      <td><a href="{{ block.target_url }}">{{ block.target }}</a>{% if !block.options.is_empty() %} <span class="hint">({{ block.options }})</span>{% endif %}</td>
+      <td>{{ block.expiry }}</td>
+      <td>{{ block.reason }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<h2>Local blocks on {{ results.wiki }}</h2>
+{% if results.local.is_empty() %}
+<p class="muted">None.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When</th><th>By</th><th>Target</th><th>Expiry</th><th>Reason</th></tr></thead>
+  <tbody>
+  {% for block in results.local %}
+    <tr>
+      <td>{{ block.time }}</td>
+      <td><a href="{{ block.by_url }}">{{ block.by }}</a></td>
+      <td><a href="{{ block.target_url }}">{{ block.target }}</a>{% if !block.options.is_empty() %} <span class="hint">({{ block.options }})</span>{% endif %}</td>
+      <td>{{ block.expiry }}</td>
+      <td>{{ block.reason }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

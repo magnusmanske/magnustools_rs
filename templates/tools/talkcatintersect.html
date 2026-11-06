@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Articles in one category tree whose talk page is in another category.</p>
+<form method="get" action="/talkcatintersect/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.lang }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.family }}" placeholder="wikipedia"></label>
+  </div>
+  <label>Article category <input type="text" name="pcategory" value="{{ request.pcategory }}" required></label>
+  <label>Talk page category <input type="text" name="tpcategory" value="{{ request.tpcategory }}" required></label>
+  <div class="row">
+    <label>Category depth <input type="number" name="d" min="1" max="10" value="{{ depth }}"></label>
+    <label>Pages <input type="number" name="limit" min="1" max="500" value="{{ limit }}"></label>
+  </div>
+  <button>Find articles</button>
+</form>
+{% if let Some(results) = results %}
+<h2>Articles on {{ results.wiki }}</h2>
+<p class="muted">{{ results.articles }} articles in the category tree{% if results.truncated %} (only the first {{ results.articles }} were checked){% endif %}; {{ results.entries.len() }} have a talk page in the other category.</p>
+{% if results.entries.is_empty() %}
+<p class="muted">No articles match.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Article</th><th>Talk page</th></tr></thead>
+  <tbody>
+  {% for entry in results.entries %}
+    <tr><td><a href="{{ entry.page_url }}">{{ entry.page }}</a></td><td><a href="{{ entry.talk_url }}">Talk</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

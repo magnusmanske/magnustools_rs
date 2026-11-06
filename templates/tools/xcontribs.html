@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">How a user's edits are spread over the Wikimedia projects, with the projects they edited most.</p>
+<form method="get" action="/xcontribs/">
+  <label>Username <input type="text" name="user" value="{{ request.user }}" required></label>
+  <button>Show projects</button>
+</form>
+{% if let Some(results) = results %}
+<h2><a href="{{ central_url }}">{{ user }}</a></h2>
+{% if results.wikis == 0 %}
+<p class="muted">The user has no edits on any Wikimedia project.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <tbody>
+    <tr><th>Projects with edits</th><td class="num">{{ results.wikis }}</td></tr>
+    <tr><th>Total edits</th><td class="num">{{ results.total }}</td></tr>
+    <tr><th>Average per project</th><td class="num">{{ results.average }}</td></tr>
+    <tr><th>Largest project</th><td class="num">{{ results.largest }} ({{ results.largest_share }})</td></tr>
+    {% if let Some(theil) = results.theil %}
+    <tr><th><a href="https://en.wikipedia.org/wiki/Theil_index">Inequality (Theil index)</a> <span class="hint">0 is even</span></th><td class="num">{{ theil }}</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+</div>
+<h2>xWikiness</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>More than</th><th class="num">Projects</th></tr></thead>
+  <tbody>
+  {% for (threshold, count) in results.thresholds %}
+    <tr><td>{{ threshold }} edits</td><td class="num">{{ count }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<h2>Projects</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Project</th><th class="num">Edits</th></tr></thead>
+  <tbody>
+  {% for project in results.projects %}
+    <tr><td><a href="{{ project.url }}">{{ project.dbname }}</a></td><td class="num">{{ project.edits }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

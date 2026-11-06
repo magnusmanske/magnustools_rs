@@ -2,9 +2,11 @@
 
 mod add_information;
 mod authority_control;
+mod blockfinder;
 mod bong;
 mod cas;
 mod commonsapi;
+mod contribs;
 mod coord_gen;
 mod flickrfree;
 mod forest4trees;
@@ -19,6 +21,7 @@ mod makeref;
 mod metronom;
 mod missingtopics;
 mod misstake;
+mod newpages;
 mod no_information;
 mod oauth_uploader;
 mod prepbio;
@@ -26,14 +29,18 @@ mod quick_counter;
 mod random_page;
 mod redirector;
 mod related_places;
+mod shortpages;
 mod spacer;
+mod subpages;
 mod tab2wiki;
+mod talkcatintersect;
 mod templator;
 mod transparent;
 mod unused_files;
 mod uploader_distribution;
 mod wiki2playlist;
 mod wp_data_url;
+mod xcontribs;
 
 use crate::state::AppState;
 use crate::web::moved;
@@ -49,9 +56,11 @@ type State = Arc<AppState>;
 /// The tools with a page, by title, for the menu of every page.
 pub const MENU: &[(&str, &str)] = &[
     ("add_information", "Add information"),
+    ("blockfinder", "Block finder [Erwin85]"),
     ("bong", "BONG"),
     ("cas", "CAS number links"),
     ("commonsapi", "Commons API"),
+    ("contribs", "Contribs [Erwin85]"),
     ("coord_gen", "Coordinate generator"),
     ("get_distinct_authors", "Distinct authors"),
     ("transparent", "Find a translator"),
@@ -64,6 +73,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("makeref", "MakeRef"),
     ("metronom", "Metronom"),
     ("missingtopics", "Missing topics"),
+    ("newpages", "New pages [Erwin85]"),
     ("no_information", "No information"),
     ("oauth_uploader", "OAuth uploader"),
     ("prepbio", "PrepBio"),
@@ -73,13 +83,17 @@ pub const MENU: &[(&str, &str)] = &[
     ("misstake", "Ranked missing articles"),
     ("redirector", "Redirector"),
     ("related_places", "Related places"),
+    ("shortpages", "Short pages [Erwin85]"),
     ("spacer", "Spacer"),
+    ("subpages", "Subpages [Erwin85]"),
     ("tab2wiki", "Table to wiki"),
+    ("talkcatintersect", "Talk page category intersect [Erwin85]"),
     ("templator", "Templator"),
     ("unused_files", "Unused files"),
     ("uploader_distribution", "Uploader distribution"),
     ("wiki2playlist", "Wiki to playlist"),
     ("wp_data_url", "Wikipedia article with inline images"),
+    ("xcontribs", "xContribs [Erwin85]"),
 ];
 
 pub fn routes() -> Router<State> {
@@ -117,9 +131,11 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
     vec![
         ("add_information", get(add_information::handler).post(add_information::handler)),
         ("authority_control", get(authority_control::handler).post(authority_control::handler)),
+        ("blockfinder", get(blockfinder::handler)),
         ("bong", get(bong::handler)),
         ("cas", get(cas::handler)),
         ("commonsapi", get(commonsapi::handler)),
+        ("contribs", get(contribs::handler)),
         ("coord_gen", get(coord_gen::handler).post(coord_gen::handler)),
         ("flickrfree", get(flickrfree::handler)),
         ("forest4trees", get(forest4trees::handler)),
@@ -133,6 +149,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("metronom", get(metronom::handler)),
         ("missingtopics", get(missingtopics::handler).post(missingtopics::handler)),
         ("misstake", get(misstake::handler).post(misstake::handler)),
+        ("newpages", get(newpages::handler)),
         ("no_information", get(no_information::handler)),
         ("oauth_uploader", get(oauth_uploader::handler).post(oauth_uploader::handler)),
         ("prepbio", get(prepbio::handler).post(prepbio::handler)),
@@ -141,14 +158,18 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("randomarticle", get(random_page::article)),
         ("redirector", get(redirector::handler).post(redirector::handler)),
         ("related_places", get(related_places::handler)),
+        ("shortpages", get(shortpages::handler)),
         ("spacer", get(spacer::handler)),
+        ("subpages", get(subpages::handler)),
         ("tab2wiki", get(tab2wiki::handler).post(tab2wiki::handler)),
+        ("talkcatintersect", get(talkcatintersect::handler)),
         ("templator", get(templator::handler).post(templator::handler)),
         ("transparent", get(transparent::handler).post(transparent::handler)),
         ("unused_files", get(unused_files::handler)),
         ("uploader_distribution", get(uploader_distribution::handler)),
         ("wiki2playlist", get(wiki2playlist::handler)),
         ("wp_data_url", get(wp_data_url::handler)),
+        ("xcontribs", get(xcontribs::handler)),
     ]
 }
 
@@ -182,6 +203,24 @@ mod tests {
         let page = get(dir.path(), "/unused_files/").await;
         assert!(page.body.contains(r#"<a href="/no_information/">No information</a>"#));
         assert!(page.body.contains(r#"<a href="/unused_files/" aria-current="page">Unused files</a>"#));
+    }
+
+    #[tokio::test]
+    async fn erwin85_forms_render() {
+        let dir = tempfile::tempdir().unwrap();
+        for (path, title) in [
+            ("/blockfinder/", "Block finder [Erwin85]"),
+            ("/contribs/", "Contribs [Erwin85]"),
+            ("/newpages/", "New pages [Erwin85]"),
+            ("/shortpages/", "Short pages [Erwin85]"),
+            ("/subpages/", "Subpages [Erwin85]"),
+            ("/talkcatintersect/", "Talk page category intersect [Erwin85]"),
+            ("/xcontribs/", "xContribs [Erwin85]"),
+        ] {
+            let page = get(dir.path(), path).await;
+            assert_eq!(page.status.as_u16(), 200, "{path}");
+            assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");
+        }
     }
 
     #[tokio::test]
