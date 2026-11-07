@@ -1,6 +1,7 @@
 //! The tools, one module each, at the URLs of their PHP originals.
 
 mod add_information;
+mod artniw;
 mod authority_control;
 mod blockfinder;
 mod bong;
@@ -16,6 +17,7 @@ mod herding_sheep;
 mod html2wiki;
 mod icommons;
 mod index;
+mod interwiki;
 pub(crate) mod logger;
 mod makeref;
 mod metronom;
@@ -32,6 +34,7 @@ mod related_places;
 mod shortpages;
 mod spacer;
 mod subpages;
+mod sugart;
 mod tab2wiki;
 mod talkcatintersect;
 mod templator;
@@ -56,6 +59,7 @@ type State = Arc<AppState>;
 /// The tools with a page, by title, for the menu of every page.
 pub const MENU: &[(&str, &str)] = &[
     ("add_information", "Add information"),
+    ("artniw", "Articles without interwikis [Joanjoc]"),
     ("blockfinder", "Block finder [Erwin85]"),
     ("bong", "BONG"),
     ("cas", "CAS number links"),
@@ -86,6 +90,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("shortpages", "Short pages [Erwin85]"),
     ("spacer", "Spacer"),
     ("subpages", "Subpages [Erwin85]"),
+    ("sugart", "Suggest articles from interwikis [Joanjoc]"),
     ("tab2wiki", "Table to wiki"),
     ("talkcatintersect", "Talk page category intersect [Erwin85]"),
     ("templator", "Templator"),
@@ -130,6 +135,7 @@ async fn count(tool: &'static str, request: Request, next: Next) -> Response {
 fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
     vec![
         ("add_information", get(add_information::handler).post(add_information::handler)),
+        ("artniw", get(artniw::handler)),
         ("authority_control", get(authority_control::handler).post(authority_control::handler)),
         ("blockfinder", get(blockfinder::handler)),
         ("bong", get(bong::handler)),
@@ -161,6 +167,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("shortpages", get(shortpages::handler)),
         ("spacer", get(spacer::handler)),
         ("subpages", get(subpages::handler)),
+        ("sugart", get(sugart::handler)),
         ("tab2wiki", get(tab2wiki::handler).post(tab2wiki::handler)),
         ("talkcatintersect", get(talkcatintersect::handler)),
         ("templator", get(templator::handler).post(templator::handler)),
@@ -216,6 +223,19 @@ mod tests {
             ("/subpages/", "Subpages [Erwin85]"),
             ("/talkcatintersect/", "Talk page category intersect [Erwin85]"),
             ("/xcontribs/", "xContribs [Erwin85]"),
+        ] {
+            let page = get(dir.path(), path).await;
+            assert_eq!(page.status.as_u16(), 200, "{path}");
+            assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");
+        }
+    }
+
+    #[tokio::test]
+    async fn joanjoc_forms_render() {
+        let dir = tempfile::tempdir().unwrap();
+        for (path, title) in [
+            ("/artniw/", "Articles without interwikis [Joanjoc]"),
+            ("/sugart/", "Suggest articles from interwikis [Joanjoc]"),
         ] {
             let page = get(dir.path(), path).await;
             assert_eq!(page.status.as_u16(), 200, "{path}");

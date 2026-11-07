@@ -23,6 +23,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 |---|---|
 | `/` | The list of all tools |
 | `/add_information/` | Rewrites a file description into an `{{Information}}` template, for the user to save (formerly add-information.toolforge.org) |
+| `/artniw/` | Pages without interwiki links, optionally inside a category tree and among pages using a template (formerly joanjoc.toolforge.org) |
 | `/authority_control/` | VIAF lookup (JSON/JSONP) |
 | `/blockfinder/` | The global and local blocks that apply to an IP address (formerly erwin85.toolforge.org) |
 | `/bong/` | One search box over Wikipedia, Commons, Wikinews, Wiktionary, places |
@@ -53,6 +54,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/shortpages/` | Pages shorter than 50 bytes, optionally without templates or with a single author (formerly erwin85.toolforge.org) |
 | `/spacer/` | Links for a spacecraft designator |
 | `/subpages/` | The subpages of a page, one title per line (formerly erwin85.toolforge.org) |
+| `/sugart/` | Articles with many interwikis that are missing a link to one language (formerly joanjoc.toolforge.org) |
 | `/talkcatintersect/` | Articles in one category tree whose talk pages are in another category (formerly erwin85.toolforge.org) |
 | `/templator/` | A template, such as an infobox, filled in from a form; templates from `Templator/<Language>` on Meta (formerly templator.toolforge.org) |
 | `/transparent/` | Find a translator |

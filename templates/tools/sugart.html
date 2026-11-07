@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The articles in a reference wiki with the most interwikis that are missing a link to one language, optionally inside a category tree and among pages that use a template.</p>
+<form method="get" action="/sugart/">
+  <div class="row">
+    <label>Reference language <span class="hint">en, de, fr, ca, …</span> <input type="text" name="l1" value="{{ request.l1 }}" placeholder="en"></label>
+    <label>Project
+      <select name="pr">
+        <option value="wiki"{% if request.pr == "wiki" %} selected{% endif %}>Wikipedia</option>
+        <option value="wikibooks"{% if request.pr == "wikibooks" %} selected{% endif %}>Wikibooks</option>
+        <option value="wikinews"{% if request.pr == "wikinews" %} selected{% endif %}>Wikinews</option>
+        <option value="wikisource"{% if request.pr == "wikisource" %} selected{% endif %}>Wikisource</option>
+        <option value="wikiversity"{% if request.pr == "wikiversity" %} selected{% endif %}>Wikiversity</option>
+        <option value="wikiquote"{% if request.pr == "wikiquote" %} selected{% endif %}>Wikiquote</option>
+        <option value="wiktionary"{% if request.pr == "wiktionary" %} selected{% endif %}>Wiktionary</option>
+      </select>
+    </label>
+    <label>Missing language <span class="hint">en, de, fr, ca, …</span> <input type="text" name="l2" value="{{ request.l2 }}" placeholder="en"></label>
+  </div>
+  <div class="row">
+    <label>Category <span class="hint">optional</span> <input type="text" name="cat" value="{{ request.cat }}"></label>
+    <label>Depth
+      <select name="dpt">
+        <option value="1"{% if depth == 1 %} selected{% endif %}>1</option>
+        <option value="2"{% if depth == 2 %} selected{% endif %}>2</option>
+        <option value="3"{% if depth == 3 %} selected{% endif %}>3</option>
+      </select>
+    </label>
+    <label>Template <span class="hint">optional</span> <input type="text" name="tpl" value="{{ request.tpl }}"></label>
+  </div>
+  <button name="go" value="1">Find articles</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(results) = results %}
+<h2>Articles on {{ results.wiki }}</h2>
+{% if results.truncated %}<p class="muted">The category tree was too large to check completely; narrow it down to see the rest.</p>{% endif %}
+{% if results.rows.is_empty() %}
+<p class="muted">No articles match.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th class="num">Interwikis</th><th>Article</th><th>Search in {{ results.missing_language }}</th></tr></thead>
+  <tbody>
+  {% for row in results.rows %}
+    <tr>
+      <td class="num">{{ row.count }}</td>
+      <td><a href="{{ row.url }}">{{ row.page }}</a></td>
+      <td><a href="{{ row.search_url }}">Search</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted">{{ results.rows.len() }} results; the first 500 at most.</p>
+{% endif %}
+{% endif %}
+{% endblock %}
