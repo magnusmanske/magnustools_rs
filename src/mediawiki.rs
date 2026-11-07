@@ -1,11 +1,11 @@
-//! Common MediaWiki API calls; see [`wikimisc::wiki_api`], and the API client
-//! and titles from [`wikimisc::mediawiki`].
+//! Common MediaWiki API calls; see [`wikimisc::wiki_api`], and the API client,
+//! pages and titles from [`wikimisc::mediawiki`].
 
 use crate::wiki::Wiki;
 use anyhow::Result;
 use std::collections::HashMap;
 
-pub use wikimisc::mediawiki::{Api, Title};
+pub use wikimisc::mediawiki::{Api, MediaWikiError, Page, Title};
 pub use wikimisc::wiki_api::*;
 
 /// Titles per `action=query&titles=` request, the API limit for normal users.

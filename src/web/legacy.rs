@@ -28,6 +28,7 @@ const PETSCAN: &str = "https://petscan.toolforge.org/";
 const RETIRED: &[(&str, Fate)] = &[
     ("/multistatus.html", Fate::MovedTo("/")),
     ("/toolstatus.html", Fate::MovedTo("/")),
+    ("/can_i_haz_files.html", Fate::MovedTo("/can_i_haz_files/")),
     ("/hay2.html", Fate::MovedTo("https://hay.toolforge.org/")),
     ("/legacy.php", Fate::Gone),
     ("/update_article_counter.php", Fate::Gone),

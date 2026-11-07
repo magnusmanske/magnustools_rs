@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Removes the list entries from a wiki page whose linked page already exists. Only the first link on each list line is checked.</p>
+<form method="get" action="/filterdone/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.language }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" placeholder="wikipedia"></label>
+  </div>
+  <label>Page <input type="text" name="title" value="{{ request.title }}" placeholder="Wikipedia:WikiProject X/Red links" required></label>
+  <button name="doit" value="1">Filter list</button>
+</form>
+{% if let Some(results) = results %}
+<h2>{{ results.title }} on {{ results.wiki }}</h2>
+<p class="muted">{{ results.removed }} list entries removed; {{ results.kept }} lines remain.</p>
+<p><button type="button" data-copy="#filtered">Copy filtered text</button></p>
+<textarea id="filtered" class="code" rows="20" readonly>{{ results.output }}</textarea>
+<script>
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-copy]');
+  if (!button) return;
+  const target = document.querySelector(button.dataset.copy);
+  if (!target) return;
+  try {
+    await navigator.clipboard.writeText(target.value);
+    const label = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = label; }, 1500);
+  } catch {
+    button.textContent = 'Copy failed';
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

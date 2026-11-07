@@ -28,6 +28,17 @@ impl From<UnknownWiki> for AppError {
     }
 }
 
+impl From<crate::mediawiki::MediaWikiError> for AppError {
+    fn from(e: crate::mediawiki::MediaWikiError) -> Self {
+        match e {
+            crate::mediawiki::MediaWikiError::Missing(title) => {
+                Self::BadRequest(format!("The page “{}” does not exist.", title.pretty()))
+            }
+            e => Self::Upstream(anyhow::Error::new(e)),
+        }
+    }
+}
+
 impl From<crate::mediawiki::WikiApiError> for AppError {
     fn from(e: crate::mediawiki::WikiApiError) -> Self {
         Self::Upstream(anyhow::Error::new(e))

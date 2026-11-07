@@ -27,10 +27,12 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/authority_control/` | VIAF lookup (JSON/JSONP) |
 | `/blockfinder/` | The global and local blocks that apply to an IP address (formerly erwin85.toolforge.org) |
 | `/bong/` | One search box over Wikipedia, Commons, Wikinews, Wiktionary, places |
+| `/can_i_haz_files/` | A shell script to download all files in a Commons category tree (formerly magnustools.toolforge.org) |
 | `/cas/` | Links for a CAS registry number |
 | `/commonsapi/` | XML (or JSON) summary of Commons files |
 | `/contribs/` | The contributions of several users, interleaved by time (formerly erwin85.toolforge.org) |
 | `/coord_gen/` | German Wikipedia's `{{Coordinate}}` from degrees |
+| `/filterdone/` | Removes list entries from a wiki page whose linked page already exists (formerly magnus-toolserver.toolforge.org) |
 | `/flickrfree/` | Latest freely licensed Flickr photos |
 | `/forest4trees/` | Articles that may be missing from a category tree |
 | `/get_article_intro/` | An article's first paragraph (JSON/JSONP) |

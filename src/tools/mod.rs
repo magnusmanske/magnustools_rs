@@ -5,10 +5,12 @@ mod artniw;
 mod authority_control;
 mod blockfinder;
 mod bong;
+mod can_i_haz_files;
 mod cas;
 mod commonsapi;
 mod contribs;
 mod coord_gen;
+mod filterdone;
 mod flickrfree;
 mod forest4trees;
 mod get_article_intro;
@@ -62,11 +64,13 @@ pub const MENU: &[(&str, &str)] = &[
     ("artniw", "Articles without interwikis [Joanjoc]"),
     ("blockfinder", "Block finder [Erwin85]"),
     ("bong", "BONG"),
+    ("can_i_haz_files", "Can I haz files?"),
     ("cas", "CAS number links"),
     ("commonsapi", "Commons API"),
     ("contribs", "Contribs [Erwin85]"),
     ("coord_gen", "Coordinate generator"),
     ("get_distinct_authors", "Distinct authors"),
+    ("filterdone", "Filter done"),
     ("transparent", "Find a translator"),
     ("flickrfree", "FlickrFree"),
     ("forest4trees", "Forest for the trees"),
@@ -139,10 +143,12 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("authority_control", get(authority_control::handler).post(authority_control::handler)),
         ("blockfinder", get(blockfinder::handler)),
         ("bong", get(bong::handler)),
+        ("can_i_haz_files", get(can_i_haz_files::handler)),
         ("cas", get(cas::handler)),
         ("commonsapi", get(commonsapi::handler)),
         ("contribs", get(contribs::handler)),
         ("coord_gen", get(coord_gen::handler).post(coord_gen::handler)),
+        ("filterdone", get(filterdone::handler)),
         ("flickrfree", get(flickrfree::handler)),
         ("forest4trees", get(forest4trees::handler)),
         ("get_article_intro", get(get_article_intro::handler)),
@@ -224,6 +230,16 @@ mod tests {
             ("/talkcatintersect/", "Talk page category intersect [Erwin85]"),
             ("/xcontribs/", "xContribs [Erwin85]"),
         ] {
+            let page = get(dir.path(), path).await;
+            assert_eq!(page.status.as_u16(), 200, "{path}");
+            assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");
+        }
+    }
+
+    #[tokio::test]
+    async fn rescued_forms_render() {
+        let dir = tempfile::tempdir().unwrap();
+        for (path, title) in [("/can_i_haz_files/", "Can I haz files?"), ("/filterdone/", "Filter done")] {
             let page = get(dir.path(), path).await;
             assert_eq!(page.status.as_u16(), 200, "{path}");
             assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");
