@@ -330,7 +330,7 @@ async fn page_ids_in_tree(state: &AppState, wiki: &Wiki, category: &str, depth: 
 async fn page_ids(state: &AppState, wiki: &Wiki, namespace: i64, titles: &[String]) -> anyhow::Result<Vec<u64>> {
     let mut conn = state.replicas.conn(wiki, &["page"]).await?;
     let sql = "SELECT page_id FROM page WHERE page_namespace=? AND page_title IN";
-    select_in(&mut conn, sql, "", &[namespace.into()], titles).await
+    select_in(&mut conn, sql, "", &[namespace.into()], titles).await.map_err(anyhow::Error::from)
 }
 
 async fn without_existing(state: &AppState, wiki: &Wiki, titles: Vec<String>) -> anyhow::Result<Vec<String>> {

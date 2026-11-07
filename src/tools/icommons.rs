@@ -287,7 +287,11 @@ async fn category(http: &reqwest::Client, name: &str) -> anyhow::Result<Body> {
 }
 
 /// Pages of a namespace in a category, without namespace; the first 500.
-async fn members(http: &reqwest::Client, category: &str, namespace: &str) -> anyhow::Result<Vec<String>> {
+async fn members(
+    http: &reqwest::Client,
+    category: &str,
+    namespace: &str,
+) -> Result<Vec<String>, mediawiki::WikiApiError> {
     let limit = MAX_MEMBERS.to_string();
     let params = [
         ("action", "query"),

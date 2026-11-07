@@ -58,18 +58,19 @@ impl AppState {
         })
     }
 
-    /// The API client for `wiki`, with its site info cached.
-    ///
-    /// Once the `mediawiki` release with `Api::new_from_client` is out, the
-    /// client can be `self.http.clone()` instead of one per wiki; the current
-    /// release only takes a builder.
+    /// The API client for `wiki`, with its site info cached. Queries use the
+    /// modern (`formatversion=2`) JSON shape; site info stays on version 1
+    /// internally, for the namespace accessors and `Title`.
     pub async fn api(&self, wiki: &Wiki) -> Result<Arc<Api>> {
         let api_url = wiki.api_url();
+        let http = self.http.clone();
         self.apis
             .get_or_fetch(wiki.dbname().to_string(), async move || {
-                Api::new_from_builder_with_user_agent(&api_url, wikimisc::http::client_builder(USER_AGENT), USER_AGENT)
+                let mut api = Api::new_from_client_with_user_agent(&api_url, http, USER_AGENT)
                     .await
-                    .map_err(anyhow::Error::from)
+                    .map_err(anyhow::Error::from)?;
+                api.set_formatversion(2);
+                Ok(api)
             })
             .await
     }

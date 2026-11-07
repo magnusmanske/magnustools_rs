@@ -126,11 +126,11 @@ async fn links_here(
     let mut conn = state.replicas.conn(other, &["page", "langlinks"]).await?;
     let sql = "SELECT page_title, ll_title FROM page JOIN langlinks ON ll_from=page_id
         WHERE page_namespace=0 AND ll_lang=? AND page_title IN";
-    select_in(&mut conn, sql, "", &[Value::from(language)], &pages).await
+    select_in(&mut conn, sql, "", &[Value::from(language)], &pages).await.map_err(anyhow::Error::from)
 }
 
 async fn tree(state: &AppState, wiki: &Wiki, category: &str, depth: u32) -> anyhow::Result<Vec<String>> {
-    state.replicas.some_pages_in_tree(wiki, category, depth, 0, Some(MAX_PAGES)).await
+    state.replicas.some_pages_in_tree(wiki, category, depth, 0, Some(MAX_PAGES)).await.map_err(anyhow::Error::from)
 }
 
 /// The category in other Wikipedias: wiki, category name. The wiki comes

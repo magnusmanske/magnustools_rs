@@ -28,6 +28,24 @@ impl From<UnknownWiki> for AppError {
     }
 }
 
+impl From<crate::mediawiki::WikiApiError> for AppError {
+    fn from(e: crate::mediawiki::WikiApiError) -> Self {
+        Self::Upstream(anyhow::Error::new(e))
+    }
+}
+
+impl From<crate::replicas::ReplicasError> for AppError {
+    fn from(e: crate::replicas::ReplicasError) -> Self {
+        Self::Upstream(anyhow::Error::new(e))
+    }
+}
+
+impl From<crate::oauth::OAuthError> for AppError {
+    fn from(e: crate::oauth::OAuthError) -> Self {
+        Self::Upstream(anyhow::Error::new(e))
+    }
+}
+
 #[derive(Template)]
 #[template(path = "error.html")]
 struct ErrorPage<'a> {
