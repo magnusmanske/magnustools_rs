@@ -262,7 +262,9 @@ pub async fn totals(conn: &mut Conn, range: i64, now: i64) -> Result<Value> {
             (from, from - range),
         )
         .await?;
-    Ok(json!({"from": from, "to": now, "current": sum_totals(&rows, None), "previous": sum_totals(&rows, Some(from - range))}))
+    Ok(
+        json!({"from": from, "to": now, "current": sum_totals(&rows, None), "previous": sum_totals(&rows, Some(from - range))}),
+    )
 }
 
 /// Folds the rows into the totals of the current period (`previous_from`
