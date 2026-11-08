@@ -36,6 +36,8 @@
 <h2>{{ results.wanted.len() }} missing articles</h2>
 <p class="muted">
   {% if request.article.trim().is_empty() %}From the links of {{ results.pages }} articles in the tree.{% else %}From the links in the article.{% endif %}
+  {% if results.pages_truncated %}Only the first {{ results.pages }} articles in the tree were counted.{% endif %}
+  {% if results.results_truncated %}More missing articles were found; narrow the category for a complete list.{% endif %}
   {% if results.template_links > 0 %}{{ results.template_links }} links from templates were left out.{% endif %}
   {% if results.shown().len() < results.wanted.len() %}The {{ results.shown().len() }} most wanted are shown.{% endif %}
 </p>

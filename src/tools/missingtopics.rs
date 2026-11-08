@@ -4,7 +4,7 @@
 //! links from the articles in the tree.
 
 use crate::mediawiki;
-use crate::replicas::{db_title, display_title, select_in};
+use crate::replicas::{db_title, display_title, placeholders, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render, thousands};
 use crate::wiki::Wiki;
@@ -16,13 +16,22 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+use wikimisc::mysql_async::prelude::Queryable;
+use wikimisc::mysql_async::{Params as DbParams, Value as DbValue};
 
 const NS_ARTICLE: i64 = 0;
 const NS_TEMPLATE: i64 = 10;
 const DEFAULT_DEPTH: u32 = 1;
 /// As deep as the old tool went; categories can nest that far.
 const MAX_DEPTH: u32 = 30;
-/// Missing articles in the HTML tables; wiki text and JSON have them all.
+/// Articles of a tree whose links are counted; a huge tree must not use unbounded memory.
+const MAX_PAGES: usize = 100_000;
+/// Missing articles kept (the most wanted); wiki text and JSON may show this many.
+const MAX_RESULTS: usize = 50_000;
+/// Time for the replica work before returning what is done; leaves room for rendering.
+const QUERY_BUDGET: Duration = Duration::from_secs(150);
+/// Missing articles in the HTML tables.
 const MAX_SHOWN: usize = 5_000;
 const LINKS_FROM: &str = "SELECT DISTINCT lt_title FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
     WHERE lt_namespace=0 AND pl_from IN";
@@ -179,6 +188,10 @@ struct Wanted {
 struct Results {
     /// Articles whose links were looked at.
     pages: usize,
+    /// The category tree had more articles than [`MAX_PAGES`].
+    pages_truncated: bool,
+    /// More than [`MAX_RESULTS`] missing articles were found.
+    results_truncated: bool,
     template_links: usize,
     /// Most wanted first.
     wanted: Vec<Wanted>,
@@ -259,24 +272,25 @@ pub async fn handler(
 
 async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Options) -> Result<Results, AppError> {
     let min_links = options.min_links();
-    let (linking, mut counts) = match source {
+    let deadline = Instant::now() + QUERY_BUDGET;
+    let (linking, mut counts, pages_truncated, mut results_truncated) = match source {
         Source::Article(id) => {
             let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget"]).await?;
             let links: Vec<String> = select_in(&mut conn, LINKS_FROM, "", &[], std::slice::from_ref(id)).await?;
             let red = without_existing(state, wiki, links).await?;
-            (vec![*id], state.replicas.link_counts(wiki, &red, true).await?)
+            (vec![*id], state.replicas.link_counts(wiki, &red, true).await?, false, false)
         }
         Source::Category { name, depth } => {
-            let ids = page_ids_in_tree(state, wiki, name, *depth).await?;
-            let mut counts = counts_from(state, wiki, &ids).await?;
-            // Fewer titles to check for existence.
-            counts.retain(|_, n| *n >= min_links);
-            let red: HashSet<String> =
-                without_existing(state, wiki, counts.keys().cloned().collect()).await?.into_iter().collect();
-            counts.retain(|title, _| red.contains(title));
-            (ids, counts)
+            let (ids, truncated) = page_ids_in_tree(state, wiki, name, *depth, deadline).await?;
+            let (counts, results_truncated) = counts_from(state, wiki, &ids, MAX_RESULTS, deadline).await?;
+            (ids, counts, truncated, results_truncated)
         }
     };
+    // Fewer titles to check for existence.
+    counts.retain(|_, n| *n >= min_links);
+    let red: HashSet<String> =
+        without_existing(state, wiki, counts.keys().cloned().collect()).await?.into_iter().collect();
+    counts.retain(|title, _| red.contains(title));
     counts.retain(|_, n| *n >= min_links);
     let mut template_links = 0;
     if options.skip_template_links {
@@ -285,7 +299,7 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
         counts.retain(|title, _| !in_templates.contains(title));
         template_links = before - counts.len();
     }
-    let wanted: Vec<Wanted> = ranked(counts)
+    let mut wanted: Vec<Wanted> = ranked(counts)
         .into_iter()
         .map(|(name, links)| Wanted {
             title: display_title(&name),
@@ -295,8 +309,21 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
             links,
         })
         .collect();
+    if wanted.len() > MAX_RESULTS {
+        wanted.truncate(MAX_RESULTS);
+        results_truncated = true;
+    }
     let alphabetical = alphabetical(&wanted);
-    Ok(Results { pages: linking.len(), template_links, wanted, alphabetical })
+    if (pages_truncated || results_truncated)
+        && let Source::Category { name, depth } = source
+    {
+        tracing::info!(
+            "missingtopics: {name} (depth {depth}): {} pages, {} results (truncated)",
+            linking.len(),
+            wanted.len()
+        );
+    }
+    Ok(Results { pages: linking.len(), pages_truncated, results_truncated, template_links, wanted, alphabetical })
 }
 
 /// Most links first, then by title.
@@ -313,18 +340,40 @@ fn alphabetical(wanted: &[Wanted]) -> Vec<Wanted> {
     alphabetical
 }
 
-/// Article page IDs in the category tree. Nothing is capped here, so the
-/// result covers the whole tree, as the old tool did.
-async fn page_ids_in_tree(state: &AppState, wiki: &Wiki, category: &str, depth: u32) -> anyhow::Result<Vec<u64>> {
+/// Article page IDs in the category tree, at most [`MAX_PAGES`]; the flag says
+/// some were left out. Stops when the query budget is spent.
+async fn page_ids_in_tree(
+    state: &AppState,
+    wiki: &Wiki,
+    category: &str,
+    depth: u32,
+    deadline: Instant,
+) -> anyhow::Result<(Vec<u64>, bool)> {
     let categories = state.replicas.category_tree(wiki, category, depth).await?;
     let sql = "SELECT DISTINCT page_id FROM page
         JOIN categorylinks ON cl_from=page_id JOIN linktarget ON cl_target_id=lt_id
         WHERE page_namespace=? AND lt_namespace=14 AND lt_title IN";
     let mut conn = state.replicas.conn(wiki, &["page", "categorylinks", "linktarget"]).await?;
-    let mut ids: Vec<u64> = select_in(&mut conn, sql, "", &[NS_ARTICLE.into()], &categories).await?;
+    let mut seen = HashSet::new();
+    let mut ids = Vec::new();
+    let mut truncated = false;
+    for chunk in categories.chunks(1000) {
+        if Instant::now() >= deadline {
+            truncated = true;
+            break;
+        }
+        let remaining = MAX_PAGES + 1 - ids.len();
+        let suffix = format!("LIMIT {remaining}");
+        let rows: Vec<u64> = select_in(&mut conn, sql, &suffix, &[NS_ARTICLE.into()], chunk).await?;
+        ids.extend(rows.into_iter().filter(|id| seen.insert(*id)));
+        if ids.len() > MAX_PAGES {
+            ids.truncate(MAX_PAGES);
+            truncated = true;
+            break;
+        }
+    }
     ids.sort_unstable();
-    ids.dedup();
-    Ok(ids)
+    Ok((ids, truncated))
 }
 
 async fn page_ids(state: &AppState, wiki: &Wiki, namespace: i64, titles: &[String]) -> anyhow::Result<Vec<u64>> {
@@ -338,17 +387,55 @@ async fn without_existing(state: &AppState, wiki: &Wiki, titles: Vec<String>) ->
     Ok(titles.into_iter().filter(|t| !existing.contains(t)).collect())
 }
 
-/// How many of the pages link to each article title.
-async fn counts_from(state: &AppState, wiki: &Wiki, page_ids: &[u64]) -> anyhow::Result<HashMap<String, u64>> {
+/// How many of the pages link to each article title, keeping the `limit` most
+/// wanted titles; the flag says more were found. The limit is applied per
+/// chunk of pages, and the query budget stops very large trees.
+async fn counts_from(
+    state: &AppState,
+    wiki: &Wiki,
+    page_ids: &[u64],
+    limit: usize,
+    deadline: Instant,
+) -> anyhow::Result<(HashMap<String, u64>, bool)> {
     let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget"]).await?;
-    let sql = "SELECT lt_title, COUNT(*) FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
-        WHERE lt_namespace=0 AND pl_from IN";
-    let rows: Vec<(String, u64)> = select_in(&mut conn, sql, "GROUP BY lt_title", &[], page_ids).await?;
     let mut counts = HashMap::new();
-    for (title, n) in rows {
-        *counts.entry(title).or_default() += n;
+    let mut truncated = false;
+    for chunk in page_ids.chunks(5000) {
+        if Instant::now() >= deadline {
+            truncated = true;
+            break;
+        }
+        let sql = format!(
+            "SELECT lt_title, COUNT(*) FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
+             WHERE lt_namespace=0 AND pl_from IN ({}) GROUP BY lt_title
+             ORDER BY COUNT(*) DESC LIMIT {limit}",
+            placeholders(chunk.len())
+        );
+        let params: Vec<DbValue> = chunk.iter().map(|id| DbValue::from(*id)).collect();
+        let rows: Vec<(String, u64)> = conn.exec(sql, DbParams::Positional(params)).await?;
+        if rows.len() >= limit {
+            truncated = true;
+        }
+        for (title, n) in rows {
+            *counts.entry(title).or_default() += n;
+        }
+        if counts.len() > limit {
+            trim_top(&mut counts, limit);
+            truncated = true;
+        }
     }
-    Ok(counts)
+    if counts.len() >= limit {
+        truncated = true;
+    }
+    Ok((counts, truncated))
+}
+
+/// Keep the `limit` titles with the most links.
+fn trim_top(counts: &mut HashMap<String, u64>, limit: usize) {
+    let mut ranked: Vec<(String, u64)> = std::mem::take(counts).into_iter().collect();
+    ranked.sort_by(|(a, x), (b, y)| y.cmp(x).then_with(|| a.cmp(b)));
+    ranked.truncate(limit);
+    *counts = ranked.into_iter().collect();
 }
 
 /// A number parameter; anything else counts as absent, as in the old tool.
@@ -490,6 +577,16 @@ mod tests {
     }
 
     #[test]
+    fn trims_to_the_most_wanted() {
+        let mut counts = HashMap::from([("A".to_string(), 1), ("B".to_string(), 3), ("C".to_string(), 2)]);
+        trim_top(&mut counts, 2);
+        assert_eq!(counts.len(), 2);
+        assert!(counts.contains_key("B"));
+        assert!(counts.contains_key("C"));
+        assert!(!counts.contains_key("A"));
+    }
+
+    #[test]
     fn ranking() {
         let counts = HashMap::from([("B".to_string(), 2), ("A".to_string(), 2), ("C".to_string(), 5)]);
         let names: Vec<String> = ranked(counts).into_iter().map(|(t, _)| t).collect();
@@ -500,7 +597,14 @@ mod tests {
     fn wiki_lists_use_their_order() {
         let wanted = vec![wanted("B", 2), wanted("A", 1)];
         let alphabetical = alphabetical(&wanted);
-        let results = Results { pages: 0, template_links: 0, wanted, alphabetical };
+        let results = Results {
+            pages: 0,
+            pages_truncated: false,
+            results_truncated: false,
+            template_links: 0,
+            wanted,
+            alphabetical,
+        };
         let titles = |output| results.for_output(output).iter().map(|w| w.title.clone()).collect::<Vec<_>>();
         assert_eq!(titles(Output::WikiList), ["A", "B"]);
         assert_eq!(titles(Output::WikiListByDemand), ["B", "A"]);
