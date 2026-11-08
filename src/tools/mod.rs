@@ -44,6 +44,7 @@ mod transparent;
 mod unused_files;
 mod uploader_distribution;
 mod wiki2playlist;
+mod wiki_todo;
 mod wp_data_url;
 mod xcontribs;
 
@@ -101,6 +102,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("unused_files", "Unused files"),
     ("uploader_distribution", "Uploader distribution"),
     ("wiki2playlist", "Wiki to playlist"),
+    ("wiki_todo", "Wiki ToDo"),
     ("wp_data_url", "Wikipedia article with inline images"),
     ("xcontribs", "xContribs [Erwin85]"),
 ];
@@ -181,6 +183,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("unused_files", get(unused_files::handler)),
         ("uploader_distribution", get(uploader_distribution::handler)),
         ("wiki2playlist", get(wiki2playlist::handler)),
+        ("wiki_todo", get(wiki_todo::handler).post(wiki_todo::handler)),
         ("wp_data_url", get(wp_data_url::handler)),
         ("xcontribs", get(xcontribs::handler)),
     ]

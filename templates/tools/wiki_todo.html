@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Checks a random article for things to do: images, links, categories, templates, language links, and hints for biographies, places, and species. Leave the article empty for a random one.</p>
+<form method="get" action="/wiki_todo/">
+  <label>Language <input type="text" name="language" value="{{ language }}" required></label>
+  <label>Project <input type="text" name="project" value="{{ project }}" required></label>
+  <label>Article <span class="hint">optional; a random one otherwise</span>
+    <input type="text" name="title" value="{{ title_input }}">
+  </label>
+  <button name="doit" value="1">Check</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+<p class="hint"><a href="{{ meta_url }}" target="_blank" rel="noopener">{{ labels.supported_languages|safe }}</a> ·
+<a href="{{ edit_meta_url }}" target="_blank" rel="noopener">{{ labels.edit_interface_text|safe }}</a></p>
+{% if let Some(result) = result %}
+<h2><a href="{{ result.view_url }}" target="_blank" rel="noopener">{{ result.title }}</a></h2>
+<p class="muted"><a href="{{ result.view_url }}" target="_blank" rel="noopener">{{ labels.view|safe }}</a> ·
+<a href="{{ result.edit_url }}" target="_blank" rel="noopener">{{ labels.edit|safe }}</a></p>
+<h3>{{ labels.analysis|safe }}</h3>
+<ul>{% for item in result.items %}<li>{{ item|safe }}</li>{% endfor %}</ul>
+{% for note in result.notes %}<p>{{ note|safe }}</p>{% endfor %}
+{% if let Some(skip) = result.skipped %}<p class="muted">{{ skip|safe }}</p>
+{% else if !result.found.is_empty() %}
+<h3>{{ labels.things_todo|safe }}</h3>
+<ul>{% for item in result.found %}<li>{{ item|safe }}</li>{% endfor %}</ul>
+{% else %}
+<p>{{ labels.nothing_wrong|safe }}</p>
+{% endif %}
+{% if tried > 1 %}<p class="muted">Tried {{ tried }} random articles.</p>{% endif %}
+<form method="get" action="/wiki_todo/">
+  <input type="hidden" name="language" value="{{ language }}">
+  <input type="hidden" name="project" value="{{ project }}">
+  <button name="doit" value="1">Check another random article</button>
+</form>
+{% endif %}
+{% endblock %}

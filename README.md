@@ -63,6 +63,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/unused_files/` | Commons files not used in articles |
 | `/uploader_distribution/` | Uploaders of a category tree |
 | `/wiki2playlist/` | M3U playlist from a wiki page or category |
+| `/wiki_todo/` | Things to do in a random article, from `Wiki-ToDo/<Language>` on Meta (also at wiki-todo.toolforge.org) |
 | `/wp_data_url/` | An article with its images inlined |
 | `/xcontribs/` | How a user's edits are spread over the Wikimedia projects (formerly erwin85.toolforge.org) |
 | `/buggregator/api/` | Buggregator API; the front-end (`public/buggregator/`) has the issues, the service dashboard, and the usage dashboard (what the logger counted) |
