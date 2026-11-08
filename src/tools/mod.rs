@@ -43,6 +43,7 @@ mod templator;
 mod transparent;
 mod unused_files;
 mod uploader_distribution;
+mod usualsuspects;
 mod wiki2playlist;
 mod wiki_todo;
 mod wp_data_url;
@@ -99,6 +100,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("tab2wiki", "Table to wiki"),
     ("talkcatintersect", "Talk page category intersect [Erwin85]"),
     ("templator", "Templator"),
+    ("usualsuspects", "The Usual Suspects"),
     ("unused_files", "Unused files"),
     ("uploader_distribution", "Uploader distribution"),
     ("wiki2playlist", "Wiki to playlist"),
@@ -182,6 +184,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("transparent", get(transparent::handler).post(transparent::handler)),
         ("unused_files", get(unused_files::handler)),
         ("uploader_distribution", get(uploader_distribution::handler)),
+        ("usualsuspects", get(usualsuspects::handler).post(usualsuspects::handler)),
         ("wiki2playlist", get(wiki2playlist::handler)),
         ("wiki_todo", get(wiki_todo::handler).post(wiki_todo::handler)),
         ("wp_data_url", get(wp_data_url::handler)),
@@ -242,7 +245,11 @@ mod tests {
     #[tokio::test]
     async fn rescued_forms_render() {
         let dir = tempfile::tempdir().unwrap();
-        for (path, title) in [("/can_i_haz_files/", "Can I haz files?"), ("/filterdone/", "Filter done")] {
+        for (path, title) in [
+            ("/can_i_haz_files/", "Can I haz files?"),
+            ("/filterdone/", "Filter done"),
+            ("/usualsuspects/", "The Usual Suspects"),
+        ] {
             let page = get(dir.path(), path).await;
             assert_eq!(page.status.as_u16(), 200, "{path}");
             assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");

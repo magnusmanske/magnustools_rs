@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">For the files in a category: who uploaded them (“Bad Boys”), or how long their description pages have been left alone (“Bad Old Ones”). These were the “Bad Old Ones” and “Bad Boys” tools on Toolserver.</p>
+<form method="get" action="/usualsuspects/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ form.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ form.project }}" required></label>
+  </div>
+  <label>Category <input type="text" name="category" value="{{ form.category }}" required></label>
+  <div class="row">
+    <label>Days <span class="hint">for Bad Old Ones</span>
+      <input type="number" name="min_days" min="0" max="999999" value="{{ form.min_days }}">
+    </label>
+    <label class="check"><input type="checkbox" name="limit" value="1"{% if form.old_only %} checked{% endif %}> Only show old files</label>
+  </div>
+  <p class="hint">For Commons: language <code>commons</code>, project <code>wikimedia</code>.</p>
+  <div class="row">
+    <button name="badboys" value="1">Bad Boys</button>
+    <button name="badoldones" value="1">Bad Old Ones</button>
+  </div>
+</form>
+{% if let Some(results) = bad_boys %}
+<h2>{{ results.files }} potentially bad files in <a href="{{ results.category_url }}">{{ results.category }}</a></h2>
+<p class="muted">{{ results.uploaders.len() }} uploaders.{% if results.capped %} Only the first {{ results.files }} files are counted.{% endif %}</p>
+{% if !results.uploaders.is_empty() %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>User</th><th class="num">Files</th><th>File list</th></tr>
+  </thead>
+  <tbody>
+  {% for uploader in results.uploaders %}
+    <tr>
+      <td><a href="{{ uploader.url }}">{{ uploader.name }}</a></td>
+      <td class="num">{{ uploader.files.len() }}</td>
+      <td>
+        {% for file in uploader.files %}
+        <a href="{{ file.url }}">{{ file.name }}</a>{% if !loop.last %}, {% endif %}
+        {% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% if let Some(results) = old_ones %}
+<h2>{{ results.files }} files in <a href="{{ results.category_url }}">{{ results.category }}</a></h2>
+<p class="muted">Category tree, depth 2.{% if results.capped %} Only the first {{ results.files }} files are shown.{% endif %}</p>
+{% if !results.rows.is_empty() %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Description</th>
+      {% if results.is_commons %}<th>Usage</th>{% endif %}
+      <th>Commands</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in results.rows %}
+    <tr>
+      <th>
+        <a href="{{ row.file_url }}">{{ row.file }}</a> [<a href="{{ row.edit_url }}">edit</a>]
+        {% if row.problem %}
+      </th>
+      <td colspan="{{ results.columns }}"><i>problem accessing page</i></td>
+        {% else %}
+        <br>
+        {% if row.old %}<span class="error">{% endif %}
+        last edited {{ row.age_days }} days ago
+        {% if row.old %}</span>{% endif %}
+        <br><br>
+        <img width="60" src="{{ row.thumbnail }}" alt="" loading="lazy">
+      </th>
+      <td><small class="source">{{ row.source }}</small></td>
+      {% if results.is_commons %}
+      <td>
+        {% if let Some(usage) = row.usage %}
+        <strong>Usage on Wikimedia projects:</strong> (<a href="{{ usage.detail_url }}">details</a>)<br>
+        {% if usage.none %}
+        <i>Not used anywhere!</i>
+        {% else %}
+        {% for line in usage.lines %}
+        <a href="{{ line.wiki_url }}">{{ line.wiki }}</a>: {{ line.namespaces }}<br>
+        {% endfor %}
+        {% endif %}
+        {% endif %}
+      </td>
+      {% endif %}
+      <td>
+        <span class="hint">Delete because:</span><br>
+        {% for link in row.delete_links %}
+        <a href="{{ link.url }}">{{ link.label }}</a><br>
+        {% endfor %}
+        {% if let Some(button) = row.remove_button %}
+        <hr>File is OK now<br>
+        <form class="inline" method="post" target="_blank" action="{{ button.action_url }}">
+          <input type="hidden" name="wpTextbox1" value="{{ button.text }}">
+          <input type="hidden" name="wpSummary" value="{{ button.summary }}">
+          <input type="hidden" name="wpDiff" value="wpDiff">
+          <input type="hidden" name="wpStarttime" value="{{ button.start_time }}">
+          <input type="hidden" name="wpEdittime" value="{{ button.edit_time }}">
+          <button>Remove “no” tags</button>
+        </form>
+        {% endif %}
+      </td>
+        {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

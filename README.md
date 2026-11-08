@@ -62,6 +62,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/transparent/` | Find a translator |
 | `/unused_files/` | Commons files not used in articles |
 | `/uploader_distribution/` | Uploaders of a category tree |
+| `/usualsuspects/` | The uploaders of the files in a category (Bad Boys), and files whose description pages have been left alone (Bad Old Ones) (formerly usualsuspects.toolforge.org) |
 | `/wiki2playlist/` | M3U playlist from a wiki page or category |
 | `/wiki_todo/` | Things to do in a random article, from `Wiki-ToDo/<Language>` on Meta (also at wiki-todo.toolforge.org) |
 | `/wp_data_url/` | An article with its images inlined |
