@@ -1,11 +1,12 @@
-//! `can_i_haz_files.html`: streams a tar archive of all files in a
-//! Commons category tree. Files are fetched and packed on the fly, with a
-//! bounded pipe so downloads and the client output overlap.
+//! `can_i_haz_files.html`: shows a shell script to download all files in a
+//! Commons category tree and tar them. The same file list can also be streamed
+//! as a tar archive with the (currently unlinked) `format=tar` parameter.
 
 use crate::mediawiki;
+use crate::replicas::select_in;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::Wiki;
+use crate::wiki::{Wiki, encode_title};
 use anyhow::Context;
 use askama::Template;
 use axum::body::Body;
@@ -13,7 +14,7 @@ use axum::extract::State;
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,6 +46,8 @@ pub struct Request {
     depth: Option<String>,
     limit: Option<String>,
     doit: Option<String>,
+    /// `format=tar` streams an archive; there is no form field for it yet.
+    format: Option<String>,
 }
 
 #[derive(Template)]
@@ -54,7 +57,17 @@ struct Page<'a> {
     request: &'a Request,
     depth: u32,
     limit: usize,
+    results: Option<Results>,
     error: Option<String>,
+}
+
+struct Results {
+    category: String,
+    category_url: String,
+    depth: u32,
+    files: usize,
+    truncated: bool,
+    script: String,
 }
 
 struct File {
@@ -77,19 +90,32 @@ pub async fn handler(
     let depth = request.depth.as_deref().and_then(|d| d.trim().parse().ok()).unwrap_or(DEFAULT_DEPTH).min(MAX_DEPTH);
     let limit =
         request.limit.as_deref().and_then(|l| l.trim().parse().ok()).unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-    let mut page = Page { title: "Can I haz files?", request: &request, depth, limit, error: None };
-    if request.doit.is_none() {
-        return Ok(render(&page)?.into_response());
-    }
+    let mut page = Page { title: "Can I haz files?", request: &request, depth, limit, results: None, error: None };
     let category = request.category.trim();
-    if category.is_empty() {
-        page.error = Some("Please give a Commons category.".to_string());
+    if category.is_empty() || request.doit.is_none() {
         return Ok(render(&page)?.into_response());
     }
-    let (files, truncated) = files(&state, category, depth, limit).await?;
+    if request.format.as_deref() == Some("tar") {
+        return tar_response(&state, &mut page, category).await;
+    }
+
+    let commons = Wiki::commons();
+    let (names, truncated) = names(&state, category, depth, limit).await?;
+    let files = existing_files(&state, &names).await?;
+    let category_url =
+        format!("https://{}/wiki/Category:{}", commons.host(), encode_title(category.trim_start_matches("Category:")));
+    let script = script(&commons, &files, category, depth);
+    page.results =
+        Some(Results { category: category.to_string(), category_url, depth, files: files.len(), truncated, script });
+    Ok(render(&page)?.into_response())
+}
+
+/// Streams the archive for the (currently unlinked) `format=tar` request.
+async fn tar_response(state: &AppState, page: &mut Page<'_>, category: &str) -> Result<Response, AppError> {
+    let (files, truncated) = files(state, category, page.depth, page.limit).await?;
     if files.is_empty() {
         page.error = Some("No files found.".to_string());
-        return Ok(render(&page)?.into_response());
+        return Ok(render(&*page)?.into_response());
     }
     let total: u64 = files.iter().map(|file| file.size).sum();
     if total > MAX_BYTES {
@@ -99,15 +125,15 @@ pub async fn handler(
             "The {} files total {gb:.1} GB, more than the {limit_gb} GB limit. Narrow the category or lower the file limit.",
             files.len()
         ));
-        return Ok(render(&page)?.into_response());
+        return Ok(render(&*page)?.into_response());
     }
 
     let name = tar_name(category);
     let (reader, writer) = tokio::io::duplex(BUFFER);
     let mut note =
-        format!("# Files not included\n# Category: {}\n# Depth: {depth}\n", category.replace(['\r', '\n'], " "));
+        format!("# Files not included\n# Category: {}\n# Depth: {}\n", category.replace(['\r', '\n'], " "), page.depth);
     if truncated {
-        note.push_str(&format!("# Only the first {limit} files were included.\n"));
+        note.push_str(&format!("# Only the first {} files were included.\n", page.limit));
     }
     let plan = Plan { files, note, truncated };
     let http = state.http.clone();
@@ -131,8 +157,8 @@ pub async fn handler(
     Ok(response)
 }
 
-/// The existing files in the category tree, with their direct URLs and sizes.
-async fn files(state: &AppState, category: &str, depth: u32, limit: usize) -> Result<(Vec<File>, bool), AppError> {
+/// The file names in the category tree, sorted and deduplicated.
+async fn names(state: &AppState, category: &str, depth: u32, limit: usize) -> Result<(Vec<String>, bool), AppError> {
     let commons = Wiki::commons();
     let mut names =
         state.replicas.some_pages_in_tree(&commons, category, depth, NS_FILE, Some(limit.saturating_add(1))).await?;
@@ -140,8 +166,28 @@ async fn files(state: &AppState, category: &str, depth: u32, limit: usize) -> Re
     names.truncate(limit);
     names.sort_unstable();
     names.dedup();
+    Ok((names, truncated))
+}
 
-    let api = state.api(&commons).await?;
+/// The existing files among `names`, dropping redirects and deleted files.
+async fn existing_files(state: &AppState, names: &[String]) -> Result<Vec<String>, AppError> {
+    if names.is_empty() {
+        return Ok(vec![]);
+    }
+    let commons = Wiki::commons();
+    let mut conn = state.replicas.conn(&commons, &["file"]).await?;
+    let rows: Vec<String> =
+        select_in(&mut conn, "SELECT file_name FROM file WHERE file_deleted=0 AND file_name IN", "", &[], names)
+            .await?;
+    let existing: HashSet<String> = rows.into_iter().collect();
+    Ok(names.iter().filter(|name| existing.contains(*name)).cloned().collect())
+}
+
+/// The existing files in the category tree, with their direct URLs and sizes.
+async fn files(state: &AppState, category: &str, depth: u32, limit: usize) -> Result<(Vec<File>, bool), AppError> {
+    let (names, truncated) = names(state, category, depth, limit).await?;
+
+    let api = state.api(&Wiki::commons()).await?;
     let mut files = vec![];
     for batch in names.chunks(MAX_TITLES) {
         let titles = batch.iter().map(|name| format!("File:{name}")).collect::<Vec<_>>().join("|");
@@ -316,6 +362,27 @@ fn short_name(name: &str) -> &str {
     &name[..end]
 }
 
+fn script(commons: &Wiki, files: &[String], category: &str, depth: u32) -> String {
+    let stem = tar_name(category);
+    // The category goes into a comment; a newline there would end it.
+    let display = category.trim().replace(['\r', '\n'], " ");
+    let mut script = format!(
+        "#!/bin/sh\n# {count} files from {display} (depth {depth}), generated by magnustools.\nset -e\nmkdir -p tmp\n",
+        count = files.len(),
+    );
+    for file in files {
+        let url = format!("https://{}/wiki/Special:FilePath/{}", commons.host(), encode_title(file));
+        script.push_str(&format!("curl -L --fail --url {} -o {}\n", quote(&url), quote(&format!("tmp/{file}"))));
+    }
+    script.push_str(&format!("tar -cvf {} tmp\nrm -rf tmp\n", quote(&stem)));
+    script
+}
+
+/// A string as a single-quoted shell word.
+fn quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 /// A safe tar file name from a category name.
 fn tar_name(category: &str) -> String {
     let name: String = category
@@ -334,12 +401,32 @@ mod tests {
     use super::*;
     use std::io::{Cursor, Read};
 
+    fn file(name: &str) -> String {
+        name.to_string()
+    }
+
+    #[test]
+    fn shell_quoting() {
+        assert_eq!(quote("plain"), "'plain'");
+        assert_eq!(quote("it's"), "'it'\\''s'");
+    }
+
     #[test]
     fn tar_names_are_safe() {
         assert_eq!(tar_name("Felis"), "Felis.tar");
         assert_eq!(tar_name("Category:Black-and-white photographs"), "Black-and-white_photographs.tar");
         assert_eq!(tar_name("A/B"), "A_B.tar");
         assert_eq!(tar_name(""), "files.tar");
+    }
+
+    #[test]
+    fn a_script_downloads_and_tars() {
+        let commons = Wiki::commons();
+        let script = script(&commons, &[file("A_b.jpg")], "Felis", 1);
+        assert!(script.starts_with("#!/bin/sh\n"));
+        assert!(script.contains("Special:FilePath/A_b.jpg"));
+        assert!(script.contains("curl -L --fail --url"));
+        assert!(script.ends_with("tar -cvf 'Felis.tar' tmp\nrm -rf tmp\n"));
     }
 
     #[test]

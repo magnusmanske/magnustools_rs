@@ -1,14 +1,42 @@
 {% extends "base.html" %}
 {% block content %}
-<p class="lead">Streams a tar archive of all files in a Commons category tree. Files are fetched and packed on the fly; nothing is buffered on the server.</p>
+<p class="lead">Generates a UNIX shell script to download all files in a Commons category tree and tar them. The script uses <code>Special:FilePath</code>, so it needs no API access.</p>
 <form method="get" action="/can_i_haz_files/">
   <div class="row">
     <label>Commons category <input type="text" name="category" value="{{ request.category }}" placeholder="Felis" required></label>
     <label>Depth <input type="number" name="depth" min="0" max="12" value="{{ depth }}"></label>
     <label>Files <input type="number" name="limit" min="1" max="5000" value="{{ limit }}"></label>
   </div>
-  <p class="muted">At most 1000 files by default, 5000 maximum, and 5 GB per archive. Files that cannot be included are listed in <code>_skipped.txt</code>.</p>
-  <button name="doit" value="1">Download tar</button>
+  <button name="doit" value="1">Generate script</button>
 </form>
 {% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(results) = results %}
+<h2>Files in <a href="{{ results.category_url }}">{{ results.category }}</a></h2>
+<p class="muted">
+  {{ results.files }} files at depth {{ results.depth }}.
+  {% if results.truncated %}Only the first {{ limit }} are included; narrow the category or raise the limit.{% endif %}
+</p>
+{% if results.files == 0 %}
+<p class="muted">No files found.</p>
+{% else %}
+<p><button type="button" data-copy="#script">Copy script</button></p>
+<textarea id="script" class="code" rows="20" readonly>{{ results.script }}</textarea>
+<script>
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-copy]');
+  if (!button) return;
+  const target = document.querySelector(button.dataset.copy);
+  if (!target) return;
+  try {
+    await navigator.clipboard.writeText(target.value);
+    const label = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = label; }, 1500);
+  } catch {
+    button.textContent = 'Copy failed';
+  }
+});
+</script>
+{% endif %}
+{% endif %}
 {% endblock %}
