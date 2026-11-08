@@ -3,7 +3,7 @@
 //! categories, and random files or categories; in the original look.
 
 use super::commonsapi;
-use crate::mediawiki::{self, strip_namespace};
+use crate::mediawiki::{self, WikiApiError, strip_namespace};
 use crate::state::AppState;
 use crate::web::{AppError, Params};
 use crate::wiki::{Wiki, encode_component, encode_title, is_language_code, upper_first};
@@ -15,7 +15,10 @@ use chrono::Utc;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::{Arc, LazyLock};
+use std::time::Duration;
+use wikimisc::http::HttpError;
 
 const NS_FILE: &str = "6";
 const NS_CATEGORY: &str = "14";
@@ -143,23 +146,77 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, AppError> {
     let http = &state.http;
     let search = request.search.trim().to_string();
-    let body = match request.mode.as_str() {
-        "search" if !search.is_empty() => search_results(http, &search).await?,
-        "desc" if !request.image.trim().is_empty() => description(http, &request.image).await?,
-        "category" if !request.category.trim().is_empty() => category(http, &request.category).await?,
-        "random_image" => match random_page(http, NS_FILE).await? {
-            Some(image) => description(http, &image).await?,
-            None => main_page(http, &request.language).await?,
-        },
-        "random_category" => match random_page(http, NS_CATEGORY).await? {
-            Some(name) => category(http, &name).await?,
-            None => main_page(http, &request.language).await?,
-        },
-        _ => main_page(http, &request.language).await?,
-    };
+    let body = retry_upstream(|| async {
+        let body = match request.mode.as_str() {
+            "search" if !search.is_empty() => search_results(http, &search).await?,
+            "desc" if !request.image.trim().is_empty() => description(http, &request.image).await?,
+            "category" if !request.category.trim().is_empty() => category(http, &request.category).await?,
+            "random_image" => match random_page(http, NS_FILE).await? {
+                Some(image) => description(http, &image).await?,
+                None => main_page(http, &request.language).await?,
+            },
+            "random_category" => match random_page(http, NS_CATEGORY).await? {
+                Some(name) => category(http, &name).await?,
+                None => main_page(http, &request.language).await?,
+            },
+            _ => main_page(http, &request.language).await?,
+        };
+        Ok(body)
+    })
+    .await?;
     let page = Page { body, search };
     let html = page.render().map_err(|e| AppError::Internal(format!("template: {e}")))?;
     Ok(([ROBOTS], Html(html)))
+}
+
+/// Retries the whole page render when the Commons API has a transient failure.
+async fn retry_upstream<F, Fut, T>(mut f: F) -> Result<T, AppError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, AppError>>,
+{
+    const ATTEMPTS: u32 = 3;
+    let mut wait = Duration::from_millis(250);
+    for attempt in 1..=ATTEMPTS {
+        let result = f().await;
+        if attempt == ATTEMPTS || !is_retryable(&result) {
+            return result;
+        }
+        tracing::warn!("icommons: retrying after upstream error: {}", error_text(&result));
+        tokio::time::sleep(wait).await;
+        wait *= 2;
+    }
+    Err(AppError::Internal("retry loop ended".to_string()))
+}
+
+fn is_retryable<T>(result: &Result<T, AppError>) -> bool {
+    match result {
+        Err(AppError::Upstream(e)) => is_retryable_upstream(e),
+        _ => false,
+    }
+}
+
+fn is_retryable_upstream(e: &anyhow::Error) -> bool {
+    let Some(api) = e.downcast_ref::<WikiApiError>() else { return false };
+    match api {
+        WikiApiError::Request { source, .. } | WikiApiError::Render { source, .. } => is_retryable_http(source),
+        _ => false,
+    }
+}
+
+fn is_retryable_http(e: &HttpError) -> bool {
+    match e {
+        HttpError::Status { status, .. } => *status == 408 || *status == 429 || *status >= 500,
+        HttpError::Transport(e) => e.is_timeout() || e.is_connect() || e.is_request(),
+        _ => false,
+    }
+}
+
+fn error_text<T>(result: &Result<T, AppError>) -> String {
+    match result {
+        Ok(_) => String::new(),
+        Err(e) => e.to_string(),
+    }
 }
 
 async fn main_page(http: &reqwest::Client, language: &str) -> anyhow::Result<Body> {
@@ -464,6 +521,24 @@ mod tests {
         assert!(linked.html().contains(" width='10' height='5' loading='lazy' "));
         let large = redirect_thumb("A.jpg", 4000.0, 3000.0, LARGE).unwrap();
         assert_eq!((large.width, large.height), (316, 237));
+    }
+
+    #[test]
+    fn retries_transient_upstream_errors() {
+        let retryable = |status| {
+            is_retryable(&Err::<(), _>(AppError::Upstream(anyhow::Error::new(WikiApiError::Request {
+                wiki: "test".to_string(),
+                source: HttpError::Status {
+                    status,
+                    url: "https://example.org".to_string(),
+                    retry_after: None,
+                    body: String::new(),
+                },
+            }))))
+        };
+        assert!(retryable(503));
+        assert!(retryable(429));
+        assert!(!retryable(404));
     }
 
     #[test]
