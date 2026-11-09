@@ -1688,6 +1688,7 @@ dependencies = [
  "include_dir",
  "lettre",
  "mime_guess",
+ "pagepile",
  "percent-encoding",
  "rand 0.9.5",
  "regex",
@@ -2018,6 +2019,18 @@ checksum = "49203cdcae0030493bad186b28da2fa25645fa276a51b6fec8010d281e02ef79"
 dependencies = [
  "dlv-list",
  "hashbrown 0.14.5",
+]
+
+[[package]]
+name = "pagepile"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b84639e4fdf049dbd60b4a55a3a06a3feee9600be82ca0803550b27755c4fa6"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

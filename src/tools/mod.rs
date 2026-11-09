@@ -27,6 +27,7 @@ mod missingtopics;
 mod misstake;
 mod newpages;
 mod no_information;
+mod not_in_the_other_language;
 mod oauth_uploader;
 mod prepbio;
 mod quick_counter;
@@ -85,6 +86,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("missingtopics", "Missing topics"),
     ("newpages", "New pages [Erwin85]"),
     ("no_information", "No information"),
+    ("not-in-the-other-language", "Not in the other language"),
     ("oauth_uploader", "OAuth uploader"),
     ("prepbio", "PrepBio"),
     ("quick_counter", "Quick edit counter"),
@@ -167,6 +169,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("misstake", get(misstake::handler).post(misstake::handler)),
         ("newpages", get(newpages::handler)),
         ("no_information", get(no_information::handler)),
+        ("not-in-the-other-language", get(not_in_the_other_language::handler)),
         ("oauth_uploader", get(oauth_uploader::handler).post(oauth_uploader::handler)),
         ("prepbio", get(prepbio::handler).post(prepbio::handler)),
         ("quick_counter", get(quick_counter::handler)),
@@ -254,6 +257,14 @@ mod tests {
             assert_eq!(page.status.as_u16(), 200, "{path}");
             assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");
         }
+    }
+
+    #[tokio::test]
+    async fn other_language_form_renders() {
+        let dir = tempfile::tempdir().unwrap();
+        let page = get(dir.path(), "/not-in-the-other-language/").await;
+        assert_eq!(page.status.as_u16(), 200);
+        assert!(page.body.contains("<h1>Not in the other language</h1>"));
     }
 
     #[tokio::test]

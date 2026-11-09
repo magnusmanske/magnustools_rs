@@ -47,6 +47,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/misstake/` | Red links on some pages, ranked by how wanted they are |
 | `/newpages/` | Pages created within a time range (formerly erwin85.toolforge.org) |
 | `/no_information/` | Files without an `{{Information}}` or similar template (formerly add-information.toolforge.org) |
+| `/not-in-the-other-language/` | Wikidata items with a page in one wiki but not another, optionally limited by a category tree or PagePile (formerly not-in-the-other-language.toolforge.org) |
 | `/oauth_uploader/` | Uploads to Commons under the user's account |
 | `/prepbio/` | Wikitext for a new biography |
 | `/quick_counter/` | A user's edits per namespace |

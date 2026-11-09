@@ -6,7 +6,7 @@ Based on: usage over 30 days (logger uses, dashboard requests), the code (`~/php
 
 ## Already Rust
 
-PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria (web, since 2026-10-23), geohack (9.2M requests/30d), autodesc, wdrc, Harvest Templates, wd-infernal, ac2wd, RustCCI, magnustools, wikidata-todo (`wikidata_todo_rs`, including `sparql_rc`), catfood (since 2026-10-24), missingtopics (part of magnustools since 2026-10-24). add-information (part of magnustools since 2026-10-25). makeref and templator (part of magnustools since 2026-10-26), icommons (since 2026-10-27). BaGLAMa2 is ~95% Rust (`baglama2_rs`; only a thin read API and the add-category action are PHP). Seven of erwin85's tools (blockfinder, contribs, newpages, shortpages, subpages, talkcatintersect, xcontribs) are part of magnustools since 2026-11-06; the rest depended on the removed `mysql_*` functions or were already disabled. joanjoc's sugart and artniw are part of magnustools since 2026-11-07; its raw SQL consoles were not ported. After reviewing the deactivated magnustools and magnus-toolserver PHP pages, can_i_haz_files and filterdone were rescued on 2026-11-07; the rest depended on dead Toolserver databases or services, were libraries or tests, or have newer replacements. usualsuspects (Bad Boys and Bad Old Ones) is part of magnustools since 2026-11-08; the old subdomain redirects with its parameters.
+PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria (web, since 2026-10-23), geohack (9.2M requests/30d), autodesc, wdrc, Harvest Templates, wd-infernal, ac2wd, RustCCI, magnustools, wikidata-todo (`wikidata_todo_rs`, including `sparql_rc`), catfood (since 2026-10-24), missingtopics (part of magnustools since 2026-10-24). add-information (part of magnustools since 2026-10-25). makeref and templator (part of magnustools since 2026-10-26), icommons (since 2026-10-27). BaGLAMa2 is ~95% Rust (`baglama2_rs`; only a thin read API and the add-category action are PHP). Seven of erwin85's tools (blockfinder, contribs, newpages, shortpages, subpages, talkcatintersect, xcontribs) are part of magnustools since 2026-11-06; the rest depended on the removed `mysql_*` functions or were already disabled. joanjoc's sugart and artniw are part of magnustools since 2026-11-07; its raw SQL consoles were not ported. After reviewing the deactivated magnustools and magnus-toolserver PHP pages, can_i_haz_files and filterdone were rescued on 2026-11-07; the rest depended on dead Toolserver databases or services, were libraries or tests, or have newer replacements. usualsuspects (Bad Boys and Bad Old Ones) is part of magnustools since 2026-11-08, and so is not-in-the-other-language; both old subdomains redirect with their parameters.
 
 PagePile's service is also Rust (`~/rust/pagepile`, plus the `pagepile` client crate); the PHP class and entry points remain for tools that include them. WD-FIST's core logic is Rust in `petscan_rs` (`src/wdfist.rs`, PetScan's `wdf_main` mode); only the standalone `fist.toolforge.org/wdfist` UI/API is still PHP. Catfood's service is Rust; one stale `commons_image_feed` row in the tool table still says PHP.
 
@@ -23,12 +23,11 @@ Many PHP tools are down (503) after a PHP security incident; that is known and n
 | # | Tool | Use (30 days) | Why Rust helps | Effort | Status |
 |---|---|---|---|---|---|
 | 1 | most-wanted (`most-wanted/public_html/index.php`) | 17.6k | Live `max()` empty-array and 128 MB memory fatals; hints mode does per-article serial DB queries and unbounded template-user queries. Rust: read the `.links.red` file, batch the `IN` queries, cap hints. No exact Rust equivalent; `missingtopics` ranks red links for an article/category, not the global per-wiki list. | S–M | |
-| 2 | not-in-the-other-language (`not-in-the-other-language/public_html/index.php`) | 466 | Live fatal 2026-11-08: PagePile creation requires the `tools.pagepile` user. SQL is built by concatenation (`get_db_safe` falls back to `addslashes` before a DB handle exists) and unbounded `IN` lists hold everything in memory. Core already in `tools_interface` (`cast --missing`) and PagePile is Rust; port the web wrapper. | S–M | |
-| 3 | isbn2wiki (`isbn2wiki/public_html/index.php`) | 137k | High traffic but currently healthy: already parallel with `curl_multi`; the 38k "assign property on string" fatals stopped 2026-10-28. Cheap consolidation: no PHP, native timeouts/retries, no internal HTTP logger call. Reuse the `wd-infernal` ISBN parsers; add DNB/LoC and wiki markup. | S–M | |
-| 4 | GLAMorous (`glamtools/public_html/glamorous.php`) | 7.4k | Loads every file name of a category tree (depth up to 20) to count them. Rust: stream and aggregate; reuse `baglama2_rs`'s `global_image_links` and category-tree code. Mostly a memory gain. | M | |
-| 5 | tooltranslate API (`tooltranslate/public_html/api.php`) | 290 | Security, not performance: `update_json` writes under a path built from the request tool name; `add_tool` lets any logged-in user create a name with `../`; SQL strings are returned in responses; write modes lack an explicit CSRF token. Port only the write API (or fix in PHP). | S–M | |
+| 2 | isbn2wiki (`isbn2wiki/public_html/index.php`) | 137k | High traffic but currently healthy: already parallel with `curl_multi`; the 38k "assign property on string" fatals stopped 2026-10-28. Cheap consolidation: no PHP, native timeouts/retries, no internal HTTP logger call. Reuse the `wd-infernal` ISBN parsers; add DNB/LoC and wiki markup. | S–M | |
+| 3 | GLAMorous (`glamtools/public_html/glamorous.php`) | 7.4k | Loads every file name of a category tree (depth up to 20) to count them. Rust: stream and aggregate; reuse `baglama2_rs`'s `global_image_links` and category-tree code. Mostly a memory gain. | M | |
+| 4 | tooltranslate API (`tooltranslate/public_html/api.php`) | 290 | Security, not performance: `update_json` writes under a path built from the request tool name; `add_tool` lets any logged-in user create a name with `../`; SQL strings are returned in responses; write modes lack an explicit CSRF token. Port only the write API (or fix in PHP). | S–M | |
 
-Ranked by expected gain, not raw traffic: isbn2wiki has more requests but is healthy and already parallel, while most-wanted and not-in-the-other-language are live bug fixes.
+Ranked by expected gain, not raw traffic: isbn2wiki has more requests but is healthy and already parallel, while most-wanted is a live bug fix.
 
 ## Not worth porting
 
@@ -65,7 +64,7 @@ Failing jobs:
 Cheap PHP fixes for the worst errors:
 
 - [ ] most-wanted: guard `max($lfc)` when it is empty (fatal at `index.php:274`), cap `number`/`start`, and limit or stream the template-usage query (128 MB exhaustion at `index.php:90`).
-- [ ] not-in-the-other-language: do not call PagePile's direct-file creation from another tool user; use the PagePile API (now Rust) and bound the category/pagepile `IN` lists.
+
 - [ ] `ToolforgeCommon.php:705` (`getSPARQLitems` reads `$row->q` whatever the variable): the source of nearly all of the old wikidata-todo error log; the Rust `sparql_rc` should stop the growth, but other PHP tools still include this library.
 - [ ] FIST `fist.php`: reuse one connection per replica cluster; map wiki names via the site matrix (`zh-min-nan`, `be-x-old`, `zh-yue`).
 - [ ] GLAMorous: reject a non-list `projects` parameter (180 TypeErrors).
@@ -74,6 +73,6 @@ Other:
 
 - [ ] Listeria: `query_list.php` has no Rust route; port or drop.
 - [x] Tool table: `webserver_type` set from the live `service.manifest` for the 18 subdomains checked on 2026-10-23.
-- [x] Tool table: usualsuspects row updated on 2026-11-08 to `magnustools` / `rust/axum` with the new URL.
+- [x] Tool table: usualsuspects and not-in-the-other-language rows updated on 2026-11-08 to `magnustools` / `rust/axum` with the new URLs.
 - [ ] Tool table: stale rows remain on 2026-11-08: pagepile and catfood are `buildservice`, not PHP; erwin85 and joanjoc are part of magnustools, but their subdomain rows still say PHP. Update them from `service.manifest`, not from guesses.
 - [ ] Remove the leftover `/tmp/wdt_tail.*` on `login.toolforge.org` (a copy of the wikidata-todo error log from this analysis; the host was unreachable).

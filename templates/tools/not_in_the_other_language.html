@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Wikidata items with a page in one wiki but not in another. Optionally limit the search to a category tree or to the items of a PagePile.</p>
+<form method="get" action="/not-in-the-other-language/">
+  <fieldset class="row">
+    <legend>In this wiki</legend>
+    <label>Language <input type="text" name="lang1" value="{{ form.lang1 }}" required></label>
+    <label>Project
+      <select name="proj1">
+        {%- for (code, label) in projects %}
+        <option value="{{ code }}"{% if *code == form.proj1 %} selected{% endif %}>{{ label }}</option>
+        {%- endfor %}
+      </select>
+    </label>
+  </fieldset>
+  <fieldset class="row">
+    <legend>… but not in this wiki</legend>
+    <label>Language <input type="text" name="lang2" value="{{ form.lang2 }}" required></label>
+    <label>Project
+      <select name="proj2">
+        {%- for (code, label) in projects %}
+        <option value="{{ code }}"{% if *code == form.proj2 %} selected{% endif %}>{{ label }}</option>
+        {%- endfor %}
+      </select>
+    </label>
+  </fieldset>
+  <label>Category tree <span class="hint">optional; the first wiki's category tree</span>
+    <input type="text" name="cat" value="{{ form.cat }}" placeholder="Root category">
+  </label>
+  <div class="row">
+    <label>Subcategory depth
+      <input type="number" name="depth" min="0" max="20" value="{{ form.depth }}">
+    </label>
+    <label>Page title starts with <span class="hint">optional; case-sensitive</span>
+      <input type="text" name="starts_with" value="{{ form.starts_with }}">
+    </label>
+  </div>
+  <label>PagePile <span class="hint">optional; pile ID, e.g. from <a href="https://pagepile.toolforge.org/">PagePile</a></span>
+    <input type="text" name="pagepile" value="{{ form.pagepile }}" placeholder="PagePile ID">
+  </label>
+  <fieldset>
+    <legend>Output</legend>
+    <label class="check"><input type="radio" name="format" value="html"{% if form.format != "pagepile" %} checked{% endif %}> HTML list</label>
+    <label class="check"><input type="radio" name="format" value="pagepile"{% if form.format == "pagepile" %} checked{% endif %}> New PagePile <span class="hint">ignores paging</span></label>
+  </fieldset>
+  <fieldset>
+    <legend>Links to</legend>
+    <label class="check"><input type="radio" name="targets" value="wikidata"{% if form.targets != "source" %} checked{% endif %}> Wikidata items</label>
+    <label class="check"><input type="radio" name="targets" value="source"{% if form.targets == "source" %} checked{% endif %}> Pages on the first wiki</label>
+  </fieldset>
+  <button name="doit" value="1">Find pages</button>
+</form>
+{% if let Some(results) = results %}
+{% if results.rows.is_empty() %}
+<p class="muted">No results{% if results.no_pile %}; no PagePile was created{% endif %}.</p>
+{% else %}
+<h2>Results {{ results.first }}–{{ results.last }}</h2>
+<ol start="{{ results.first }}">
+  {%- for row in results.rows %}
+  <li><a href="{{ row.url }}">{{ row.label }}</a></li>
+  {%- endfor %}
+</ol>
+{% endif %}
+{% if results.category_truncated %}<p class="muted">Only the first part of the category tree was used.</p>{% endif %}
+{% if results.pile_truncated %}<p class="muted">Only the first part of the PagePile was used.</p>{% endif %}
+{% if results.capped %}<p class="muted">More results were found; narrow the category, starts-with or PagePile for a complete list.</p>{% endif %}
+{% if pager.prev.is_some() || pager.next.is_some() %}
+<p class="row">
+  {%- if let Some(prev) = pager.prev %}<a href="{{ prev }}">Previous</a>{% endif %}
+  {%- if let Some(next) = pager.next %}<a href="{{ next }}">Next</a>{% endif %}
+</p>
+{% endif %}
+{% endif %}
+{% endblock %}
