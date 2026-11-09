@@ -73,7 +73,7 @@ async fn create_issue(conn: &mut Conn, issue: &NewIssue) -> Result<u64> {
         "INSERT INTO issue (label, status, date_created, date_last, site, url, description_text_id, tool, priority)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'NORMAL')",
         (
-            mb3(&issue.label),
+            db_label(&issue.label),
             &issue.status,
             time(&issue.date_created),
             time(&issue.date_last),
@@ -113,6 +113,12 @@ fn mb3(text: &str) -> String {
     text.chars().filter(|c| u32::from(*c) <= 0xFFFF).collect()
 }
 
+/// Text for the `varchar(255)` label column; truncated the same way when
+/// looking an issue up, so a long heading does not create a new row each run.
+fn db_label(text: &str) -> String {
+    mb3(text).chars().take(255).collect()
+}
+
 async fn user_id(conn: &mut Conn, name: &str, site: &str) -> Result<u64> {
     let name = mb3(&if site == "WIKI" { name.replace('_', " ") } else { name.to_string() });
     let name = name.trim();
@@ -136,7 +142,7 @@ async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &ToolMatcher)
                 .exec_first(
                     "SELECT issue.id FROM issue JOIN wiki_issue ON issue_id=issue.id
                      WHERE site='WIKI' AND CONVERT(label USING utf8mb4)=? AND wiki_page_id=?",
-                    (&label, page_id),
+                    (db_label(&label), page_id),
                 )
                 .await?;
             if known.is_some() {
@@ -304,7 +310,10 @@ impl Forge {
 /// no longer lists as open (the PHP version never closed any).
 async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<()> {
     let repos: Vec<(u64, String, String, u64)> = conn
-        .exec("SELECT id, html_url, api_issues_url, tool_id FROM git_repo WHERE repo_type=?", (forge.site(),))
+        .exec(
+            "SELECT id, html_url, api_issues_url, tool_id FROM git_repo WHERE repo_type=? ORDER BY id",
+            (forge.site(),),
+        )
         .await?;
     for (repo_id, html_url, api_issues_url, tool_id) in repos {
         let Some((url, page_size)) = forge.api(&html_url, &api_issues_url) else { continue };
@@ -319,17 +328,24 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
         for json in &open {
             let Some(number) = json["number"].as_u64() else { continue };
             open_numbers.insert(number);
+            // Identify by repository URL, not `git_repo.id`: the same repository can
+            // have several rows (one per tool), and a row keeps its id when the
+            // repository moves between forges. `git_issue.site` separates the
+            // issue numbers of the old and the new forge.
             let known: Option<u64> = conn
                 .exec_first(
-                    "SELECT issue.id FROM issue JOIN git_issue ON issue_id=issue.id
-                     WHERE site=? AND git_id=? AND git_repo_id=?",
-                    (forge.site(), number, repo_id),
+                    "SELECT issue.id FROM issue
+                     JOIN git_issue ON git_issue.issue_id=issue.id
+                     JOIN git_repo ON git_repo.id=git_issue.git_repo_id
+                     WHERE git_issue.site=? AND git_issue.git_id=?
+                       AND git_repo.repo_type=? AND git_repo.html_url=? LIMIT 1",
+                    (forge.site(), number, forge.site(), &html_url),
                 )
                 .await?;
             if let Some(issue_id) = known {
                 conn.exec_drop(
                     "UPDATE issue SET status='OPEN', label=?, date_last=GREATEST(date_last, ?) WHERE id=?",
-                    (mb3(json["title"].as_str().unwrap_or_default()), iso_time(&json["updated_at"]), issue_id),
+                    (db_label(json["title"].as_str().unwrap_or_default()), iso_time(&json["updated_at"]), issue_id),
                 )
                 .await?;
                 continue;
@@ -349,21 +365,25 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
             };
             let issue_id = create_issue(conn, &issue).await?;
             conn.exec_drop(
-                "INSERT IGNORE INTO git_issue (issue_id, git_id, git_repo_id) VALUES (?, ?, ?)",
-                (issue_id, number, repo_id),
+                "INSERT IGNORE INTO git_issue (issue_id, site, git_id, git_repo_id) VALUES (?, ?, ?, ?)",
+                (issue_id, forge.site(), number, repo_id),
             )
             .await?;
         }
         let stored: Vec<(u64, u64)> = conn
             .exec(
-                "SELECT issue.id, git_id FROM issue JOIN git_issue ON issue_id=issue.id
-                 WHERE site=? AND git_repo_id=? AND status='OPEN'",
-                (forge.site(), repo_id),
+                "SELECT issue.id, git_issue.git_id FROM issue
+                 JOIN git_issue ON git_issue.issue_id=issue.id
+                 JOIN git_repo ON git_repo.id=git_issue.git_repo_id
+                 WHERE git_issue.site=? AND git_repo.repo_type=? AND git_repo.html_url=?
+                   AND issue.status='OPEN'",
+                (forge.site(), forge.site(), &html_url),
             )
             .await?;
         for (issue_id, _) in stored.iter().filter(|(_, number)| !open_numbers.contains(number)) {
             conn.exec_drop("UPDATE issue SET status='CLOSED' WHERE id=?", (issue_id,)).await?;
         }
+        tracing::debug!("{html_url}: {} open, {} stored", open_numbers.len(), stored.len());
     }
     Ok(())
 }
@@ -372,23 +392,44 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
 async fn open_forge_issues(state: &AppState, url: &str, page_size: usize) -> Result<Vec<Value>> {
     let mut issues = vec![];
     for page in 1.. {
-        let json: Value = state
+        let request = format!("{url}&page={page}");
+        let response = state
             .http
-            .get(format!("{url}&page={page}"))
+            .get(&request)
             .header(reqwest::header::ACCEPT, "application/json")
             .send()
-            .await
-            .and_then(reqwest::Response::error_for_status)?
-            .json()
-            .await?;
-        let batch = json.as_array().cloned().unwrap_or_default();
+            .await?
+            .error_for_status()?;
+        let status = response.status();
+        let text = response.text().await?;
+        let json: Value = match serde_json::from_str(&text) {
+            Ok(json) => json,
+            Err(e) => anyhow::bail!("{request}: HTTP {status}, {e}; body: {}", excerpt(&text)),
+        };
+        // An error object here would be read as "no open issues", and the caller
+        // would close every issue of the repository.
+        let Some(batch) = json.as_array() else {
+            anyhow::bail!("{request}: HTTP {status}, expected a JSON array; body: {}", excerpt(&text));
+        };
         let count = batch.len();
-        issues.extend(batch.into_iter().filter(|i| i.get("pull_request").is_none()));
+        // Forgejo sets `pull_request` to null on issues; GitHub omits it.
+        issues.extend(batch.iter().filter(|i| is_issue(i)).cloned());
         if count < page_size {
             break;
         }
     }
     Ok(issues)
+}
+
+/// The start of a response body, for an error message.
+fn excerpt(text: &str) -> String {
+    text.chars().take(300).collect()
+}
+
+/// Whether a forge issue is an issue, not a pull request. GitHub omits the
+/// field for issues; Forgejo sets it to null.
+fn is_issue(json: &Value) -> bool {
+    json["pull_request"].is_null()
 }
 
 /// `2024-01-02T03:04:05Z` as the database writes it, in UTC.
@@ -642,8 +683,19 @@ mod tests {
     }
 
     #[test]
+    fn forge_issues_exclude_pull_requests() {
+        let github_issue = serde_json::json!({"number": 1});
+        let forgejo_issue = serde_json::json!({"number": 2, "pull_request": null});
+        let pull_request = serde_json::json!({"number": 3, "pull_request": {"url": "x"}});
+        assert!(is_issue(&github_issue));
+        assert!(is_issue(&forgejo_issue));
+        assert!(!is_issue(&pull_request));
+    }
+
+    #[test]
     fn basic_plane_only() {
         assert_eq!(mb3("Bug 🐛 in Grüße"), "Bug  in Grüße");
+        assert_eq!(db_label(&"x".repeat(300)).chars().count(), 255);
     }
 
     #[test]

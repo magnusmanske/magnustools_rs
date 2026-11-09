@@ -95,11 +95,12 @@ CREATE TABLE `dash_service` (
 CREATE TABLE `git_issue` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `issue_id` int(11) unsigned NOT NULL DEFAULT 0,
+  `site` enum('GITHUB','BITBUCKET','GITLAB','CODEBERG','GITLAB_WMF') NOT NULL DEFAULT 'GITHUB',
   `git_id` int(11) unsigned NOT NULL,
   `git_repo_id` int(11) unsigned NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `issue_id` (`issue_id`),
-  UNIQUE KEY `git_id` (`git_id`,`git_repo_id`),
+  UNIQUE KEY `site_git_id` (`site`,`git_id`,`git_repo_id`),
   KEY `git_repo_id` (`git_repo_id`),
   CONSTRAINT `git_issue_ibfk_1` FOREIGN KEY (`issue_id`) REFERENCES `issue` (`id`),
   CONSTRAINT `git_issue_ibfk_2` FOREIGN KEY (`git_repo_id`) REFERENCES `git_repo` (`id`)
