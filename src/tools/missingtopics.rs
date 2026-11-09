@@ -26,11 +26,13 @@ const DEFAULT_DEPTH: u32 = 1;
 /// As deep as the old tool went; categories can nest that far.
 const MAX_DEPTH: u32 = 30;
 /// Articles of a tree whose links are counted; a huge tree must not use unbounded memory.
-const MAX_PAGES: usize = 100_000;
+/// Large portals (e.g. dewiki "Literatur") have a few hundred thousand articles.
+const MAX_PAGES: usize = 400_000;
 /// Missing articles kept (the most wanted); wiki text and JSON may show this many.
 const MAX_RESULTS: usize = 50_000;
-/// Time for the replica work before returning what is done; leaves room for rendering.
-const QUERY_BUDGET: Duration = Duration::from_secs(150);
+/// Time for the replica work before returning what is done. The request
+/// timeout is 300 s, so leave room for the existence and template checks.
+const QUERY_BUDGET: Duration = Duration::from_secs(200);
 /// Missing articles in the HTML tables.
 const MAX_SHOWN: usize = 5_000;
 const LINKS_FROM: &str = "SELECT DISTINCT lt_title FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
@@ -490,9 +492,11 @@ fn wikitext(output: Output, wanted: &[Wanted], again: &str, date: &str) -> Optio
             text.push_str("|}\n");
         }
         Output::WikiList | Output::WikiListByDemand => {
-            let titles: Vec<String> = wanted.iter().map(|w| format!("[[{}]]", w.title)).collect();
-            text.push_str(&titles.join(" - "));
-            text.push('\n');
+            // One title per line, so the source stays readable when pasted
+            // into a portal page.
+            for w in wanted {
+                text.push_str(&format!("[[{}]] –\n", w.title));
+            }
         }
         Output::Html | Output::Json => return None,
     }
@@ -617,7 +621,12 @@ mod tests {
         let table = wikitext(Output::WikiTable, &list, again, "D").unwrap();
         assert!(table.starts_with("== Created D by [https://x.org/missingtopics/ the MissingTopics tool]"));
         assert!(table.contains("|-\n| 3 || [[Foo bar]]\n|}"));
-        assert!(wikitext(Output::WikiList, &list, again, "D").is_some_and(|t| t.ends_with("[[Foo bar]]\n")));
+        assert!(wikitext(Output::WikiList, &list, again, "D").is_some_and(|t| t.ends_with("[[Foo bar]] –\n")));
+        let two = [wanted("Foo bar", 3), wanted("Baz", 1)];
+        assert!(
+            wikitext(Output::WikiListByDemand, &two, again, "D")
+                .is_some_and(|t| t.ends_with("[[Foo bar]] –\n[[Baz]] –\n"))
+        );
         assert!(wikitext(Output::Html, &list, again, "D").is_none());
     }
 
