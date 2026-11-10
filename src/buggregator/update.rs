@@ -661,8 +661,9 @@ async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
 }
 
 /// A `tool` row for the address check: id, active, web interface, subdomain,
-/// URL (its own or its service's), service id, status, and since.
-type ToolRow = (u64, bool, bool, String, String, Option<u64>, Option<i64>, Option<i64>);
+/// URL (its own or its service's; `None` when neither is set), service id,
+/// status, and since.
+type ToolRow = (u64, bool, bool, String, Option<String>, Option<u64>, Option<i64>, Option<i64>);
 /// A tool answering at an address, with its status and since before this run.
 type ToolStatus = (u64, Option<i64>, Option<i64>);
 
@@ -687,6 +688,7 @@ pub async fn web_status(conn: &mut Conn) -> Result<()> {
     let mut by_address: BTreeMap<String, Vec<ToolStatus>> = BTreeMap::new();
     let mut unchecked = vec![];
     for (id, is_active, has_webservice, subdomain, url, service, status, since) in tools {
+        let url = url.unwrap_or_default();
         match crate::buggregator::address(&subdomain, &url) {
             Some(address) if is_active && (has_webservice || service.is_some()) => {
                 by_address.entry(address).or_default().push((id, status, since));

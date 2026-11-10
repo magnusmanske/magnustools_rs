@@ -101,8 +101,9 @@ impl WebAlert {
     }
 }
 
-/// A `tool` row for [`web`]: name, subdomain, URL, service, status, and since.
-type Row = (String, String, String, Option<String>, i64, Option<i64>);
+/// A `tool` row for [`web`]: name, subdomain, URL (its own or its service's;
+/// `None` when neither is set), service, status, and since.
+type Row = (String, String, Option<String>, Option<String>, i64, Option<i64>);
 
 /// From the `tool` table, which the `webstatus` job fills: the tools whose
 /// web address does not answer with 200. A checked address that never
@@ -120,7 +121,14 @@ pub async fn web(conn: &mut Conn) -> anyhow::Result<Vec<WebAlert>> {
         .await?;
     let rows = rows
         .into_iter()
-        .map(|(name, subdomain, url, service, status, since)| WebRow { name, subdomain, url, service, status, since })
+        .map(|(name, subdomain, url, service, status, since)| WebRow {
+            name,
+            subdomain,
+            url: url.unwrap_or_default(),
+            service,
+            status,
+            since,
+        })
         .collect();
     Ok(group(rows))
 }
