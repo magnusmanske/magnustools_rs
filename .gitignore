@@ -1,5 +1,6 @@
 /target
 /config.json
+/backups
 
 # Credentials: never commit
 *.ini
