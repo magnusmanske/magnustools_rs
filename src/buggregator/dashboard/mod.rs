@@ -9,6 +9,7 @@ pub mod admin;
 pub mod alerts;
 mod daily_uses;
 pub mod ingest;
+pub mod maintenance;
 pub mod payload;
 pub mod query;
 

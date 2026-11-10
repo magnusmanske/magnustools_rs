@@ -5,7 +5,7 @@ mod dashboard_alerts;
 mod mail;
 mod monitor;
 
-use crate::buggregator::dashboard::{self, admin};
+use crate::buggregator::dashboard::{self, admin, maintenance};
 use crate::buggregator::{dedupe, issues, update};
 use crate::state::AppState;
 use anyhow::{Result, bail};
@@ -72,7 +72,7 @@ pub async fn run(command: Command, state: &AppState) -> Result<()> {
         Command::BuggregatorDedupe { apply } => dedupe::run(&mut conn, apply).await?,
         Command::Toolhub => update::toolhub(state, &mut conn).await?,
         Command::Webstatus => update::web_status(&mut conn).await?,
-        Command::DashboardMaintenance => admin::maintenance(&mut conn, now).await?,
+        Command::DashboardMaintenance => maintenance::maintenance(&mut conn, now).await?,
         Command::DashboardAlerts => dashboard_alerts::run(state).await?,
         Command::Monitor => monitor::run(state).await?,
         Command::IssueStatus { issue_id, status } => {
@@ -103,7 +103,7 @@ pub async fn run(command: Command, state: &AppState) -> Result<()> {
                 }
             }
             DashboardCommand::Reinfer => {
-                for (uid, from, to) in admin::reinfer_ends(&mut conn).await? {
+                for (uid, from, to) in maintenance::reinfer_ends(&mut conn).await? {
                     println!("{uid}: {from} => {to}");
                 }
             }
