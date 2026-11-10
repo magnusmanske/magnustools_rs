@@ -29,6 +29,8 @@ const USER_CACHE_FOR: Duration = Duration::from_secs(300);
 const USER_CACHE_USERS: usize = 64;
 /// The dashboard is polled every minute; a few seconds of sharing is enough.
 const DASHBOARD_CACHE_FOR: Duration = Duration::from_secs(30);
+/// The usage overview changes once a day; one minute is plenty.
+const USAGE_CACHE_FOR: Duration = Duration::from_secs(60);
 
 pub struct AppState {
     pub config: Config,
@@ -44,6 +46,8 @@ pub struct AppState {
     pub user_names: TimedMap<String, String>,
     /// The dashboard overview, with the time it was computed.
     pub dash_overview: TimedMap<String, (i64, Value)>,
+    /// The usage overview, by range in days.
+    pub usage_overview: TimedMap<String, Value>,
 }
 
 impl AppState {
@@ -67,6 +71,7 @@ impl AppState {
             apis: TimedMap::new(API_CACHE_FOR, API_CACHE_WIKIS),
             user_names: TimedMap::new(USER_CACHE_FOR, USER_CACHE_USERS),
             dash_overview: TimedMap::new(DASHBOARD_CACHE_FOR, 4),
+            usage_overview: TimedMap::new(USAGE_CACHE_FOR, 8),
         })
     }
 

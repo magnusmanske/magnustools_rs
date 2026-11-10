@@ -11,6 +11,7 @@ use wikimisc::mysql_async::prelude::Queryable;
 const RAW_DAYS: i64 = 7;
 const HOURLY_DAYS: i64 = 400;
 const EVENT_DAYS: i64 = 90;
+const INSTANCE_DAYS: i64 = 400;
 pub const ACK_KINDS: &[&str] = &["status", "restarts", "memory"];
 
 /// Hides a dashboard alert until whatever triggers it happens again. The
@@ -152,6 +153,9 @@ async fn purge(conn: &mut Conn, now: i64) -> Result<()> {
         (now - DAY,),
     )
     .await?;
+    // Keep instance history as long as the hourly rollup; points/events above
+    // are already gone, and their foreign keys cascade for anything left.
+    conn.exec_drop("DELETE FROM dash_instance WHERE ended_at<?", (now - INSTANCE_DAYS * DAY,)).await?;
     Ok(())
 }
 

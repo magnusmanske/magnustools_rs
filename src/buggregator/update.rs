@@ -17,8 +17,7 @@ use std::sync::LazyLock;
 use wikimisc::mysql_async::Conn;
 use wikimisc::mysql_async::prelude::Queryable;
 
-/// How MySQL shows an unknown date.
-const ZERO_TIME: &str = "0000-00-00 00:00:00";
+/// How many issues a forge page holds; also the pagination guard.
 const GITHUB_PAGE: usize = 100;
 const CODEBERG_PAGE: usize = 50;
 const TOOLHUB_SEARCH: &str = "https://toolhub.wikimedia.org/api/search/tools/?format=json&ordering=-score&page=1&page_size=1000&q=%22Magnus+Manske%22";
@@ -64,7 +63,7 @@ struct NewIssue {
     site: &'static str,
     url: String,
     description: String,
-    tool: u64,
+    tool: Option<u64>,
     /// The first one created the issue.
     users: Vec<String>,
     urls: Vec<String>,
@@ -72,7 +71,6 @@ struct NewIssue {
 
 async fn create_issue(conn: &mut impl Queryable, issue: &NewIssue) -> Result<u64> {
     let description_id = text_id(conn, &issue.description).await?;
-    let time = |t: &Option<String>| t.clone().unwrap_or_else(|| ZERO_TIME.to_string());
     conn.exec_drop(
         "INSERT INTO issue (label, status, date_created, date_last, site, url, description_text_id, tool, priority)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'NORMAL')
@@ -80,10 +78,10 @@ async fn create_issue(conn: &mut impl Queryable, issue: &NewIssue) -> Result<u64
         (
             db_label(&issue.label),
             &issue.status,
-            time(&issue.date_created),
-            time(&issue.date_last),
+            issue.date_created.as_deref(),
+            issue.date_last.as_deref(),
             issue.site,
-            mb3(&issue.url),
+            &issue.url,
             description_id,
             issue.tool,
         ),
@@ -114,20 +112,14 @@ async fn create_issue(conn: &mut impl Queryable, issue: &NewIssue) -> Result<u64
     Ok(issue_id)
 }
 
-/// Text for a `utf8mb3` column, which has no room for characters beyond the
-/// Basic Multilingual Plane (such as emoji).
-fn mb3(text: &str) -> String {
-    text.chars().filter(|c| u32::from(*c) <= 0xFFFF).collect()
-}
-
 /// Text for the `varchar(255)` label column; truncated the same way when
 /// looking an issue up, so a long heading does not create a new row each run.
 fn db_label(text: &str) -> String {
-    mb3(text).chars().take(255).collect()
+    text.chars().take(255).collect()
 }
 
 async fn user_id(conn: &mut impl Queryable, name: &str, site: &str) -> Result<u64> {
-    let name = mb3(&if site == "WIKI" { name.replace('_', " ") } else { name.to_string() });
+    let name = if site == "WIKI" { name.replace('_', " ") } else { name.to_string() };
     let name = name.trim();
     conn.exec_drop(
         "INSERT INTO user (name, site) VALUES (?, ?)
@@ -143,22 +135,23 @@ async fn user_id(conn: &mut impl Queryable, name: &str, site: &str) -> Result<u6
 /// Every section of the watched talk pages is an issue. Sections are
 /// refreshed on every run, so replies, dates and descriptions do not go stale.
 async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
-    let pages: Vec<(u64, String, String, u64)> = conn.query("SELECT id, wiki, page, tool_hint FROM wiki_page").await?;
+    let pages: Vec<(u64, String, String, Option<u64>)> =
+        conn.query("SELECT id, wiki, page, tool_hint FROM wiki_page").await?;
     for (page_id, dbname, page, tool_hint) in pages {
         let wiki = Wiki::from_dbname(&dbname)?;
         let text = mediawiki::page_wikitext(&state.http, &wiki, &page).await?.unwrap_or_default();
         for (label, wikitext) in sections(&text) {
-            let known: Option<(u64, String, String)> = conn
+            let known: Option<(u64, String, Option<String>)> = conn
                 .exec_first(
                     "SELECT issue.id, issue.status, issue.date_last FROM issue JOIN wiki_issue ON issue_id=issue.id
-                     WHERE site='WIKI' AND CONVERT(label USING utf8mb4)=? AND wiki_page_id=?",
+                     WHERE site='WIKI' AND label=? AND wiki_page_id=?",
                     (db_label(&label), page_id),
                 )
                 .await?;
             let times = signature_times(&wikitext);
             let issue = NewIssue {
                 url: format!("https://{}/wiki/{}#{}", wiki.host(), encode_title(&page), encode_title(&label)),
-                tool: tools.find(&label).or_else(|| tools.find(&wikitext)).unwrap_or(tool_hint),
+                tool: tools.find(&label).or_else(|| tools.find(&wikitext)).or(tool_hint),
                 status: "OPEN".to_string(),
                 date_created: times.iter().min().map(format_time),
                 date_last: times.iter().max().map(format_time),
@@ -171,7 +164,7 @@ async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &ToolMatcher)
             match known {
                 Some((issue_id, status, old_last)) => {
                     update_wiki_issue(conn, issue_id, &issue, &wikitext).await?;
-                    reopen_on_reply(conn, issue_id, &status, &old_last, &issue, &wikitext).await?;
+                    reopen_on_reply(conn, issue_id, &status, old_last.as_deref(), &issue, &wikitext).await?;
                 }
                 None => {
                     let mut tx = conn.start_transaction(Default::default()).await?;
@@ -195,20 +188,19 @@ async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &ToolMatcher)
 async fn update_wiki_issue(conn: &mut Conn, issue_id: u64, issue: &NewIssue, wikitext: &str) -> Result<()> {
     let mut tx = conn.start_transaction(Default::default()).await?;
     let description_id = text_id(&mut tx, &issue.description).await?;
-    let time = |t: &Option<String>| t.clone().unwrap_or_else(|| ZERO_TIME.to_string());
     tx.exec_drop(
         "UPDATE issue SET label=?, url=?, description_text_id=?,
-           date_created=IF(date_created=?, ?, date_created),
-           date_last=GREATEST(date_last, ?),
-           tool=IF(tool=0, ?, tool)
+           date_created=COALESCE(date_created, ?),
+           date_last=COALESCE(GREATEST(date_last, ?), date_last, ?),
+           tool=COALESCE(tool, ?)
          WHERE id=?",
         (
             db_label(&issue.label),
-            mb3(&issue.url),
+            &issue.url,
             description_id,
-            ZERO_TIME,
-            time(&issue.date_created),
-            time(&issue.date_last),
+            issue.date_created.as_deref(),
+            issue.date_last.as_deref(),
+            issue.date_last.as_deref(),
             issue.tool,
             issue_id,
         ),
@@ -246,11 +238,16 @@ async fn reopen_on_reply(
     conn: &mut Conn,
     issue_id: u64,
     status: &str,
-    old_last: &str,
+    old_last: Option<&str>,
     issue: &NewIssue,
     wikitext: &str,
 ) -> Result<()> {
-    if status != "CLOSED" || issue.date_last.as_deref().is_none_or(|new| new <= old_last) {
+    let newer = match (issue.date_last.as_deref(), old_last) {
+        (Some(new), Some(old)) => new > old,
+        (Some(_), None) => true,
+        (None, _) => false,
+    };
+    if status != "CLOSED" || !newer {
         return Ok(());
     }
     let last_close: Option<(String, String)> = conn
@@ -549,13 +546,13 @@ fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64, url: &str) -> NewIs
     NewIssue {
         label: json["title"].as_str().unwrap_or_default().to_string(),
         status: "OPEN".to_string(),
-        date_created: Some(iso_time(&json["created_at"])),
-        date_last: Some(iso_time(&json["updated_at"])),
+        date_created: iso_time(&json["created_at"]),
+        date_last: iso_time(&json["updated_at"]),
         site: forge.site(),
         url: url.to_string(),
         urls: urls(&description),
         description,
-        tool: tool_id,
+        tool: Some(tool_id),
         users: json["user"]["login"].as_str().map(str::to_string).into_iter().collect(),
     }
 }
@@ -564,14 +561,15 @@ fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64, url: &str) -> NewIs
 async fn update_forge_issue(conn: &mut Conn, issue_id: u64, forge: Forge, json: &Value, url: &str) -> Result<()> {
     let description = json["body"].as_str().unwrap_or_default();
     let title = json["title"].as_str().unwrap_or_default();
+    let updated = iso_time(&json["updated_at"]);
     let mut tx = conn.start_transaction(Default::default()).await?;
     let description_id = text_id(&mut tx, description).await?;
     // `IGNORE`: a repository rename can collide with another issue's old URL;
     // the mapping still identifies this one.
     tx.exec_drop(
         "UPDATE IGNORE issue SET status='OPEN', label=?, url=?, description_text_id=?,
-           date_last=GREATEST(date_last, ?) WHERE id=?",
-        (db_label(title), mb3(url), description_id, iso_time(&json["updated_at"]), issue_id),
+           date_last=COALESCE(GREATEST(date_last, ?), date_last, ?) WHERE id=?",
+        (db_label(title), url, description_id, updated.as_deref(), updated.as_deref(), issue_id),
     )
     .await?;
     for url in urls(description) {
@@ -654,11 +652,11 @@ fn is_issue(json: &Value) -> bool {
 }
 
 /// `2024-01-02T03:04:05Z` as the database writes it, in UTC.
-fn iso_time(value: &Value) -> String {
+fn iso_time(value: &Value) -> Option<String> {
     value
         .as_str()
         .and_then(|t| DateTime::parse_from_rfc3339(t).ok())
-        .map_or_else(|| ZERO_TIME.to_string(), |t| format_time(&t.with_timezone(&Utc).naive_utc()))
+        .map(|t| format_time(&t.with_timezone(&Utc).naive_utc()))
 }
 
 // ── Toolhub, Wikidata ──────────────────────────────────────────────────────
@@ -778,10 +776,10 @@ pub async fn maintenance(conn: &mut Conn) -> Result<()> {
 async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
     // Wiki issues without dates: from the signatures.
     let undated: Vec<(u64, String)> = conn
-        .query(format!(
+        .query(
             "SELECT issue.id, wikitext FROM issue JOIN wiki_issue ON issue_id=issue.id
-             WHERE site='WIKI' AND status='OPEN' AND date_created='{ZERO_TIME}'"
-        ))
+             WHERE site='WIKI' AND status='OPEN' AND date_created IS NULL",
+        )
         .await?;
     for (issue_id, wikitext) in undated {
         let times = signature_times(&wikitext);
@@ -795,18 +793,18 @@ async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
     }
 
     // Issues without a tool: by name in the label or text, else the wiki page's hint.
-    let untooled: Vec<(u64, String, String, u64)> = conn
+    let untooled: Vec<(u64, String, String, Option<u64>)> = conn
         .query(
             "SELECT issue.id, label, COALESCE(wikitext, (SELECT text FROM text WHERE text.id=description_text_id), ''),
-             COALESCE(tool_hint, 0)
+             tool_hint
              FROM issue LEFT JOIN wiki_issue ON issue_id=issue.id LEFT JOIN wiki_page ON wiki_page.id=wiki_page_id
-             WHERE tool=0 AND status='OPEN'",
+             WHERE tool IS NULL AND status='OPEN'",
         )
         .await?;
     for (issue_id, label, text, hint) in untooled {
-        let tool = tools.find(&label).or_else(|| tools.find(&text)).unwrap_or(hint);
-        if tool != 0 {
-            conn.exec_drop("UPDATE issue SET tool=? WHERE id=? AND tool=0", (tool, issue_id)).await?;
+        let tool = tools.find(&label).or_else(|| tools.find(&text)).or(hint);
+        if let Some(tool) = tool {
+            conn.exec_drop("UPDATE issue SET tool=? WHERE id=? AND tool IS NULL", (tool, issue_id)).await?;
         }
     }
 
@@ -816,9 +814,9 @@ async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
         .exec(
             "SELECT issue.id, wikitext FROM issue JOIN wiki_issue ON wiki_issue.issue_id=issue.id
              JOIN user_issue ON user_issue.issue_id=issue.id JOIN user ON user.id=user_issue.user_id
-             WHERE issue.site='WIKI' AND issue.status='OPEN' AND issue.date_last!=? AND issue.date_last<?
+             WHERE issue.site='WIKI' AND issue.status='OPEN' AND issue.date_last IS NOT NULL AND issue.date_last<?
              AND user.name=? AND user.site='WIKI'",
-            (ZERO_TIME, cutoff, MAINTAINER),
+            (cutoff, MAINTAINER),
         )
         .await?;
     let maintainer = regex(r"\bMagnus[ _]Manske\b");
@@ -983,8 +981,8 @@ mod tests {
             Some("https://codeberg.org/api/v1/repos/magnusmanske/petscan_rs".to_string())
         );
         assert!(Forge::GitHub.repo_api("https://github.com/x/y").is_none());
-        assert_eq!(iso_time(&Value::from("2024-01-02T03:04:05Z")), "2024-01-02 03:04:05");
-        assert_eq!(iso_time(&Value::Null), ZERO_TIME);
+        assert_eq!(iso_time(&Value::from("2024-01-02T03:04:05Z")), Some("2024-01-02 03:04:05".to_string()));
+        assert_eq!(iso_time(&Value::Null), None);
     }
 
     #[test]
@@ -998,8 +996,8 @@ mod tests {
     }
 
     #[test]
-    fn basic_plane_only() {
-        assert_eq!(mb3("Bug 🐛 in Grüße"), "Bug  in Grüße");
+    fn labels_and_unicode() {
+        assert_eq!(db_label("Bug 🐛 in Grüße"), "Bug 🐛 in Grüße");
         assert_eq!(db_label(&"x".repeat(300)).chars().count(), 255);
     }
 

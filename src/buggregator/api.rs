@@ -169,13 +169,26 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
                 out.insert("status".to_string(), status.into());
             }
             "usage" | "usage_tool" => {
-                let mut conn = self.state.tool_db.conn().await?;
+                let days = usage::range(&text("range"));
                 // Complete days only: today's count is still growing.
                 let today = chrono::Utc::now().date_naive();
-                let (days, last) = (usage::range(&text("range")), today.pred_opt().unwrap_or(today));
+                let last = today.pred_opt().unwrap_or(today);
                 let data = match action {
-                    "usage" => usage::overview(&mut conn, days, last).await?,
-                    _ => usage::tool(&mut conn, &text("tool"), days, last).await?,
+                    "usage" => {
+                        let overview = self
+                            .state
+                            .usage_overview
+                            .get_or_fetch(days.to_string(), async || {
+                                let mut conn = self.state.tool_db.conn().await?;
+                                usage::overview(&mut conn, days, last).await
+                            })
+                            .await?;
+                        overview.as_ref().clone()
+                    }
+                    _ => {
+                        let mut conn = self.state.tool_db.conn().await?;
+                        usage::tool(&mut conn, &text("tool"), days, last).await?
+                    }
                 };
                 out.insert("data".to_string(), data);
             }
@@ -217,7 +230,7 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
             if tool_id != 0 && !issues::tool_exists(&mut conn, tool_id).await? {
                 return Ok(format!("No tool with ID {tool_id}"));
             }
-            issues::set_tool(&mut conn, issue_id, tool_id, &user).await?;
+            issues::set_tool(&mut conn, issue_id, (tool_id != 0).then_some(tool_id), &user).await?;
         }
         out.insert("user".to_string(), user.into());
         Ok("OK".to_string())

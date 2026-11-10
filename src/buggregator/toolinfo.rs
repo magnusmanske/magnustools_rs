@@ -57,7 +57,7 @@ async fn load(state: &AppState) -> anyhow::Result<Vec<ToolInfo>> {
              WHERE toolhub='' AND NOT EXISTS (SELECT * FROM tool_kv WHERE tool_id=tool.id AND `key`='status')",
         )
         .await?;
-    let mut names: Vec<String> = vec![];
+    let mut names = std::collections::HashSet::new();
     let mut tools = vec![];
     for (id, name, subdomain, description, note, url) in rows {
         let lower_note = note.to_lowercase();
@@ -77,7 +77,7 @@ async fn load(state: &AppState) -> anyhow::Result<Vec<ToolInfo>> {
         if names.contains(&toolinfo_name) {
             toolinfo_name = format!("{toolinfo_name}_{subdomain}");
         }
-        names.push(toolinfo_name.clone());
+        names.insert(toolinfo_name.clone());
 
         let mut words: Vec<String> = keywords.remove(&id).unwrap_or_default();
         if lower_note.contains("javascript") {

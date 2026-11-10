@@ -105,7 +105,7 @@ CREATE TABLE `git_issue` (
   KEY `git_repo_id` (`git_repo_id`),
   CONSTRAINT `git_issue_ibfk_1` FOREIGN KEY (`issue_id`) REFERENCES `issue` (`id`),
   CONSTRAINT `git_issue_ibfk_2` FOREIGN KEY (`git_repo_id`) REFERENCES `git_repo` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `git_repo` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -116,25 +116,25 @@ CREATE TABLE `git_repo` (
   PRIMARY KEY (`id`),
   KEY `tool_id` (`tool_id`),
   CONSTRAINT `git_repo_ibfk_1` FOREIGN KEY (`tool_id`) REFERENCES `tool` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `issue` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `label` varchar(255) NOT NULL DEFAULT '',
   `status` enum('OPEN','CLOSED') NOT NULL DEFAULT 'OPEN',
-  `date_created` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
-  `date_last` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `date_created` timestamp NULL DEFAULT NULL,
+  `date_last` timestamp NULL DEFAULT NULL,
   `site` enum('WIKI','GITHUB','BITBUCKET','TWITTER','WIKIDATA','GITLAB','CODEBERG','GITLAB_WMF') NOT NULL DEFAULT 'WIKI',
   `url` varchar(255) NOT NULL,
-  `description_text_id` int(11) NOT NULL DEFAULT 0,
-  `tool` int(11) unsigned NOT NULL DEFAULT 0,
+  `description_text_id` int(11) unsigned DEFAULT NULL,
+  `tool` int(11) unsigned DEFAULT NULL,
   `priority` enum('HIGH','NORMAL','LOW') NOT NULL DEFAULT 'NORMAL',
   PRIMARY KEY (`id`),
   UNIQUE KEY `site_url` (`site`,`url`),
   KEY `status` (`status`,`priority`,`date_last`),
   KEY `tool_status` (`tool`,`status`),
   KEY `date_last` (`date_last`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `keywords` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -142,7 +142,7 @@ CREATE TABLE `keywords` (
   `keyword` varchar(32) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   UNIQUE KEY `tool_id` (`tool_id`,`keyword`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `log` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -158,7 +158,7 @@ CREATE TABLE `log` (
   CONSTRAINT `log_ibfk_1` FOREIGN KEY (`issue_id`) REFERENCES `issue` (`id`),
   CONSTRAINT `log_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`),
   CONSTRAINT `log_ibfk_3` FOREIGN KEY (`text_id`) REFERENCES `text` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `logging_tools` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -208,7 +208,7 @@ CREATE TABLE `text` (
   `text` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `hash` (`hash`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `tool` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -246,7 +246,7 @@ CREATE TABLE `url_issue` (
   UNIQUE KEY `issue_url` (`issue_id`,`url`),
   KEY `issue_id` (`issue_id`),
   CONSTRAINT `url_issue_ibfk_1` FOREIGN KEY (`issue_id`) REFERENCES `issue` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `user` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -254,7 +254,7 @@ CREATE TABLE `user` (
   `site` enum('WIKI','GITHUB','BITBUCKET','TWITTER','WIKIDATA','GITLAB','CODEBERG','GITLAB_WMF') NOT NULL DEFAULT 'WIKI',
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_site` (`name`,`site`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `user_issue` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -267,29 +267,7 @@ CREATE TABLE `user_issue` (
   KEY `issue_id` (`issue_id`),
   CONSTRAINT `user_issue_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`),
   CONSTRAINT `user_issue_ibfk_2` FOREIGN KEY (`issue_id`) REFERENCES `issue` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_git_issue` AS select `issue`.`id` AS `id`,`issue`.`label` AS `label`,`issue`.`status` AS `status`,`issue`.`date_created` AS `date_created`,`issue`.`date_last` AS `date_last`,`issue`.`site` AS `site`,`issue`.`url` AS `url`,`text`.`text` AS `description`,`issue`.`tool` AS `tool`,`issue`.`priority` AS `priority`,`git_issue`.`git_id` AS `git_id`,`git_issue`.`git_repo_id` AS `git_repo_id`,`git_repo`.`html_url` AS `html_url`,`git_repo`.`api_issues_url` AS `api_issues_url`,`git_repo`.`repo_type` AS `repo_type`,`git_repo`.`tool_id` AS `tool_id` from (((`issue` join `git_issue`) join `git_repo`) join `text`) where `issue`.`site` in ('GITHUB','BITBUCKET','GITLAB','CODEBERG') and `git_issue`.`issue_id` = `issue`.`id` and `git_issue`.`git_repo_id` = `git_repo`.`id` and `issue`.`description_text_id` = `text`.`id`
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_issue` AS select `issue`.`id` AS `id`,`issue`.`label` AS `label`,`issue`.`status` AS `status`,`issue`.`date_created` AS `date_created`,`issue`.`date_last` AS `date_last`,`issue`.`site` AS `site`,`issue`.`url` AS `url`,`issue`.`description_text_id` AS `description_text_id`,`issue`.`tool` AS `tool`,`issue`.`priority` AS `priority`,(select `text`.`text` from `text` where `issue`.`description_text_id` = `text`.`id`) AS `description` from `issue`
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_log` AS select `log`.`id` AS `id`,`log`.`issue_id` AS `issue_id`,`log`.`event` AS `event`,`log`.`user_id` AS `user_id`,`log`.`timestamp` AS `timestamp`,`log`.`text_id` AS `text_id`,`issue`.`label` AS `issue_label`,`user`.`name` AS `user_name`,`text`.`text` AS `value` from (((`log` join `issue`) join `user`) join `text`) where `log`.`issue_id` = `issue`.`id` and `log`.`user_id` = `user`.`id` and `log`.`text_id` = `text`.`id`
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_status_overview` AS select `issue`.`status` AS `status`,`issue`.`priority` AS `priority`,count(0) AS `cnt` from `issue` group by `issue`.`status`,`issue`.`priority`
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_tool_logs` AS select `logging_uses`.`tool_id` AS `tool_id`,`logging_uses`.`date` AS `date`,`logging_uses`.`used` AS `used`,`logging_tools`.`name` AS `name`,`logging_tools`.`method` AS `method`,`logging_tools`.`url` AS `url` from (`logging_uses` join `logging_tools`) where `logging_tools`.`id` = `logging_uses`.`tool_id` order by `logging_uses`.`date` desc,`logging_tools`.`name`,`logging_tools`.`method`
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_tool_logs_main_tool_last_month` AS select `logging_tools`.`main_tool_id` AS `main_tool_id`,sum(`vw_tool_logs`.`used`) AS `monthly_usage` from (`vw_tool_logs` join `logging_tools`) where `vw_tool_logs`.`date` like concat(year(current_timestamp() - interval 1 month),right(concat('00',month(current_timestamp() - interval 1 month)),2),'%') and `logging_tools`.`id` = `vw_tool_logs`.`tool_id` and `logging_tools`.`main_tool_id` is not null group by `logging_tools`.`main_tool_id` order by sum(`vw_tool_logs`.`used`) desc
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_tool_logs_summary` AS select `logging_uses`.`tool_id` AS `tool_id`,sum(`logging_uses`.`used`) AS `total_usage`,count(`logging_uses`.`date`) AS `days_used`,round(if(count(`logging_uses`.`date`) = 0,0,sum(`logging_uses`.`used`) / count(`logging_uses`.`date`)),2) AS `uses_per_day`,`logging_tools`.`name` AS `name`,`logging_tools`.`method` AS `method`,`logging_tools`.`url` AS `url` from (`logging_uses` join `logging_tools`) where `logging_tools`.`id` = `logging_uses`.`tool_id` group by `logging_uses`.`tool_id` order by round(if(count(`logging_uses`.`date`) = 0,0,sum(`logging_uses`.`used`) / count(`logging_uses`.`date`)),2) desc
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_tool_logs_summary_collapsed` AS select `logging_uses`.`tool_id` AS `tool_id`,sum(`logging_uses`.`used`) AS `total_usage`,count(distinct `logging_uses`.`date`) AS `days_used`,round(if(count(`logging_uses`.`date`) = 0,0,sum(`logging_uses`.`used`) / count(`logging_uses`.`date`)),2) AS `uses_per_day`,`logging_tools`.`name` AS `name` from (`logging_uses` join `logging_tools`) where `logging_tools`.`id` = `logging_uses`.`tool_id` group by `logging_tools`.`name` order by round(if(count(`logging_uses`.`date`) = 0,0,sum(`logging_uses`.`used`) / count(`logging_uses`.`date`)),2) desc
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_tool_tag` AS select `tag`.`tag` AS `tag`,`tool`.`id` AS `id`,`tool`.`name` AS `name`,`tool`.`subdomain` AS `subdomain`,`tool`.`description` AS `description`,`tool`.`webserver_type` AS `webserver_type`,`tool`.`own_oauth` AS `own_oauth`,`tool`.`using_logging` AS `using_logging`,`tool`.`note` AS `note`,`tool`.`url` AS `url`,`tool`.`toolhub` AS `toolhub` from ((`tool` join `tag`) join `tag2tool`) where `tag2tool`.`tag_id` = `tag`.`id` and `tag2tool`.`tool_id` = `tool`.`id`
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_tools_tickets` AS select `tool`.`id` AS `id`,`tool`.`name` AS `name`,`tool`.`subdomain` AS `subdomain`,`tool`.`webserver_type` AS `webserver_type`,`tool`.`own_oauth` AS `own_oauth`,`s51079__buggregator`.`tool`.`using_subdomain` AS `using_subdomain`,`s51079__buggregator`.`tool`.`using_kubernetes` AS `using_kubernetes`,`s51079__buggregator`.`tool`.`using_new_wbterms` AS `using_new_wbterms`,`s51079__buggregator`.`tool`.`using_composer` AS `using_composer`,`s51079__buggregator`.`tool`.`using_logging` AS `using_logging`,`s51079__buggregator`.`tool`.`note` AS `note`,`s51079__buggregator`.`tool`.`url` AS `url`,`s51079__buggregator`.`tool`.`toolhub` AS `toolhub`,(select count(0) from `issue` where `s51079__buggregator`.`issue`.`tool` = `s51079__buggregator`.`tool`.`id` and `s51079__buggregator`.`issue`.`status` = 'OPEN') AS `open_tickets`,(select count(0) from `issue` where `s51079__buggregator`.`issue`.`tool` = `s51079__buggregator`.`tool`.`id` and `s51079__buggregator`.`issue`.`status` = 'CLOSED') AS `closed_tickets` from `tool`
-;
-CREATE ALGORITHM=UNDEFINED SQL SECURITY DEFINER VIEW `vw_wiki_issue` AS select `issue`.`id` AS `id`,`issue`.`label` AS `label`,`issue`.`status` AS `status`,`issue`.`date_created` AS `date_created`,`issue`.`date_last` AS `date_last`,`issue`.`site` AS `site`,`issue`.`url` AS `url`,`issue`.`description_text_id` AS `description_text_id`,`issue`.`tool` AS `tool`,`issue`.`priority` AS `priority`,`text`.`text` AS `description`,`wiki_issue`.`wiki_page_id` AS `wiki_page_id`,`wiki_page`.`wiki` AS `wiki`,`wiki_page`.`page` AS `page`,`wiki_page`.`tool_hint` AS `tool_hint`,`wiki_issue`.`wikitext` AS `wikitext` from (((`issue` join `wiki_issue`) join `wiki_page`) join `text`) where `wiki_issue`.`issue_id` = `issue`.`id` and `issue`.`site` = 'WIKI' and `wiki_issue`.`wiki_page_id` = `wiki_page`.`id` and `issue`.`description_text_id` = `text`.`id`
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `wiki_issue` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -301,14 +279,49 @@ CREATE TABLE `wiki_issue` (
   KEY `wiki_page_id` (`wiki_page_id`),
   CONSTRAINT `wiki_issue_ibfk_1` FOREIGN KEY (`wiki_page_id`) REFERENCES `wiki_page` (`id`),
   CONSTRAINT `wiki_issue_ibfk_2` FOREIGN KEY (`issue_id`) REFERENCES `issue` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `wiki_page` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `wiki` varchar(16) NOT NULL DEFAULT '',
   `page` varchar(255) NOT NULL DEFAULT '',
-  `tool_hint` int(11) unsigned NOT NULL DEFAULT 0,
+  `tool_hint` int(11) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `wiki` (`wiki`,`page`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
+
+-- Foreign keys whose referenced tables are created later in the dump.
+ALTER TABLE `issue`
+  ADD CONSTRAINT `issue_tool_fk` FOREIGN KEY (`tool`) REFERENCES `tool` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `issue_description_fk` FOREIGN KEY (`description_text_id`) REFERENCES `text` (`id`);
+
+ALTER TABLE `wiki_page`
+  ADD CONSTRAINT `wiki_page_tool_fk` FOREIGN KEY (`tool_hint`) REFERENCES `tool` (`id`) ON DELETE SET NULL;
+
+ALTER TABLE `dash_service`
+  ADD CONSTRAINT `dash_service_tool_fk` FOREIGN KEY (`tool_id`) REFERENCES `tool` (`id`) ON DELETE SET NULL;
+
+ALTER TABLE `dash_ack`
+  ADD CONSTRAINT `dash_ack_service_fk` FOREIGN KEY (`service_id`) REFERENCES `dash_service` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `dash_instance`
+  ADD CONSTRAINT `dash_instance_service_fk` FOREIGN KEY (`service_id`) REFERENCES `dash_service` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `dash_series`
+  ADD CONSTRAINT `dash_series_service_fk` FOREIGN KEY (`service_id`) REFERENCES `dash_service` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `dash_point`
+  ADD CONSTRAINT `dash_point_series_fk` FOREIGN KEY (`series_id`) REFERENCES `dash_series` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `dash_point_instance_fk` FOREIGN KEY (`instance_id`) REFERENCES `dash_instance` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `dash_point_hourly`
+  ADD CONSTRAINT `dash_point_hourly_series_fk` FOREIGN KEY (`series_id`) REFERENCES `dash_series` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `dash_counter_state`
+  ADD CONSTRAINT `dash_counter_state_instance_fk` FOREIGN KEY (`instance_id`) REFERENCES `dash_instance` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `dash_counter_state_series_fk` FOREIGN KEY (`series_id`) REFERENCES `dash_series` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `dash_event`
+  ADD CONSTRAINT `dash_event_service_fk` FOREIGN KEY (`service_id`) REFERENCES `dash_service` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `dash_event_instance_fk` FOREIGN KEY (`instance_id`) REFERENCES `dash_instance` (`id`) ON DELETE CASCADE;

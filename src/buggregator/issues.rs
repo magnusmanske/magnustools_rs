@@ -8,8 +8,8 @@ use wikimisc::mysql_async::prelude::Queryable;
 use wikimisc::mysql_async::{Conn, Params, Row, Value as Sql};
 
 pub const STATUSES: &[&str] = &["OPEN", "CLOSED"];
-/// BITBUCKET is kept for browsing legacy data, though imports are retired.
-pub const SITES: &[&str] = &["WIKI", "WIKIDATA", "GITHUB", "CODEBERG", "BITBUCKET"];
+/// BITBUCKET/GITLAB are kept for browsing legacy data, though imports are retired.
+pub const SITES: &[&str] = &["WIKI", "WIKIDATA", "GITHUB", "CODEBERG", "BITBUCKET", "GITLAB", "GITLAB_WMF", "TWITTER"];
 pub const PRIORITIES: &[&str] = &["HIGH", "NORMAL", "LOW"];
 pub const SORT_BY: &[&str] = &["label", "status", "date_created", "date_last", "site", "tool", "priority"];
 pub const MAX_LIMIT: u64 = 500;
@@ -145,9 +145,10 @@ pub async fn set_status(conn: &mut Conn, issue_id: u64, status: &str, user: &str
     Ok(())
 }
 
-pub async fn set_tool(conn: &mut Conn, issue_id: u64, tool_id: u64, user: &str) -> Result<()> {
+pub async fn set_tool(conn: &mut Conn, issue_id: u64, tool_id: Option<u64>, user: &str) -> Result<()> {
     let mut tx = conn.start_transaction(Default::default()).await?;
-    log(&mut tx, issue_id, "TOOL_ID", &tool_id.to_string(), user).await?;
+    let value = tool_id.map_or_else(|| "0".to_string(), |id| id.to_string());
+    log(&mut tx, issue_id, "TOOL_ID", &value, user).await?;
     tx.exec_drop("UPDATE issue SET tool=? WHERE id=?", (tool_id, issue_id)).await?;
     tx.commit().await?;
     Ok(())
