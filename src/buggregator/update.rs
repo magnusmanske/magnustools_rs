@@ -286,6 +286,46 @@ impl Forge {
         }
     }
 
+    /// The repository metadata endpoint, where the forge says whether the
+    /// repository is archived. Only Codeberg: GitHub's unauthenticated rate
+    /// limit is too low for one more call per repository.
+    fn repo_api(self, html_url: &str) -> Option<String> {
+        match self {
+            Self::GitHub => None,
+            Self::Codeberg => {
+                let path = html_url.split_once("codeberg.org/")?.1;
+                let mut parts = path.split('/').filter(|p| !p.is_empty());
+                let (owner, repo) = (parts.next()?, parts.next()?);
+                Some(format!("https://codeberg.org/api/v1/repos/{owner}/{repo}"))
+            }
+        }
+    }
+
+    /// Whether the repository is archived. A failed check counts as not
+    /// archived, so a transient API error does not stop the daily import.
+    async fn is_archived(self, state: &AppState, html_url: &str) -> bool {
+        let Some(url) = self.repo_api(html_url) else { return false };
+        let archived = async {
+            let response = state
+                .http
+                .get(&url)
+                .header(reqwest::header::ACCEPT, "application/json")
+                .send()
+                .await?
+                .error_for_status()?;
+            let json: Value = response.json().await?;
+            anyhow::Ok(json["archived"].as_bool().unwrap_or(false))
+        }
+        .await;
+        match archived {
+            Ok(archived) => archived,
+            Err(e) => {
+                tracing::warn!("{url}: {e:#}");
+                false
+            }
+        }
+    }
+
     /// The issues endpoint and page size. Codeberg (Forgejo) URLs are built
     /// from the repository's page, since `api_issues_url` holds that for them.
     fn api(self, html_url: &str, api_issues_url: &str) -> Option<(String, usize)> {
@@ -316,6 +356,10 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
         )
         .await?;
     for (repo_id, html_url, api_issues_url, tool_id) in repos {
+        if forge.is_archived(state, &html_url).await {
+            tracing::info!("{html_url}: repository archived; skipping");
+            continue;
+        }
         let Some((url, page_size)) = forge.api(&html_url, &api_issues_url) else { continue };
         let open = match open_forge_issues(state, &url, page_size).await {
             Ok(open) => open,
@@ -678,6 +722,11 @@ mod tests {
             "https://codeberg.org/api/v1/repos/magnusmanske/petscan_rs/issues?type=issues&state=open&limit=50"
         );
         assert!(Forge::Codeberg.api("https://github.com/x/y", "").is_none());
+        assert_eq!(
+            Forge::Codeberg.repo_api("https://codeberg.org/magnusmanske/petscan_rs"),
+            Some("https://codeberg.org/api/v1/repos/magnusmanske/petscan_rs".to_string())
+        );
+        assert!(Forge::GitHub.repo_api("https://github.com/x/y").is_none());
         assert_eq!(iso_time(&Value::from("2024-01-02T03:04:05Z")), "2024-01-02 03:04:05");
         assert_eq!(iso_time(&Value::Null), ZERO_TIME);
     }
