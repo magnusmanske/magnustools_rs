@@ -85,7 +85,7 @@ CREATE TABLE `dash_service` (
   `label` varchar(255) NOT NULL DEFAULT '',
   `url` varchar(255) NOT NULL DEFAULT '',
   `tool_id` int(10) unsigned DEFAULT NULL COMMENT 'buggregator tool.id, for issue counts',
-  `token_hash` char(64) NOT NULL,
+  `token_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` int(10) unsigned NOT NULL,
   PRIMARY KEY (`id`),

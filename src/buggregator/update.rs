@@ -2,7 +2,9 @@
 //! Codeberg; tool data from Toolhub; and some tidying up. Each step runs
 //! even if an earlier one failed.
 
+use super::MAINTAINER;
 use super::issues::{self, text_id};
+use super::safe_url;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::wiki::{Wiki, encode_title};
@@ -26,8 +28,6 @@ const IGNORE_TOOL_NAMES: &[&str] = &["data"];
 /// rewrite, so their old issues are not synced again.
 const RETIRED_REPOS: &[&str] =
     &["https://github.com/magnusmanske/quickstatements", "https://codeberg.org/magnusmanske/sourcemd"];
-/// Whose replies close a wiki issue after a month without further discussion.
-const MAINTAINER: &str = "Magnus Manske";
 /// Tries per tool for its web status: the Toolforge proxy now and then
 /// answers 503 for a connection it dropped, though the tool is fine.
 const STATUS_ATTEMPTS: usize = 3;
@@ -470,12 +470,15 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
         for json in &open {
             let Some(number) = json["number"].as_u64() else { continue };
             open_numbers.insert(number);
-            let issue_url = json["html_url"].as_str().unwrap_or_default();
-            if let Some(issue_id) = known_forge_issue(conn, forge, number, repo_id, &html_url, issue_url).await? {
-                update_forge_issue(conn, issue_id, forge, json).await?;
+            let Some(issue_url) = safe_url(json["html_url"].as_str().unwrap_or_default()) else {
+                tracing::warn!("{html_url}: issue without a usable URL; skipping");
+                continue;
+            };
+            if let Some(issue_id) = known_forge_issue(conn, forge, number, repo_id, &html_url, &issue_url).await? {
+                update_forge_issue(conn, issue_id, forge, json, &issue_url).await?;
                 continue;
             }
-            let issue = new_forge_issue(forge, json, tool_id);
+            let issue = new_forge_issue(forge, json, tool_id, &issue_url);
             let mut tx = conn.start_transaction(Default::default()).await?;
             let issue_id = create_issue(&mut tx, &issue).await?;
             ensure_mapping(&mut tx, issue_id, forge.site(), number, repo_id).await?;
@@ -539,7 +542,7 @@ async fn known_forge_issue(
         .await?)
 }
 
-fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64) -> NewIssue {
+fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64, url: &str) -> NewIssue {
     let description = json["body"].as_str().unwrap_or_default().to_string();
     NewIssue {
         label: json["title"].as_str().unwrap_or_default().to_string(),
@@ -547,7 +550,7 @@ fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64) -> NewIssue {
         date_created: Some(iso_time(&json["created_at"])),
         date_last: Some(iso_time(&json["updated_at"])),
         site: forge.site(),
-        url: json["html_url"].as_str().unwrap_or_default().to_string(),
+        url: url.to_string(),
         urls: urls(&description),
         description,
         tool: tool_id,
@@ -556,10 +559,9 @@ fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64) -> NewIssue {
 }
 
 /// Updates an issue the forge already knows, including edits to its body.
-async fn update_forge_issue(conn: &mut Conn, issue_id: u64, forge: Forge, json: &Value) -> Result<()> {
+async fn update_forge_issue(conn: &mut Conn, issue_id: u64, forge: Forge, json: &Value, url: &str) -> Result<()> {
     let description = json["body"].as_str().unwrap_or_default();
     let title = json["title"].as_str().unwrap_or_default();
-    let url = json["html_url"].as_str().unwrap_or_default();
     let mut tx = conn.start_transaction(Default::default()).await?;
     let description_id = text_id(&mut tx, description).await?;
     // `IGNORE`: a repository rename can collide with another issue's old URL;
@@ -931,7 +933,7 @@ mod tests {
         assert_eq!(trim_markup("See [[Foo#bar|this]], [[Baz]] {{tl|x}} <b>now</b>"), "See Foo, Baz  now");
         assert_eq!(wiki_users("by [[User:A B|A]] and [[Benutzer:C]] and [[User talk:D]]"), vec!["A B", "C"]);
         assert_eq!(
-            urls("see https://x.org/a?b=1. and (http://y.org/z)"),
+            urls("see https://x.org/a?b=1. and (http://y.org/z) and https://x.org/a?b=1"),
             vec!["https://x.org/a?b=1", "http://y.org/z"]
         );
     }

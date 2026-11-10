@@ -33,6 +33,10 @@ pub async fn handler(
     let Some(oauth) = state.buggregator_oauth.as_ref() else {
         return answer(json!({"status": "Login is not configured"}));
     };
+    if get("denied").is_some() || get("oauth_problem").is_some() {
+        tracing::info!("buggregator OAuth login declined");
+        return Redirect::to(&format!("{}/buggregator/", state.config.public_url)).into_response();
+    }
     if let (Some(verifier), Some(token)) = (get("oauth_verifier"), get("oauth_token")) {
         return login_callback(oauth, jar, &verifier, &token, &state.config.public_url).await;
     }
@@ -106,22 +110,7 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
             }
             "set_issue_status" | "set_issue_tool" => {
                 let (issue_id, status) = (number("issue_id"), text("new_status"));
-                let status = match self.editor().await? {
-                    None => NOT_ALLOWED.to_string(),
-                    Some(_) if issue_id == 0 => "No issue ID set".to_string(),
-                    Some(_) if action == "set_issue_status" && !STATUSES.contains(&status.as_str()) => {
-                        format!("'{status}' is not a valid issue status")
-                    }
-                    Some(user) => {
-                        let mut conn = self.state.tool_db.conn().await?;
-                        match action {
-                            "set_issue_status" => issues::set_status(&mut conn, issue_id, &status, &user).await?,
-                            _ => issues::set_tool(&mut conn, issue_id, number("new_tool_id"), &user).await?,
-                        }
-                        out.insert("user".to_string(), user.into());
-                        "OK".to_string()
-                    }
-                };
+                let status = self.set_issue(action, issue_id, &status, number("new_tool_id"), &mut out).await?;
                 out.insert("status".to_string(), status.into());
             }
             "dashboard" => {
@@ -188,6 +177,43 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
         Ok(Reply::Json(out))
     }
 
+    /// A validated issue edit; the answer is the message for the front-end.
+    async fn set_issue(
+        &self,
+        action: &str,
+        issue_id: u64,
+        status: &str,
+        tool_id: u64,
+        out: &mut Map<String, Value>,
+    ) -> anyhow::Result<String> {
+        if *self.method != Method::POST {
+            return Ok("POST required".to_string());
+        }
+        let Some(user) = self.editor().await? else {
+            return Ok(NOT_ALLOWED.to_string());
+        };
+        if issue_id == 0 {
+            return Ok("No issue ID set".to_string());
+        }
+        if action == "set_issue_status" && !STATUSES.contains(&status) {
+            return Ok(format!("'{status}' is not a valid issue status"));
+        }
+        let mut conn = self.state.tool_db.conn().await?;
+        if !issues::issue_exists(&mut conn, issue_id).await? {
+            return Ok("No such issue".to_string());
+        }
+        if action == "set_issue_status" {
+            issues::set_status(&mut conn, issue_id, status, &user).await?;
+        } else {
+            if tool_id != 0 && !issues::tool_exists(&mut conn, tool_id).await? {
+                return Ok(format!("No tool with ID {tool_id}"));
+            }
+            issues::set_tool(&mut conn, issue_id, tool_id, &user).await?;
+        }
+        out.insert("user".to_string(), user.into());
+        Ok("OK".to_string())
+    }
+
     /// The user's rights as MediaWiki reports them (`query.userinfo`), which
     /// the front-end's login widget reads; an error object when logged out.
     async fn rights(&self) -> Value {
@@ -201,16 +227,31 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
         })
     }
 
-    /// The logged-in user, if they may edit. Changes must come from the
-    /// buggregator page itself (the front-end sends them as GET requests,
-    /// so a POST cannot be required).
+    /// The logged-in user's name, cached briefly per access token; `None` when
+    /// logged out. An error means the wiki could not be reached.
+    async fn user_name(&self) -> anyhow::Result<Option<String>> {
+        let Some(token) = SESSION.access_token(self.jar) else { return Ok(None) };
+        let key = crate::buggregator::sha256_hex(token.key.as_bytes());
+        let name = self
+            .state
+            .user_names
+            .get_or_fetch(key, async move || {
+                let params = [("action", "query"), ("meta", "userinfo")];
+                let json = self.oauth.api(API_URL, Some(&token), &params).await?;
+                Ok::<String, anyhow::Error>(json["query"]["userinfo"]["name"].as_str().unwrap_or_default().to_string())
+            })
+            .await?;
+        Ok((!name.is_empty()).then(|| name.to_string()))
+    }
+
+    /// The logged-in user, if they may edit. Changes must be POSTs from the
+    /// buggregator page itself.
     async fn editor(&self) -> anyhow::Result<Option<String>> {
         if !is_same_origin(self.headers) {
             return Ok(None);
         }
-        let rights = self.rights().await;
-        let name = rights["query"]["userinfo"]["name"].as_str().unwrap_or_default();
-        Ok(WRITE_ACCESS.contains(&name).then(|| name.to_string()))
+        let Some(name) = self.user_name().await? else { return Ok(None) };
+        Ok(WRITE_ACCESS.contains(&name.as_str()).then_some(name))
     }
 }
 

@@ -190,7 +190,7 @@ let IssueList = Vue.extend ( {
 		} ,
 		changeIssueStatus : function ( issue_id , new_status ) {
 			let me = this ;
-			$.get ( './api.php' , {
+			$.post ( './api.php' , {
 				action : 'set_issue_status' ,
 				issue_id : issue_id ,
 				new_status : new_status
@@ -206,7 +206,7 @@ let IssueList = Vue.extend ( {
 		} ,
 		changeToolId : function ( issue_id , new_tool_id ) {
 			let me = this ;
-			$.get ( './api.php' , {
+			$.post ( './api.php' , {
 				action : 'set_issue_tool' ,
 				issue_id : issue_id ,
 				new_tool_id : new_tool_id

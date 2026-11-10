@@ -10,7 +10,6 @@ use crate::buggregator::{dedupe, issues, update};
 use crate::state::AppState;
 use anyhow::{Result, bail};
 use clap::Subcommand;
-use wikimisc::mysql_async::prelude::Queryable;
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
@@ -81,8 +80,10 @@ pub async fn run(command: Command, state: &AppState) -> Result<()> {
             if !issues::STATUSES.contains(&status.as_str()) {
                 bail!("'{status}' is not a valid issue status");
             }
-            conn.exec_drop("UPDATE issue SET status=?, date_last=CURRENT_TIMESTAMP WHERE id=?", (status, issue_id))
-                .await?;
+            if !issues::issue_exists(&mut conn, issue_id).await? {
+                bail!("No issue {issue_id}");
+            }
+            issues::set_status(&mut conn, issue_id, &status, crate::buggregator::MAINTAINER).await?;
         }
         Command::Dashboard(command) => match command {
             DashboardCommand::Add { name, label, url, tool_id } => {

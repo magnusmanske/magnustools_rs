@@ -23,6 +23,9 @@ pub const USER_AGENT: &str =
 const API_CACHE_FOR: Duration = Duration::from_secs(86_400);
 /// Wikis to keep API clients for; a request rarely touches more than a few.
 const API_CACHE_WIKIS: usize = 128;
+/// The write check only needs the user name; cache it briefly per access token.
+const USER_CACHE_FOR: Duration = Duration::from_secs(300);
+const USER_CACHE_USERS: usize = 64;
 
 pub struct AppState {
     pub config: Config,
@@ -34,6 +37,8 @@ pub struct AppState {
     pub uploader_oauth: Option<OAuth>,
     /// API clients with each wiki's cached site info.
     apis: TimedMap<String, Api>,
+    /// Access-token hash => MediaWiki user name, for the write check.
+    pub user_names: TimedMap<String, String>,
 }
 
 impl AppState {
@@ -55,6 +60,7 @@ impl AppState {
             http,
             config,
             apis: TimedMap::new(API_CACHE_FOR, API_CACHE_WIKIS),
+            user_names: TimedMap::new(USER_CACHE_FOR, USER_CACHE_USERS),
         })
     }
 

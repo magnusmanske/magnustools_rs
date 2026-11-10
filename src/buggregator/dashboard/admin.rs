@@ -60,10 +60,15 @@ pub async fn add_service(
     if !valid {
         bail!("Invalid service name '{name}'");
     }
+    let url = if url.trim().is_empty() {
+        String::new()
+    } else {
+        crate::buggregator::safe_url(url).ok_or_else(|| anyhow::anyhow!("Invalid service URL '{url}'"))?
+    };
     let token = new_token();
     conn.exec_drop(
         "INSERT INTO dash_service (name, label, url, tool_id, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (name, label, url, tool_id, hash_token(&token), now),
+        (name, label, url.as_str(), tool_id, hash_token(&token), now),
     )
     .await?;
     Ok(token)

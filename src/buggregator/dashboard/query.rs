@@ -47,7 +47,7 @@ pub async fn overview(conn: &mut Conn, now: i64) -> Result<Value> {
         out.push(json!({
             "label": if label.is_empty() { name.clone() } else { label },
             "name": name,
-            "url": url,
+            "url": crate::buggregator::safe_url(&url).unwrap_or_default(),
             "tool_id": tool_id,
             "components": components,
         }));

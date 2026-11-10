@@ -25,6 +25,17 @@ pub fn sha256_hex(data: &[u8]) -> String {
     Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Who maintains the tool; also the user a maintenance action logs as.
+pub const MAINTAINER: &str = "Magnus Manske";
+
+/// An absolute HTTP(S) URL, trimmed; `None` for anything a link must not use
+/// (e.g. `javascript:`). Empty input is `None`.
+pub fn safe_url(url: &str) -> Option<String> {
+    let url = url.trim();
+    let lower = url.to_ascii_lowercase();
+    (lower.starts_with("http://") || lower.starts_with("https://")).then(|| url.to_string())
+}
+
 /// The auto-increment id of the row just written on `conn` (`LAST_INSERT_ID()`).
 pub async fn last_id(conn: &mut impl Queryable) -> Result<u64> {
     conn.query_first::<u64, _>("SELECT LAST_INSERT_ID()").await?.ok_or_else(|| anyhow::anyhow!("no insert id"))
@@ -34,14 +45,10 @@ pub async fn last_id(conn: &mut impl Queryable) -> Result<u64> {
 /// service if it has one (that is the one users see), else its own `url`,
 /// else its Toolforge subdomain. `None` if there is nothing to check.
 pub fn address(subdomain: &str, url: &str) -> Option<String> {
-    let url = url.trim();
-    if !url.is_empty() {
-        Some(url.to_string())
-    } else if !subdomain.trim().is_empty() {
-        Some(format!("https://{}.toolforge.org", subdomain.trim()))
-    } else {
-        None
+    if let Some(url) = safe_url(url) {
+        return Some(url);
     }
+    if !subdomain.trim().is_empty() { Some(format!("https://{}.toolforge.org", subdomain.trim())) } else { None }
 }
 
 pub fn routes() -> Router<Arc<AppState>> {
@@ -64,5 +71,16 @@ mod tests {
         assert_eq!(address("petscan", "https://petscan.wmcloud.org/").as_deref(), Some("https://petscan.wmcloud.org/"));
         assert_eq!(address("petscan", "  ").as_deref(), Some("https://petscan.toolforge.org"));
         assert_eq!(address("", "").as_deref(), None);
+    }
+
+    #[test]
+    fn only_http_urls_become_links() {
+        assert_eq!(safe_url(" https://x.org/a ").as_deref(), Some("https://x.org/a"));
+        assert_eq!(safe_url("HTTP://x.org").as_deref(), Some("HTTP://x.org"));
+        assert_eq!(safe_url("javascript:alert(1)"), None);
+        assert_eq!(safe_url("//x.org"), None);
+        assert_eq!(safe_url(""), None);
+        // An unsafe URL does not hide the Toolforge address.
+        assert_eq!(address("petscan", "javascript:x").as_deref(), Some("https://petscan.toolforge.org"));
     }
 }

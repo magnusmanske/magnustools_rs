@@ -198,12 +198,20 @@ async fn user_id(conn: &mut impl Queryable, name: &str) -> Result<u64> {
     super::last_id(conn).await
 }
 
-/// A row as column => string (or null).
+/// A row as column => string (or null). A stored `url` that is not HTTP(S)
+/// is blanked, so it cannot become a clickable `javascript:` link.
 pub fn row_as_strings(row: &Row) -> Map<String, Value> {
     row.columns_ref()
         .iter()
         .enumerate()
-        .map(|(i, column)| (column.name_str().into_owned(), row.as_ref(i).map_or(Value::Null, sql_string)))
+        .map(|(i, column)| {
+            let name = column.name_str().into_owned();
+            let mut value = row.as_ref(i).map_or(Value::Null, sql_string);
+            if name == "url" && value.as_str().is_some_and(|u| !u.is_empty() && super::safe_url(u).is_none()) {
+                value = Value::Null;
+            }
+            (name, value)
+        })
         .collect()
 }
 
