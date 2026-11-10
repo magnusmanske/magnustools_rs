@@ -1,3 +1,5 @@
+SET FOREIGN_KEY_CHECKS=0;
+
 CREATE TABLE `dash_ack` (
   `service_id` int(10) unsigned NOT NULL,
   `component` varchar(32) NOT NULL,
@@ -325,3 +327,5 @@ ALTER TABLE `dash_counter_state`
 ALTER TABLE `dash_event`
   ADD CONSTRAINT `dash_event_service_fk` FOREIGN KEY (`service_id`) REFERENCES `dash_service` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `dash_event_instance_fk` FOREIGN KEY (`instance_id`) REFERENCES `dash_instance` (`id`) ON DELETE CASCADE;
+
+SET FOREIGN_KEY_CHECKS=1;
