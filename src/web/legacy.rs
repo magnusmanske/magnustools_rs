@@ -35,6 +35,9 @@ const RETIRED: &[(&str, Fate)] = &[
     ("/autotools.php", Fate::Gone),
     ("/last_tools.php", Fate::Gone),
     ("/record_ip.php", Fate::Gone),
+    ("/outofsight", Fate::Gone),
+    ("/outofsight/", Fate::Gone),
+    ("/outofsight.php", Fate::Gone),
     ("/test1.php", Fate::Gone),
     ("/test2.html", Fate::Gone),
     ("/test3.html", Fate::Gone),
@@ -192,7 +195,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         // Even where the file is still there.
         std::fs::write(dir.path().join("test2.html"), "old").unwrap();
-        for gone in ["/legacy.php", "/test2.html", "/file_reuse", "/file_reuse/", "/file_reuse/main.js"] {
+        for gone in
+            ["/legacy.php", "/test2.html", "/file_reuse", "/file_reuse/", "/file_reuse/main.js", "/outofsight.php"]
+        {
             assert_eq!(get(dir.path(), gone).await.status.as_u16(), 410, "{gone}");
         }
         let moved = get(dir.path(), "/hay2.html").await;

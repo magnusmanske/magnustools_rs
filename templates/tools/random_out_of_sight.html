@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">A random selection of articles whose latest revision has not been sighted, limited to small size changes such as typo fixes.</p>
+<form method="get" action="/random_out_of_sight/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <div class="row">
+    <label>Articles <input type="number" name="out" min="1" max="100" value="{{ out }}"></label>
+    <label>Size difference up to <input type="number" name="limit" min="0" max="100000" value="{{ limit }}"> bytes</label>
+  </div>
+  <button name="doit" value="1">Show random pages</button>
+</form>
+{% if let Some(results) = results %}
+{% if results.pages.is_empty() %}
+<p class="muted">No pages with such small changes are waiting for sighting.</p>
+{% else %}
+<h2>{{ results.pages.len() }} pages</h2>
+<ol>
+  {%- for page in results.pages %}
+  <li><a href="{{ page.url }}" target="_blank" data-diff>{{ page.title }}</a>
+    <span class="{{ page.diff_class() }}">{{ page.diff_text() }}</span></li>
+  {%- endfor %}
+</ol>
+<p class="row">
+  <button type="button" data-open-tabs="20">Open first 20 in tabs</button>
+  <button type="button" data-open-tabs="0">Open all in tabs</button>
+</p>
+<script>
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-open-tabs]');
+  if (!button) return;
+  const count = Number(button.dataset.openTabs) || 0;
+  const links = [...document.querySelectorAll('a[data-diff]')];
+  (count ? links.slice(0, count) : links).forEach(link => window.open(link.href, '_blank'));
+});
+</script>
+{% endif %}
+{% endif %}
+{% endblock %}

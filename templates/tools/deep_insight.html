@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Pages in a category tree that have no sighted version yet. Check the category's pending changes, or open the pages to sight them.</p>
+<form method="get" action="/deep_insight/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <label>Category <span class="hint">without the Category: prefix</span>
+    <input type="text" name="category" value="{{ request.category }}" required>
+  </label>
+  <div class="row">
+    <label>Subcategory depth <input type="number" name="depth" min="0" max="20" value="{{ depth }}"></label>
+    <label class="check"><input type="checkbox" name="redirects" value="1"{% if request.redirects.is_some() %} checked{% endif %}> Only show redirects</label>
+  </div>
+  <fieldset>
+    <legend>Output</legend>
+    <label class="check"><input type="radio" name="mode" value="web"{% if !rss %} checked{% endif %}> Web page</label>
+    <label class="check"><input type="radio" name="mode" value="rss"{% if rss %} checked{% endif %}> RSS feed</label>
+  </fieldset>
+  <button name="doit" value="1">Find unsighted pages</button>
+</form>
+{% if let Some(results) = results %}
+<h2>{{ results.found }} unsighted pages</h2>
+{% if results.categories.is_empty() %}
+<p class="muted">Nothing to sight in this category tree.</p>
+{% endif %}
+{% if results.truncated %}
+<p class="muted">Only the first {{ results.found }} pages are shown; narrow the category for a complete list.</p>
+{% endif %}
+{% for category in results.categories %}
+<h3><a href="{{ category.url }}">{{ category.title }}</a></h3>
+<ol>
+  {%- for page in category.pages %}
+  <li><a href="{{ page.url }}" target="_blank">{{ page.title }}</a></li>
+  {%- endfor %}
+</ol>
+{% endfor %}
+{% endif %}
+{% endblock %}

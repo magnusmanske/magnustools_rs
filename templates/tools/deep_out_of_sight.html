@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Articles in a category tree whose latest revision has not been sighted yet.</p>
+{% if !simple %}
+<form method="get" action="/deep_out_of_sight/">
+  <fieldset class="row">
+    <legend>Wiki</legend>
+    <label>Language <input type="text" name="language" value="{{ request.language }}" required></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" required></label>
+  </fieldset>
+  <label>Category <span class="hint">without the Category: prefix</span>
+    <input type="text" name="category" value="{{ request.category }}" required>
+  </label>
+  <label>Subcategory depth <input type="number" name="depth" min="0" max="20" value="{{ depth }}"></label>
+  <label class="check"><input type="checkbox" name="extended" value="1"{% if extended %} checked{% endif %}> Show the changes since the last sighting</label>
+  <fieldset>
+    <legend>Sort by</legend>
+    <label class="check"><input type="radio" name="sortby" value="category"{% if !size_sorted %} checked{% endif %}> Category</label>
+    <label class="check"><input type="radio" name="sortby" value="size"{% if size_sorted %} checked{% endif %}> Size difference</label>
+  </fieldset>
+  <fieldset>
+    <legend>Output</legend>
+    <label class="check"><input type="radio" name="mode" value="web"{% if !rss %} checked{% endif %}> Web page</label>
+    <label class="check"><input type="radio" name="mode" value="rss"{% if rss %} checked{% endif %}> RSS feed</label>
+  </fieldset>
+  <button name="doit" value="1">Find pages</button>
+</form>
+{% endif %}
+{% if let Some(results) = results %}
+{% if !simple %}
+<h2>{{ results.found }} pages to sight</h2>
+{% if results.truncated %}
+<p class="muted">Only the first {{ results.found }} pages are shown; narrow the category for a complete list.</p>
+{% endif %}
+{% if notes_capped %}
+<p class="muted">Extended notes are shown for the first {{ notes_limit }} pages only.</p>
+{% endif %}
+{% endif %}
+{% if results.found == 0 %}
+<p class="muted">Nothing to sight in this category tree.</p>
+{% else %}
+{% if let Some(sorted) = results.sorted %}
+<ol>
+  {%- for page in sorted %}
+  <li><a href="{{ page.url }}" target="_blank" data-diff>{{ page.title }}</a>
+    <span class="{{ page.diff_class() }}">{{ page.diff_text() }}</span>{% if let Some(note) = page.note %} <span class="hint">({{ note.text() }})</span>{% endif %}</li>
+  {%- endfor %}
+</ol>
+{% else %}
+{% for group in results.groups %}
+{% if !simple %}<h3><a href="{{ group.url }}">{{ group.title }}</a></h3>{% endif %}
+<ol>
+  {%- for page in group.pages %}
+  <li><a href="{{ page.url }}" target="_blank" data-diff>{{ page.title }}</a>
+    <span class="{{ page.diff_class() }}">{{ page.diff_text() }}</span>{% if let Some(note) = page.note %} <span class="hint">({{ note.text() }})</span>{% endif %}</li>
+  {%- endfor %}
+</ol>
+{% endfor %}
+{% endif %}
+{% if !simple %}
+<p class="row">
+  <button type="button" data-open-tabs="20">Open first 20 in tabs</button>
+  <button type="button" data-open-tabs="50">Open first 50 in tabs</button>
+  <button type="button" data-open-tabs="0">Open all in tabs</button>
+</p>
+<script>
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-open-tabs]');
+  if (!button) return;
+  const count = Number(button.dataset.openTabs) || 0;
+  const links = [...document.querySelectorAll('a[data-diff]')];
+  (count ? links.slice(0, count) : links).forEach(link => window.open(link.href, '_blank'));
+});
+</script>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -159,6 +159,12 @@ ul.hits { list-style: none; padding: 0; }
 ul.hits li { margin: 0 0 1rem; }
 
 .error { color: var(--danger); }
+.diff-plus { color: #2e7d32; }
+.diff-minus { color: var(--danger); }
+
+@media (prefers-color-scheme: dark) {
+  .diff-plus { color: #81c784; }
+}
 
 /* Templator: required fields, and the wiki's rendering of descriptions. */
 input.required { background: color-mix(in srgb, #1fb5b5 14%, var(--bg)); }

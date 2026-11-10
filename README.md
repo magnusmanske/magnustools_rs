@@ -32,6 +32,8 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/commonsapi/` | XML (or JSON) summary of Commons files |
 | `/contribs/` | The contributions of several users, interleaved by time (formerly erwin85.toolforge.org) |
 | `/coord_gen/` | German Wikipedia's `{{Coordinate}}` from degrees |
+| `/deep_insight/` | Pages in a category tree that have never been sighted (formerly sighting.toolforge.org) |
+| `/deep_out_of_sight/` | Pages in a category tree whose latest revision has not been sighted, optionally with the changes since then (formerly sighting.toolforge.org) |
 | `/filterdone/` | Removes list entries from a wiki page whose linked page already exists (formerly magnus-toolserver.toolforge.org) |
 | `/flickrfree/` | Latest freely licensed Flickr photos |
 | `/forest4trees/` | Articles that may be missing from a category tree |
@@ -52,6 +54,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/prepbio/` | Wikitext for a new biography |
 | `/quick_counter/` | A user's edits per namespace |
 | `/randomarticle/`, `/random_image_commons_subcat/` | A random page from a category tree |
+| `/random_out_of_sight/` | A random selection of small unsighted changes (formerly sighting.toolforge.org) |
 | `/redirector/` | Redirects a Wikipedia may want, from other languages' titles |
 | `/related_places/` | The places a page links to, on a map, as KML or GeoJSON |
 | `/shortpages/` | Pages shorter than 50 bytes, optionally without templates or with a single author (formerly erwin85.toolforge.org) |

@@ -10,6 +10,8 @@ mod cas;
 mod commonsapi;
 mod contribs;
 mod coord_gen;
+mod deep_insight;
+mod deep_out_of_sight;
 mod filterdone;
 mod flickrfree;
 mod forest4trees;
@@ -31,10 +33,12 @@ mod not_in_the_other_language;
 mod oauth_uploader;
 mod prepbio;
 mod quick_counter;
+mod random_out_of_sight;
 mod random_page;
 mod redirector;
 mod related_places;
 mod shortpages;
+mod sighting;
 mod spacer;
 mod subpages;
 mod sugart;
@@ -72,6 +76,8 @@ pub const MENU: &[(&str, &str)] = &[
     ("commonsapi", "Commons API"),
     ("contribs", "Contribs [Erwin85]"),
     ("coord_gen", "Coordinate generator"),
+    ("deep_insight", "Deep InSight"),
+    ("deep_out_of_sight", "Deep out-of-sight"),
     ("get_distinct_authors", "Distinct authors"),
     ("filterdone", "Filter done"),
     ("transparent", "Find a translator"),
@@ -92,6 +98,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("quick_counter", "Quick edit counter"),
     ("randomarticle", "Random article"),
     ("random_image_commons_subcat", "Random image"),
+    ("random_out_of_sight", "Random out-of-sight"),
     ("misstake", "Ranked missing articles"),
     ("redirector", "Redirector"),
     ("related_places", "Related places"),
@@ -154,6 +161,8 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("commonsapi", get(commonsapi::handler)),
         ("contribs", get(contribs::handler)),
         ("coord_gen", get(coord_gen::handler).post(coord_gen::handler)),
+        ("deep_insight", get(deep_insight::handler).post(deep_insight::handler)),
+        ("deep_out_of_sight", get(deep_out_of_sight::handler).post(deep_out_of_sight::handler)),
         ("filterdone", get(filterdone::handler)),
         ("flickrfree", get(flickrfree::handler)),
         ("forest4trees", get(forest4trees::handler)),
@@ -174,6 +183,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("prepbio", get(prepbio::handler).post(prepbio::handler)),
         ("quick_counter", get(quick_counter::handler)),
         ("random_image_commons_subcat", get(random_page::image)),
+        ("random_out_of_sight", get(random_out_of_sight::handler).post(random_out_of_sight::handler)),
         ("randomarticle", get(random_page::article)),
         ("redirector", get(redirector::handler).post(redirector::handler)),
         ("related_places", get(related_places::handler)),
