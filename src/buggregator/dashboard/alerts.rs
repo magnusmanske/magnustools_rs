@@ -11,7 +11,7 @@ use wikimisc::mysql_async::Conn;
 use wikimisc::mysql_async::prelude::Queryable;
 
 /// Seconds without a report before a component counts as offline.
-pub const OFFLINE_AFTER: i64 = 600;
+pub const OFFLINE_AFTER: i64 = super::INACTIVE_AFTER;
 
 /// Seconds before a still-failing alert is mailed again.
 pub const REMIND_AFTER: i64 = 86_400;
@@ -41,6 +41,10 @@ pub fn offline(overview: &Value, now: i64) -> Vec<Alert> {
             let Some(last_seen) = c["current"]["last_seen"].as_i64() else { continue };
             let acknowledged = c["acks"]["status"].as_i64().is_some_and(|acked_at| acked_at >= last_seen);
             if now - last_seen <= OFFLINE_AFTER || acknowledged {
+                continue;
+            }
+            // A planned stop or an outside replacement is not an outage.
+            if c["current"]["end_reason"].as_str().is_some_and(|reason| super::EXPECTED_END_REASONS.contains(&reason)) {
                 continue;
             }
             let since = DateTime::from_timestamp(last_seen, 0)
@@ -208,6 +212,14 @@ mod tests {
         assert!(offline(&overview("down", NOW - 3600, None, Some(NOW - 3000)), NOW).is_empty());
         // An acknowledgement of an earlier outage does not cover this one.
         assert_eq!(offline(&overview("down", NOW - 3600, None, Some(NOW - 7200)), NOW).len(), 1);
+    }
+
+    #[test]
+    fn planned_ends_stay_quiet() {
+        for reason in ["shutdown", "exit", "vanished"] {
+            assert!(offline(&overview("stopped", NOW - 3600, Some(reason), None), NOW).is_empty(), "{reason}");
+        }
+        assert_eq!(offline(&overview("stopped", NOW - 3600, Some("crash"), None), NOW).len(), 1);
     }
 
     fn row(name: &str, subdomain: &str, status: i64, since: Option<i64>) -> WebRow {

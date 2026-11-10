@@ -19,6 +19,13 @@ use wikimisc::mysql_async::prelude::FromValue;
 
 pub const DAY: i64 = 86_400;
 
+/// A component silent this long is stale (dashboard) or offline (alerts).
+pub const INACTIVE_AFTER: i64 = 600;
+
+/// Ends that are no reason for an alert: planned ones, and a replacement
+/// from outside without a final report (restart, deploy, pod moved).
+pub const EXPECTED_END_REASONS: &[&str] = &["shutdown", "exit", "vanished"];
+
 /// Ends the dashboard worked out itself, as opposed to ones a service reported.
 pub const INFERRED_REASONS: &[&str] = &["oom", "crash", "vanished"];
 

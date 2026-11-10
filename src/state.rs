@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use axum::http::HeaderMap;
 use axum_extra::extract::PrivateCookieJar;
 use axum_extra::extract::cookie::Key;
+use serde_json::Value;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,6 +27,8 @@ const API_CACHE_WIKIS: usize = 128;
 /// The write check only needs the user name; cache it briefly per access token.
 const USER_CACHE_FOR: Duration = Duration::from_secs(300);
 const USER_CACHE_USERS: usize = 64;
+/// The dashboard is polled every minute; a few seconds of sharing is enough.
+const DASHBOARD_CACHE_FOR: Duration = Duration::from_secs(30);
 
 pub struct AppState {
     pub config: Config,
@@ -39,6 +42,8 @@ pub struct AppState {
     apis: TimedMap<String, Api>,
     /// Access-token hash => MediaWiki user name, for the write check.
     pub user_names: TimedMap<String, String>,
+    /// The dashboard overview, with the time it was computed.
+    pub dash_overview: TimedMap<String, (i64, Value)>,
 }
 
 impl AppState {
@@ -61,6 +66,7 @@ impl AppState {
             config,
             apis: TimedMap::new(API_CACHE_FOR, API_CACHE_WIKIS),
             user_names: TimedMap::new(USER_CACHE_FOR, USER_CACHE_USERS),
+            dash_overview: TimedMap::new(DASHBOARD_CACHE_FOR, 4),
         })
     }
 

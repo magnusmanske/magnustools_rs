@@ -32,6 +32,8 @@ const RETIRED_REPOS: &[&str] =
 /// answers 503 for a connection it dropped, though the tool is fine.
 const STATUS_ATTEMPTS: usize = 3;
 const STATUS_RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
+/// Addresses checked at once; the job should finish well within its window.
+const WEB_STATUS_CONCURRENT: usize = 8;
 
 pub async fn update(state: &AppState) -> Result<()> {
     let mut conn = state.tool_db.conn().await?;
@@ -868,8 +870,19 @@ pub async fn web_status(conn: &mut Conn) -> Result<()> {
         conn.exec_drop("UPDATE tool SET http_status=NULL, http_status_since=NULL WHERE id=?", (id,)).await?;
     }
     let now = Utc::now().timestamp();
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(WEB_STATUS_CONCURRENT));
+    let mut tasks = tokio::task::JoinSet::new();
     for (address, tools) in by_address {
-        let status = web_answer(&client, &address).await;
+        let client = client.clone();
+        let semaphore = semaphore.clone();
+        tasks.spawn(async move {
+            let Ok(_permit) = semaphore.acquire_owned().await else { return None };
+            let status = web_answer(&client, &address).await;
+            Some((address, tools, status))
+        });
+    }
+    while let Some(result) = tasks.join_next().await {
+        let Some((address, tools, status)) = result? else { continue };
         for (id, previous, previous_since) in tools {
             // An unchanged answer keeps its start; one that becomes fine has none.
             let since = if status == 200 {
@@ -885,6 +898,7 @@ pub async fn web_status(conn: &mut Conn) -> Result<()> {
             )
             .await?;
         }
+        tracing::debug!("{address}: HTTP {status}");
     }
     Ok(())
 }
@@ -896,12 +910,30 @@ async fn web_answer(client: &reqwest::Client, url: &str) -> u16 {
         if attempt > 0 {
             tokio::time::sleep(STATUS_RETRY_AFTER).await;
         }
-        status = client.head(url).send().await.map_or(0, |r| r.status().as_u16());
+        status = answer_once(client, url).await;
         if status == 200 {
             break;
         }
     }
     status
+}
+
+/// HEAD first; some servers reject it, so ask for the first byte instead.
+async fn answer_once(client: &reqwest::Client, url: &str) -> u16 {
+    match client.head(url).send().await {
+        Ok(response) if matches!(response.status().as_u16(), 405 | 501) => {
+            let status = client
+                .get(url)
+                .header(reqwest::header::RANGE, "bytes=0-0")
+                .send()
+                .await
+                .map_or(0, |r| r.status().as_u16());
+            // A partial answer for the one requested byte means the address is fine.
+            if status == 206 { 200 } else { status }
+        }
+        Ok(response) => response.status().as_u16(),
+        Err(_) => 0,
+    }
 }
 
 #[cfg(test)]

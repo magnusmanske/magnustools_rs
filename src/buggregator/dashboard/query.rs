@@ -11,14 +11,11 @@ use wikimisc::mysql_async::{Conn, Row};
 /// Seconds since the last push for "up" (pushes come every 60 s) …
 const UP_WITHIN: i64 = 150;
 /// … and for "stale"; older is "down".
-const STALE_WITHIN: i64 = 600;
+const STALE_WITHIN: i64 = super::INACTIVE_AFTER;
 /// Longer ranges are read from the hourly rollup.
 const RAW_MAX_RANGE: i64 = 2 * DAY;
 const TARGET_POINTS: i64 = 360;
 pub const RANGES: &[(&str, i64)] = &[("6h", 6 * 3600), ("24h", DAY), ("7d", 7 * DAY), ("30d", 30 * DAY)];
-/// Ends that are no reason for an alert: planned ones, and a replacement
-/// from outside without a final report (restart, deploy, pod moved).
-const EXPECTED_END_REASONS: &[&str] = &["shutdown", "exit", "vanished"];
 const MAX_EVENTS: u32 = 200;
 
 /// A range name, `24h` if unknown.
@@ -37,13 +34,66 @@ pub fn status(instance: &Instance, now: i64) -> &'static str {
     }
 }
 
-/// All active services, with per-component status, restarts and uptime.
+/// All active services, with per-component status, restarts and uptime. One
+/// query for the services, the instances and the acknowledgements; the
+/// front-end refreshes this every minute.
 pub async fn overview(conn: &mut Conn, now: i64) -> Result<Value> {
     let services: Vec<(u64, String, String, String, Option<u64>)> =
         conn.query("SELECT id, name, label, url, tool_id FROM dash_service WHERE is_active=1 ORDER BY name").await?;
+    let columns = Instance::COLUMNS.split(", ").map(|c| format!("i.{c}")).collect::<Vec<_>>().join(", ");
+    let rows: Vec<Row> = conn
+        .query(format!(
+            "SELECT {columns} FROM dash_instance i JOIN dash_service v ON v.id=i.service_id
+             WHERE v.is_active=1 ORDER BY i.id"
+        ))
+        .await?;
+    let mut by_service: BTreeMap<u64, BTreeMap<String, Vec<Instance>>> = BTreeMap::new();
+    for row in &rows {
+        let instance = Instance::from_row(row)?;
+        by_service
+            .entry(instance.service_id)
+            .or_default()
+            .entry(instance.component.clone())
+            .or_default()
+            .push(instance);
+    }
+    let acks = all_acks(conn).await?;
+    let cutoff = now - 7 * DAY;
     let mut out = vec![];
     for (id, name, label, url, tool_id) in services {
-        let components = components(conn, id, now).await?;
+        let mut components = Map::new();
+        for (component, instances) in by_service.remove(&id).unwrap_or_default() {
+            // Instances that ended before the window no longer describe the component.
+            let recent: Vec<Instance> = instances
+                .iter()
+                .filter(|i| i.ended_at.is_none() || i.ended_at.is_some_and(|end| end >= cutoff))
+                .cloned()
+                .collect();
+            let running: Vec<&Instance> = recent.iter().filter(|i| status(i, now) == "up").collect();
+            // The running replica closest to its memory limit (the newest when unknown).
+            let current = running
+                .iter()
+                .copied()
+                .max_by(|a, b| a.memory_share().total_cmp(&b.memory_share()).then(a.id.cmp(&b.id)))
+                .or_else(|| recent.last());
+            let Some(current) = current else { continue };
+            components.insert(
+                component.clone(),
+                json!({
+                    "status": status(current, now),
+                    "replicas": running.len(),
+                    "current": instance_json(current),
+                    "deployed_at": deployed_at(&instances, &current.version),
+                    "restarts_1h": ends_since(&recent, now - 3600),
+                    "restarts_24h": ends_since(&recent, now - DAY),
+                    "restarts_7d": ends_since(&recent, now - 7 * DAY),
+                    "uptime_24h": uptime(&recent, now - DAY, now),
+                    "uptime_7d": uptime(&recent, now - 7 * DAY, now),
+                    "last_unplanned_end": last_unplanned_end(&recent),
+                    "acks": acks.get(&id).and_then(|c| c.get(&component)).cloned().unwrap_or_default(),
+                }),
+            );
+        }
         out.push(json!({
             "label": if label.is_empty() { name.clone() } else { label },
             "name": name,
@@ -55,68 +105,10 @@ pub async fn overview(conn: &mut Conn, now: i64) -> Result<Value> {
     Ok(Value::Array(out))
 }
 
-async fn components(conn: &mut Conn, service_id: u64, now: i64) -> Result<Value> {
-    let rows: Vec<Row> = conn
-        .exec(
-            format!(
-                "SELECT {} FROM dash_instance WHERE service_id=? AND (ended_at IS NULL OR ended_at>=?) ORDER BY id",
-                Instance::COLUMNS
-            ),
-            (service_id, now - 7 * DAY),
-        )
-        .await?;
-    let mut by_component: BTreeMap<String, Vec<Instance>> = BTreeMap::new();
-    for row in &rows {
-        let instance = Instance::from_row(row)?;
-        by_component.entry(instance.component.clone()).or_default().push(instance);
-    }
-    let acks = acks(conn, service_id).await?;
-    let mut out = Map::new();
-    for (component, instances) in by_component {
-        let running: Vec<&Instance> = instances.iter().filter(|i| status(i, now) == "up").collect();
-        // The running replica closest to its memory limit (the newest when unknown), so the card shows the one at risk.
-        let current = running
-            .iter()
-            .copied()
-            .max_by(|a, b| a.memory_share().total_cmp(&b.memory_share()).then(a.id.cmp(&b.id)))
-            .or(instances.last());
-        let Some(current) = current else { continue };
-        let deployed_at = deployed_at(conn, service_id, &component, &current.version).await?;
-        out.insert(
-            component.clone(),
-            json!({
-                "status": status(current, now),
-                "replicas": running.len(),
-                "current": instance_json(current),
-                "deployed_at": deployed_at,
-                "restarts_1h": ends_since(&instances, now - 3600),
-                "restarts_24h": ends_since(&instances, now - DAY),
-                "restarts_7d": ends_since(&instances, now - 7 * DAY),
-                "uptime_24h": uptime(&instances, now - DAY, now),
-                "uptime_7d": uptime(&instances, now - 7 * DAY, now),
-                "last_unplanned_end": last_unplanned_end(&instances),
-                "acks": acks.get(&component).cloned().unwrap_or_default(),
-            }),
-        );
-    }
-    Ok(Value::Object(out))
-}
-
 /// Start of the oldest instance running the current version without a different one in between.
-async fn deployed_at(conn: &mut Conn, service_id: u64, component: &str, version: &str) -> Result<Option<i64>> {
-    let before: Option<Option<u64>> = conn
-        .exec_first(
-            "SELECT MAX(id) FROM dash_instance WHERE service_id=? AND component=? AND version!=?",
-            (service_id, component, version),
-        )
-        .await?;
-    let start: Option<Option<i64>> = conn
-        .exec_first(
-            "SELECT MIN(started_at) FROM dash_instance WHERE service_id=? AND component=? AND id>?",
-            (service_id, component, before.flatten().unwrap_or_default()),
-        )
-        .await?;
-    Ok(start.flatten())
+fn deployed_at(instances: &[Instance], version: &str) -> Option<i64> {
+    let after = instances.iter().filter(|i| i.version != version).map(|i| i.id).max().unwrap_or_default();
+    instances.iter().filter(|i| i.id > after).map(|i| i.started_at).min()
 }
 
 /// End reason => number of instances that ended since `since`.
@@ -131,18 +123,22 @@ fn ends_since(instances: &[Instance], since: i64) -> Map<String, Value> {
 fn last_unplanned_end(instances: &[Instance]) -> Option<i64> {
     instances
         .iter()
-        .filter(|i| !i.end_reason.as_deref().is_some_and(|r| EXPECTED_END_REASONS.contains(&r)))
+        .filter(|i| !i.end_reason.as_deref().is_some_and(|r| super::EXPECTED_END_REASONS.contains(&r)))
         .filter_map(|i| i.ended_at)
         .max()
 }
 
-/// component => kind => acked_at
-async fn acks(conn: &mut Conn, service_id: u64) -> Result<BTreeMap<String, Map<String, Value>>> {
-    let rows: Vec<(String, String, i64)> =
-        conn.exec("SELECT component, kind, acked_at FROM dash_ack WHERE service_id=?", (service_id,)).await?;
-    let mut out: BTreeMap<String, Map<String, Value>> = BTreeMap::new();
-    for (component, kind, acked_at) in rows {
-        out.entry(component).or_default().insert(kind, acked_at.into());
+/// service => component => kind => acked_at
+async fn all_acks(conn: &mut Conn) -> Result<BTreeMap<u64, BTreeMap<String, Map<String, Value>>>> {
+    let rows: Vec<(u64, String, String, i64)> = conn
+        .query(
+            "SELECT a.service_id, a.component, a.kind, a.acked_at FROM dash_ack a
+             JOIN dash_service s ON s.id=a.service_id WHERE s.is_active=1",
+        )
+        .await?;
+    let mut out: BTreeMap<u64, BTreeMap<String, Map<String, Value>>> = BTreeMap::new();
+    for (service_id, component, kind, acked_at) in rows {
+        out.entry(service_id).or_default().entry(component).or_default().insert(kind, acked_at.into());
     }
     Ok(out)
 }
@@ -400,6 +396,23 @@ mod tests {
         // Measured from the first start.
         assert_eq!(uptime(&instances, -1000, 1000), 0.8);
         assert_eq!(uptime(&instances, 1000, 1000), 1.0);
+    }
+
+    #[test]
+    fn deploy_time_is_the_run_of_the_current_version() {
+        let mut old = instance(1, 100, 200, Some(200), Some("shutdown"));
+        let mut current = instance(2, 300, 400, None, None);
+        let mut newer = instance(3, 500, 600, None, None);
+        old.version = "1".into();
+        current.version = "2".into();
+        newer.version = "2".into();
+        assert_eq!(deployed_at(&[old.clone(), current.clone(), newer.clone()], "2"), Some(300));
+        // A later version starts a new run.
+        let mut newest = instance(4, 700, 800, None, None);
+        newest.version = "3".into();
+        assert_eq!(deployed_at(&[old, current, newer, newest], "3"), Some(700));
+        // Without an older version, the oldest instance is the deploy.
+        assert_eq!(deployed_at(&[instance(1, 100, 200, None, None)], "1"), Some(100));
     }
 
     #[test]

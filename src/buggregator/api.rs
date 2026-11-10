@@ -114,8 +114,17 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
                 out.insert("status".to_string(), status.into());
             }
             "dashboard" => {
-                let mut conn = self.state.tool_db.conn().await?;
-                out.insert("data".to_string(), json!({"services": query::overview(&mut conn, now).await?, "now": now}));
+                let overview = self
+                    .state
+                    .dash_overview
+                    .get_or_fetch("overview".to_string(), async || {
+                        let mut conn = self.state.tool_db.conn().await?;
+                        let now = dashboard::now();
+                        let services = query::overview(&mut conn, now).await?;
+                        Ok::<_, anyhow::Error>((now, services))
+                    })
+                    .await?;
+                out.insert("data".to_string(), json!({"services": &overview.1, "now": overview.0}));
             }
             "web_alerts" => {
                 let mut conn = self.state.tool_db.conn().await?;
