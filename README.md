@@ -75,7 +75,11 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 Uses of the tools are counted in the telemetry (`tool_uses_total`, with
 `tool_requests_total` for all requests, in `src/tools/mod.rs`): a request
 counts if it brings parameters and does not fail, so opening an empty form
-does not. The service dashboard's hourly maintenance copies the uses of the
+does not. Telemetry pushes (`/buggregator/ingest*`) and logger calls
+(`/logger*`) are ecosystem-internal, not user traffic: they are excluded from
+the request metrics (`UNCOUNTED_PATHS` in `src/web/mod.rs`), and the logger is
+also excluded from `tool_requests_total`/`tool_uses_total`. The service
+dashboard's hourly maintenance copies the uses of the
 last complete days into the tool database's usage log, as tool `magnustools`
 with the tool's name as method (`src/buggregator/dashboard/daily_uses.rs`);
 it does the same for wikidata-todo, and for any service that reports

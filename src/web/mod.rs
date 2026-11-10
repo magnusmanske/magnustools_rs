@@ -25,9 +25,19 @@ use tower_http::set_header::SetResponseHeaderLayer;
 /// Some replica queries legitimately take minutes.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const HEALTH_PATH: &str = "/healthz";
-/// Not counted as traffic: health checks, and the logger, which the tools
-/// themselves call (under its old address too).
-const UNCOUNTED_PATHS: &[&str] = &[HEALTH_PATH, "/logger/", "/logger.php", "/logger"];
+/// Not counted as traffic: health checks, the logger, which the tools
+/// themselves call (under its old address too), and the telemetry ingest,
+/// which other services push to. These are ecosystem-internal calls, not
+/// user requests.
+const UNCOUNTED_PATHS: &[&str] = &[
+    HEALTH_PATH,
+    "/logger/",
+    "/logger.php",
+    "/logger",
+    "/buggregator/ingest/",
+    "/buggregator/ingest.php",
+    "/buggregator/ingest",
+];
 
 pub fn router(state: Arc<AppState>) -> Router {
     let static_files = static_files::service(state.config.public_html.as_deref());
@@ -112,6 +122,21 @@ mod tests {
     use super::test_support::get;
     use super::*;
     use axum::http::HeaderMap;
+
+    #[test]
+    fn internal_calls_are_not_traffic() {
+        for path in [
+            "/healthz",
+            "/logger/",
+            "/logger.php",
+            "/logger",
+            "/buggregator/ingest/",
+            "/buggregator/ingest.php",
+            "/buggregator/ingest",
+        ] {
+            assert!(UNCOUNTED_PATHS.contains(&path), "{path} is traffic");
+        }
+    }
 
     #[test]
     fn same_origin() {
