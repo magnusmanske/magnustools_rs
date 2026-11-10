@@ -13,6 +13,7 @@
 ALTER TABLE `text`
   ADD COLUMN `hash` char(64) NOT NULL DEFAULT '' COMMENT 'SHA-256 of text, so equal texts are stored once';
 UPDATE `text` SET `hash`=LOWER(SHA2(`text`,256)) WHERE `hash`='';
+ALTER TABLE `text` MODIFY `hash` char(64) NOT NULL;
 
 -- The issue list filters and default sort; `text_id` no longer scans `text`.
 ALTER TABLE `issue`

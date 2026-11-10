@@ -139,6 +139,7 @@ async fn prepare(conn: &mut Conn) -> Result<()> {
         .await?;
     }
     conn.query_drop("UPDATE `text` SET `hash`=LOWER(SHA2(`text`,256)) WHERE `hash`=''").await?;
+    conn.query_drop("ALTER TABLE `text` MODIFY `hash` char(64) NOT NULL").await?;
 
     for (table, name, ddl) in [
         ("issue", "tool_status", "ALTER TABLE `issue` ADD KEY `tool_status` (`tool`,`status`)"),
