@@ -22,6 +22,10 @@ const CODEBERG_PAGE: usize = 50;
 const TOOLHUB_SEARCH: &str = "https://toolhub.wikimedia.org/api/search/tools/?format=json&ordering=-score&page=1&page_size=1000&q=%22Magnus+Manske%22";
 /// Tool names too common to recognise a tool by.
 const IGNORE_TOOL_NAMES: &[&str] = &["data"];
+/// Repositories the project has left behind: archived, or superseded by a
+/// rewrite, so their old issues are not synced again.
+const RETIRED_REPOS: &[&str] =
+    &["https://github.com/magnusmanske/quickstatements", "https://codeberg.org/magnusmanske/sourcemd"];
 /// The sites the `user` table has users of.
 const USER_SITES: &[&str] = &["WIKI", "GITHUB"];
 /// Whose replies close a wiki issue after a month without further discussion.
@@ -356,6 +360,9 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
         )
         .await?;
     for (repo_id, html_url, api_issues_url, tool_id) in repos {
+        if RETIRED_REPOS.contains(&html_url.as_str()) {
+            continue;
+        }
         if forge.is_archived(state, &html_url).await {
             tracing::info!("{html_url}: repository archived; skipping");
             continue;
