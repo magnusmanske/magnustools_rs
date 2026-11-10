@@ -108,14 +108,14 @@ pub async fn overview(conn: &mut Conn, days: u64, last: NaiveDate) -> Result<Val
     let period = Period::new(days, last);
     let rows: Vec<(String, u32, u64)> = conn
         .exec(
-            "SELECT lt.name, u.date, SUM(u.used) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.tool_id
+            "SELECT lt.name, u.date, SUM(u.used) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.logging_tool_id
              WHERE u.date BETWEEN ? AND ? GROUP BY lt.name, u.date",
             (day_number(period.previous_first), day_number(period.last)),
         )
         .await?;
     let last_used: BTreeMap<String, u32> = conn
         .query(
-            "SELECT lt.name, MAX(u.date) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.tool_id GROUP BY lt.name",
+            "SELECT lt.name, MAX(u.date) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.logging_tool_id GROUP BY lt.name",
         )
         .await?
         .into_iter()
@@ -131,14 +131,14 @@ pub async fn tool(conn: &mut Conn, name: &str, days: u64, last: NaiveDate) -> Re
     let period = Period::new(days, last);
     let rows: Vec<(String, u32, u64)> = conn
         .exec(
-            "SELECT lt.method, u.date, SUM(u.used) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.tool_id
+            "SELECT lt.method, u.date, SUM(u.used) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.logging_tool_id
              WHERE lt.name=? AND u.date BETWEEN ? AND ? GROUP BY lt.method, u.date",
             (name, day_number(period.previous_first), day_number(period.last)),
         )
         .await?;
     let last_used: BTreeMap<String, u32> = conn
         .exec(
-            "SELECT lt.method, MAX(u.date) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.tool_id
+            "SELECT lt.method, MAX(u.date) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.logging_tool_id
              WHERE lt.name=? GROUP BY lt.method",
             (name,),
         )

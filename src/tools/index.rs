@@ -145,7 +145,7 @@ async fn most_used(conn: &mut Conn) -> anyhow::Result<Vec<(u32, Usage)>> {
     let first = today.checked_sub_days(Days::new(USAGE_DAYS)).unwrap_or(today);
     let logged: Vec<(u32, u64)> = conn
         .exec(
-            "SELECT lt.main_tool_id, SUM(u.used) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.tool_id
+            "SELECT lt.main_tool_id, SUM(u.used) FROM logging_uses u JOIN logging_tools lt ON lt.id=u.logging_tool_id
              WHERE u.date BETWEEN ? AND ? AND lt.main_tool_id IS NOT NULL GROUP BY lt.main_tool_id",
             (day_number(first), day_number(today.pred_opt().unwrap_or(today))),
         )

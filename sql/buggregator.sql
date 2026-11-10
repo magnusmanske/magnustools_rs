@@ -175,13 +175,13 @@ CREATE TABLE `logging_tools` (
 ;
 CREATE TABLE `logging_uses` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `tool_id` int(11) unsigned NOT NULL COMMENT 'The tool ID in the logging_tools table (NOT the tool table!)',
+  `logging_tool_id` int(11) unsigned NOT NULL COMMENT 'The tool ID in the logging_tools table (NOT the tool table!)',
   `date` int(11) unsigned NOT NULL COMMENT 'Day, as integer',
   `used` int(11) unsigned NOT NULL DEFAULT 0 COMMENT 'counter how often this tool/method was used on that day',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `tool` (`tool_id`,`date`),
+  UNIQUE KEY `tool_date` (`logging_tool_id`,`date`),
   KEY `date` (`date`),
-  CONSTRAINT `logging_uses_ibfk_1` FOREIGN KEY (`tool_id`) REFERENCES `logging_tools` (`id`)
+  CONSTRAINT `logging_uses_ibfk_1` FOREIGN KEY (`logging_tool_id`) REFERENCES `logging_tools` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `tag` (

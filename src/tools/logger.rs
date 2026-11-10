@@ -63,7 +63,7 @@ async fn log(state: &AppState, use_: &ToolMethod) -> anyhow::Result<()> {
     let mut conn = state.tool_db.conn().await?;
     let tool_id = logging_tool_id(&mut conn, use_, today, None).await?;
     conn.exec_drop(
-        "INSERT INTO logging_uses (tool_id, date, used) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE used=used+1",
+        "INSERT INTO logging_uses (logging_tool_id, date, used) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE used=used+1",
         (tool_id, today),
     )
     .await?;
@@ -77,7 +77,7 @@ pub async fn set_uses(conn: &mut Conn, tool: &str, method: &str, day: u32, uses:
     let Some(use_) = ToolMethod::new(tool, method) else { return Ok(()) };
     let tool_id = logging_tool_id(conn, &use_, day, Some((tool, method))).await?;
     conn.exec_drop(
-        "INSERT INTO logging_uses (tool_id, date, used) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE used=VALUES(used)",
+        "INSERT INTO logging_uses (logging_tool_id, date, used) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE used=VALUES(used)",
         (tool_id, day, uses),
     )
     .await?;

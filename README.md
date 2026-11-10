@@ -129,11 +129,27 @@ TOOL_DATA_DIR=$PWD toolforge-tunnel
 For anything that writes to the tool database, point `tool_db.url` at a local
 copy (`mysql://user@localhost/db?socket=…`); `sql/buggregator.sql` has the schema.
 
+### Database migrations
+
+`sql/` holds the reference schema and the one-off migrations. Back up the tool
+database and stop the web service and jobs, then run them in order:
+
+1. `2026-11-09-git-issue-site.sql`, `2026-11-09-wiki-duplicates.sql`
+2. `2026-11-10-dedupe-prep.sql`
+3. `magnustools_rs --config … buggregator-dedupe` (dry run), then `--apply`
+4. `2026-11-10-utf8mb4.sql`, `2026-11-10-null-dates-tools.sql`,
+   `2026-11-10-drop-legacy-views.sql`, `2026-11-10-token-hash-ascii.sql`
+
+`buggregator-dedupe` reports duplicate issues, users, texts and links;
+`--apply` collapses them and installs the natural keys. Do not run it against a
+database that is still being written to.
+
 ## Jobs
 
 The same binary runs the background jobs: `magnustools_rs --help` lists them,
 and `jobs.yaml` schedules them on Toolforge. Service dashboard administration
-is `magnustools_rs dashboard add|rotate|enable|disable|list|reinfer`.
+is `magnustools_rs dashboard add|rotate|enable|disable|list|reinfer`; the
+one-off duplicate cleanup is `magnustools_rs buggregator-dedupe`.
 
 Alerts go to `monitor.mail_to`. The `monitor` job covers tools without a
 dashboard service (a blocked bot, a web address that does not answer with
