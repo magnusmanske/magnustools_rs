@@ -44,12 +44,12 @@ async fn rollup(conn: &mut Conn, now: i64) -> Result<()> {
     let (from, to) = (from - from.rem_euclid(3600), now - now.rem_euclid(3600));
     // As in the series query: value_avg is the highest replica's average.
     conn.exec_drop(
-        "INSERT INTO dash_point_hourly (series_id, hour, delta_sum, value_avg, value_max)
-         SELECT series_id, h, SUM(d), MAX(a), MAX(m) FROM (
-           SELECT series_id, instance_id, ts - ts % 3600 AS h, SUM(delta) AS d, AVG(value) AS a, MAX(value) AS m
+        "INSERT INTO dash_point_hourly (series_id, hour, delta_sum, value_avg)
+         SELECT series_id, h, SUM(d), MAX(a) FROM (
+           SELECT series_id, instance_id, ts - ts % 3600 AS h, SUM(delta) AS d, AVG(value) AS a
            FROM dash_point WHERE ts>=? AND ts<? GROUP BY series_id, instance_id, h
          ) x GROUP BY series_id, h
-         ON DUPLICATE KEY UPDATE delta_sum=VALUES(delta_sum), value_avg=VALUES(value_avg), value_max=VALUES(value_max)",
+         ON DUPLICATE KEY UPDATE delta_sum=VALUES(delta_sum), value_avg=VALUES(value_avg)",
         (from, to),
     )
     .await?;

@@ -65,7 +65,6 @@ CREATE TABLE `dash_point_hourly` (
   `hour` int(10) unsigned NOT NULL COMMENT 'unix seconds, start of hour',
   `delta_sum` double DEFAULT NULL,
   `value_avg` double NOT NULL,
-  `value_max` double NOT NULL,
   PRIMARY KEY (`series_id`,`hour`),
   KEY `hour` (`hour`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
