@@ -6,7 +6,7 @@ mod mail;
 mod monitor;
 
 use crate::buggregator::dashboard::{self, admin};
-use crate::buggregator::{issues, update};
+use crate::buggregator::{dedupe, issues, update};
 use crate::state::AppState;
 use anyhow::{Result, bail};
 use clap::Subcommand;
@@ -18,6 +18,11 @@ pub enum Command {
     BuggregatorUpdate,
     /// Only the tidying up of issues: dates, tools, closing old ones.
     BuggregatorMaintenance,
+    /// Collapses duplicate issues, users, texts and links; dry run unless `--apply`.
+    BuggregatorDedupe {
+        #[arg(long)]
+        apply: bool,
+    },
     /// Tool descriptions and keywords from Toolhub.
     Toolhub,
     /// What each tool's web address answers (twice an hour).
@@ -65,6 +70,7 @@ pub async fn run(command: Command, state: &AppState) -> Result<()> {
     match command {
         Command::BuggregatorUpdate => update::update(state).await?,
         Command::BuggregatorMaintenance => update::maintenance(&mut conn).await?,
+        Command::BuggregatorDedupe { apply } => dedupe::run(&mut conn, apply).await?,
         Command::Toolhub => update::toolhub(state, &mut conn).await?,
         Command::Webstatus => update::web_status(&mut conn).await?,
         Command::DashboardMaintenance => admin::maintenance(&mut conn, now).await?,

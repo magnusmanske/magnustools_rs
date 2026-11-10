@@ -4,6 +4,7 @@
 
 mod api;
 pub mod dashboard;
+pub(crate) mod dedupe;
 mod ingest;
 pub mod issues;
 mod toolinfo;
@@ -12,9 +13,22 @@ mod usage;
 
 use crate::state::AppState;
 use crate::web::moved;
+use anyhow::Result;
 use axum::Router;
 use axum::routing::{any, get};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
+use wikimisc::mysql_async::prelude::Queryable;
+
+/// Lower-case SHA-256, as the token and text columns store it.
+pub fn sha256_hex(data: &[u8]) -> String {
+    Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The auto-increment id of the row just written on `conn` (`LAST_INSERT_ID()`).
+pub async fn last_id(conn: &mut impl Queryable) -> Result<u64> {
+    conn.query_first::<u64, _>("SELECT LAST_INSERT_ID()").await?.ok_or_else(|| anyhow::anyhow!("no insert id"))
+}
 
 /// Where a tool's web interface should answer: the address of its dashboard
 /// service if it has one (that is the one users see), else its own `url`,

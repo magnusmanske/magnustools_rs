@@ -4,8 +4,8 @@
 
 use super::payload::Push;
 use super::{INFERRED_REASONS, Instance};
+use crate::buggregator::sha256_hex;
 use anyhow::Result;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use wikimisc::mysql_async::prelude::Queryable;
 use wikimisc::mysql_async::{Conn, Params, Row, Value};
@@ -25,7 +25,7 @@ const LIMIT_METRIC: &str = "process_memory_limit_bytes";
 pub struct Rejected(pub u16, pub &'static str);
 
 pub fn hash_token(token: &str) -> String {
-    Sha256::digest(token.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+    sha256_hex(token.as_bytes())
 }
 
 /// The active service a token belongs to. Tokens are 256 random bits, so

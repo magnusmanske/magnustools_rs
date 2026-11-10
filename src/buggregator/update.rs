@@ -2,11 +2,11 @@
 //! Codeberg; tool data from Toolhub; and some tidying up. Each step runs
 //! even if an earlier one failed.
 
-use super::issues::text_id;
+use super::issues::{self, text_id};
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::wiki::{Wiki, encode_title};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Months, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use regex::Regex;
 use serde_json::Value;
@@ -26,8 +26,6 @@ const IGNORE_TOOL_NAMES: &[&str] = &["data"];
 /// rewrite, so their old issues are not synced again.
 const RETIRED_REPOS: &[&str] =
     &["https://github.com/magnusmanske/quickstatements", "https://codeberg.org/magnusmanske/sourcemd"];
-/// The sites the `user` table has users of.
-const USER_SITES: &[&str] = &["WIKI", "GITHUB"];
 /// Whose replies close a wiki issue after a month without further discussion.
 const MAINTAINER: &str = "Magnus Manske";
 /// Tries per tool for its web status: the Toolforge proxy now and then
@@ -70,12 +68,13 @@ struct NewIssue {
     urls: Vec<String>,
 }
 
-async fn create_issue(conn: &mut Conn, issue: &NewIssue) -> Result<u64> {
+async fn create_issue(conn: &mut impl Queryable, issue: &NewIssue) -> Result<u64> {
     let description_id = text_id(conn, &issue.description).await?;
     let time = |t: &Option<String>| t.clone().unwrap_or_else(|| ZERO_TIME.to_string());
     conn.exec_drop(
         "INSERT INTO issue (label, status, date_created, date_last, site, url, description_text_id, tool, priority)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'NORMAL')",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'NORMAL')
+         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)",
         (
             db_label(&issue.label),
             &issue.status,
@@ -88,13 +87,14 @@ async fn create_issue(conn: &mut Conn, issue: &NewIssue) -> Result<u64> {
         ),
     )
     .await?;
-    let issue_id = conn.last_insert_id().context("no issue id")?;
+    let issue_id = super::last_id(conn).await?;
     for url in &issue.urls {
-        conn.exec_drop("INSERT IGNORE INTO url_issue (url, issue_id) VALUES (?, ?)", (url, issue_id)).await?;
-    }
-    // `user.site` knows only these sites.
-    if !USER_SITES.contains(&issue.site) {
-        return Ok(issue_id);
+        conn.exec_drop(
+            "INSERT INTO url_issue (url, issue_id) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE url=VALUES(url)",
+            (url, issue_id),
+        )
+        .await?;
     }
     let mut seen = HashSet::new();
     for (i, name) in issue.users.iter().enumerate() {
@@ -102,7 +102,8 @@ async fn create_issue(conn: &mut Conn, issue: &NewIssue) -> Result<u64> {
         if seen.insert(user_id) {
             let role = if i == 0 { "CREATOR" } else { "UNKNOWN" };
             conn.exec_drop(
-                "INSERT IGNORE INTO user_issue (user_id, issue_id, role) VALUES (?, ?, ?)",
+                "INSERT INTO user_issue (user_id, issue_id, role) VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE role=IF(role='CREATOR', 'CREATOR', VALUES(role))",
                 (user_id, issue_id, role),
             )
             .await?;
@@ -123,35 +124,35 @@ fn db_label(text: &str) -> String {
     mb3(text).chars().take(255).collect()
 }
 
-async fn user_id(conn: &mut Conn, name: &str, site: &str) -> Result<u64> {
+async fn user_id(conn: &mut impl Queryable, name: &str, site: &str) -> Result<u64> {
     let name = mb3(&if site == "WIKI" { name.replace('_', " ") } else { name.to_string() });
     let name = name.trim();
-    if let Some(id) = conn.exec_first("SELECT id FROM user WHERE name=? AND site=?", (name, site)).await? {
-        return Ok(id);
-    }
-    conn.exec_drop("INSERT INTO user (name, site) VALUES (?, ?)", (name, site)).await?;
-    conn.last_insert_id().context("no user id")
+    conn.exec_drop(
+        "INSERT INTO user (name, site) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)",
+        (name, site),
+    )
+    .await?;
+    super::last_id(conn).await
 }
 
 // ── Wiki talk pages ────────────────────────────────────────────────────────
 
-/// Every section of the watched talk pages is an issue.
+/// Every section of the watched talk pages is an issue. Sections are
+/// refreshed on every run, so replies, dates and descriptions do not go stale.
 async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
     let pages: Vec<(u64, String, String, u64)> = conn.query("SELECT id, wiki, page, tool_hint FROM wiki_page").await?;
     for (page_id, dbname, page, tool_hint) in pages {
         let wiki = Wiki::from_dbname(&dbname)?;
         let text = mediawiki::page_wikitext(&state.http, &wiki, &page).await?.unwrap_or_default();
         for (label, wikitext) in sections(&text) {
-            let known: Option<u64> = conn
+            let known: Option<(u64, String, String)> = conn
                 .exec_first(
-                    "SELECT issue.id FROM issue JOIN wiki_issue ON issue_id=issue.id
+                    "SELECT issue.id, issue.status, issue.date_last FROM issue JOIN wiki_issue ON issue_id=issue.id
                      WHERE site='WIKI' AND CONVERT(label USING utf8mb4)=? AND wiki_page_id=?",
                     (db_label(&label), page_id),
                 )
                 .await?;
-            if known.is_some() {
-                continue;
-            }
             let times = signature_times(&wikitext);
             let issue = NewIssue {
                 url: format!("https://{}/wiki/{}#{}", wiki.host(), encode_title(&page), encode_title(&label)),
@@ -165,13 +166,104 @@ async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &ToolMatcher)
                 urls: urls(&wikitext),
                 label,
             };
-            let issue_id = create_issue(conn, &issue).await?;
-            conn.exec_drop(
-                "INSERT IGNORE INTO wiki_issue (wiki_page_id, issue_id, wikitext) VALUES (?, ?, ?)",
-                (page_id, issue_id, &wikitext),
+            match known {
+                Some((issue_id, status, old_last)) => {
+                    update_wiki_issue(conn, issue_id, &issue, &wikitext).await?;
+                    reopen_on_reply(conn, issue_id, &status, &old_last, &issue, &wikitext).await?;
+                }
+                None => {
+                    let mut tx = conn.start_transaction(Default::default()).await?;
+                    let issue_id = create_issue(&mut tx, &issue).await?;
+                    tx.exec_drop(
+                        "INSERT INTO wiki_issue (wiki_page_id, issue_id, wikitext) VALUES (?, ?, ?)
+                         ON DUPLICATE KEY UPDATE wikitext=VALUES(wikitext)",
+                        (page_id, issue_id, &wikitext),
+                    )
+                    .await?;
+                    tx.commit().await?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Refreshes a known wiki issue without touching its status (closing is
+/// `tidy`'s decision). Missing users and URLs are added; existing ones stay.
+async fn update_wiki_issue(conn: &mut Conn, issue_id: u64, issue: &NewIssue, wikitext: &str) -> Result<()> {
+    let mut tx = conn.start_transaction(Default::default()).await?;
+    let description_id = text_id(&mut tx, &issue.description).await?;
+    let time = |t: &Option<String>| t.clone().unwrap_or_else(|| ZERO_TIME.to_string());
+    tx.exec_drop(
+        "UPDATE issue SET label=?, url=?, description_text_id=?,
+           date_created=IF(date_created=?, ?, date_created),
+           date_last=GREATEST(date_last, ?),
+           tool=IF(tool=0, ?, tool)
+         WHERE id=?",
+        (
+            db_label(&issue.label),
+            mb3(&issue.url),
+            description_id,
+            ZERO_TIME,
+            time(&issue.date_created),
+            time(&issue.date_last),
+            issue.tool,
+            issue_id,
+        ),
+    )
+    .await?;
+    tx.exec_drop("UPDATE wiki_issue SET wikitext=? WHERE issue_id=?", (wikitext, issue_id)).await?;
+    for url in &issue.urls {
+        tx.exec_drop(
+            "INSERT INTO url_issue (url, issue_id) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE url=VALUES(url)",
+            (url, issue_id),
+        )
+        .await?;
+    }
+    let mut seen = HashSet::new();
+    for (i, name) in issue.users.iter().enumerate() {
+        let user_id = user_id(&mut tx, name, issue.site).await?;
+        if seen.insert(user_id) {
+            let role = if i == 0 { "CREATOR" } else { "UNKNOWN" };
+            tx.exec_drop(
+                "INSERT INTO user_issue (user_id, issue_id, role) VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE role=IF(role='CREATOR', 'CREATOR', VALUES(role))",
+                (user_id, issue_id, role),
             )
             .await?;
         }
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// A thread that got a reply after the maintainer's last word was closed by
+/// `tidy`; a new reply reopens it. Manual closes by anyone else stay closed.
+async fn reopen_on_reply(
+    conn: &mut Conn,
+    issue_id: u64,
+    status: &str,
+    old_last: &str,
+    issue: &NewIssue,
+    wikitext: &str,
+) -> Result<()> {
+    if status != "CLOSED" || issue.date_last.as_deref().is_none_or(|new| new <= old_last) {
+        return Ok(());
+    }
+    let last_close: Option<(String, String)> = conn
+        .exec_first(
+            "SELECT u.name, t.text FROM log l
+             JOIN user u ON u.id=l.user_id JOIN text t ON t.id=l.text_id
+             WHERE l.issue_id=? AND l.event='STATUS' ORDER BY l.id DESC LIMIT 1",
+            (issue_id,),
+        )
+        .await?;
+    let closed_by_maintenance = last_close.is_some_and(|(user, text)| user == MAINTAINER && text == "CLOSED");
+    let maintainer = regex(r"\bMagnus[ _]Manske\b");
+    let last_line_is_maintainer = wikitext.trim().lines().last().is_some_and(|line| maintainer.is_match(line));
+    if closed_by_maintenance && !last_line_is_maintainer {
+        issues::set_status(conn, issue_id, "OPEN", MAINTAINER).await?;
     }
     Ok(())
 }
@@ -260,9 +352,8 @@ fn trim_markup(wikitext: &str) -> String {
 }
 
 fn urls(text: &str) -> Vec<String> {
-    let mut urls: Vec<String> = URL.find_iter(text).map(|m| m.as_str().to_string()).collect();
-    urls.dedup();
-    urls
+    let mut seen = HashSet::new();
+    URL.find_iter(text).map(|m| m.as_str().to_string()).filter(|url| seen.insert(url.clone())).collect()
 }
 
 /// Users linked in the text, in order; the first one opened the section.
@@ -379,47 +470,16 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
         for json in &open {
             let Some(number) = json["number"].as_u64() else { continue };
             open_numbers.insert(number);
-            // Identify by repository URL, not `git_repo.id`: the same repository can
-            // have several rows (one per tool), and a row keeps its id when the
-            // repository moves between forges. `git_issue.site` separates the
-            // issue numbers of the old and the new forge.
-            let known: Option<u64> = conn
-                .exec_first(
-                    "SELECT issue.id FROM issue
-                     JOIN git_issue ON git_issue.issue_id=issue.id
-                     JOIN git_repo ON git_repo.id=git_issue.git_repo_id
-                     WHERE git_issue.site=? AND git_issue.git_id=?
-                       AND git_repo.repo_type=? AND git_repo.html_url=? LIMIT 1",
-                    (forge.site(), number, forge.site(), &html_url),
-                )
-                .await?;
-            if let Some(issue_id) = known {
-                conn.exec_drop(
-                    "UPDATE issue SET status='OPEN', label=?, date_last=GREATEST(date_last, ?) WHERE id=?",
-                    (db_label(json["title"].as_str().unwrap_or_default()), iso_time(&json["updated_at"]), issue_id),
-                )
-                .await?;
+            let issue_url = json["html_url"].as_str().unwrap_or_default();
+            if let Some(issue_id) = known_forge_issue(conn, forge, number, repo_id, &html_url, issue_url).await? {
+                update_forge_issue(conn, issue_id, forge, json).await?;
                 continue;
             }
-            let description = json["body"].as_str().unwrap_or_default().to_string();
-            let issue = NewIssue {
-                label: json["title"].as_str().unwrap_or_default().to_string(),
-                status: "OPEN".to_string(),
-                date_created: Some(iso_time(&json["created_at"])),
-                date_last: Some(iso_time(&json["updated_at"])),
-                site: forge.site(),
-                url: json["html_url"].as_str().unwrap_or_default().to_string(),
-                urls: urls(&description),
-                description,
-                tool: tool_id,
-                users: json["user"]["login"].as_str().map(str::to_string).into_iter().collect(),
-            };
-            let issue_id = create_issue(conn, &issue).await?;
-            conn.exec_drop(
-                "INSERT IGNORE INTO git_issue (issue_id, site, git_id, git_repo_id) VALUES (?, ?, ?, ?)",
-                (issue_id, forge.site(), number, repo_id),
-            )
-            .await?;
+            let issue = new_forge_issue(forge, json, tool_id);
+            let mut tx = conn.start_transaction(Default::default()).await?;
+            let issue_id = create_issue(&mut tx, &issue).await?;
+            ensure_mapping(&mut tx, issue_id, forge.site(), number, repo_id).await?;
+            tx.commit().await?;
         }
         let stored: Vec<(u64, u64)> = conn
             .exec(
@@ -431,6 +491,12 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
                 (forge.site(), forge.site(), &html_url),
             )
             .await?;
+        // A forge that suddenly returns no issues (a proxy error with HTTP 200,
+        // an access change) must not close the whole repository's history.
+        if open_numbers.is_empty() && !stored.is_empty() {
+            tracing::warn!("{html_url}: no open issues returned; not closing {} stored issues", stored.len());
+            continue;
+        }
         for (issue_id, _) in stored.iter().filter(|(_, number)| !open_numbers.contains(number)) {
             conn.exec_drop("UPDATE issue SET status='CLOSED' WHERE id=?", (issue_id,)).await?;
         }
@@ -439,10 +505,110 @@ async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<(
     Ok(())
 }
 
+/// The issue a forge report belongs to: the natural `(site, url)` first, then
+/// the repository mapping (the stable identity across URL changes).
+async fn known_forge_issue(
+    conn: &mut Conn,
+    forge: Forge,
+    number: u64,
+    repo_id: u64,
+    html_url: &str,
+    url: &str,
+) -> Result<Option<u64>> {
+    if !url.is_empty()
+        && let Some(id) =
+            conn.exec_first("SELECT id FROM issue WHERE site=? AND url=? LIMIT 1", (forge.site(), url)).await?
+    {
+        return Ok(Some(id));
+    }
+    if let Some(id) = conn
+        .exec_first(
+            "SELECT issue_id FROM git_issue WHERE site=? AND git_id=? AND git_repo_id=? LIMIT 1",
+            (forge.site(), number, repo_id),
+        )
+        .await?
+    {
+        return Ok(Some(id));
+    }
+    Ok(conn
+        .exec_first(
+            "SELECT gi.issue_id FROM git_issue gi JOIN git_repo r ON r.id=gi.git_repo_id
+             WHERE gi.site=? AND gi.git_id=? AND r.html_url=? LIMIT 1",
+            (forge.site(), number, html_url),
+        )
+        .await?)
+}
+
+fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64) -> NewIssue {
+    let description = json["body"].as_str().unwrap_or_default().to_string();
+    NewIssue {
+        label: json["title"].as_str().unwrap_or_default().to_string(),
+        status: "OPEN".to_string(),
+        date_created: Some(iso_time(&json["created_at"])),
+        date_last: Some(iso_time(&json["updated_at"])),
+        site: forge.site(),
+        url: json["html_url"].as_str().unwrap_or_default().to_string(),
+        urls: urls(&description),
+        description,
+        tool: tool_id,
+        users: json["user"]["login"].as_str().map(str::to_string).into_iter().collect(),
+    }
+}
+
+/// Updates an issue the forge already knows, including edits to its body.
+async fn update_forge_issue(conn: &mut Conn, issue_id: u64, forge: Forge, json: &Value) -> Result<()> {
+    let description = json["body"].as_str().unwrap_or_default();
+    let title = json["title"].as_str().unwrap_or_default();
+    let url = json["html_url"].as_str().unwrap_or_default();
+    let mut tx = conn.start_transaction(Default::default()).await?;
+    let description_id = text_id(&mut tx, description).await?;
+    // `IGNORE`: a repository rename can collide with another issue's old URL;
+    // the mapping still identifies this one.
+    tx.exec_drop(
+        "UPDATE IGNORE issue SET status='OPEN', label=?, url=?, description_text_id=?,
+           date_last=GREATEST(date_last, ?) WHERE id=?",
+        (db_label(title), mb3(url), description_id, iso_time(&json["updated_at"]), issue_id),
+    )
+    .await?;
+    for url in urls(description) {
+        tx.exec_drop(
+            "INSERT INTO url_issue (url, issue_id) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE url=VALUES(url)",
+            (url, issue_id),
+        )
+        .await?;
+    }
+    if let Some(login) = json["user"]["login"].as_str() {
+        let user_id = user_id(&mut tx, login, forge.site()).await?;
+        tx.exec_drop(
+            "INSERT INTO user_issue (user_id, issue_id, role) VALUES (?, ?, 'CREATOR')
+             ON DUPLICATE KEY UPDATE role=IF(role='CREATOR', 'CREATOR', VALUES(role))",
+            (user_id, issue_id),
+        )
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Maps an issue to its forge number. The unique key is `(site, git_id,
+/// git_repo_id)`, so a forge's numbers cannot collide with an older forge's.
+async fn ensure_mapping(conn: &mut impl Queryable, issue_id: u64, site: &str, number: u64, repo_id: u64) -> Result<()> {
+    conn.exec_drop(
+        "INSERT INTO git_issue (issue_id, site, git_id, git_repo_id) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE issue_id=VALUES(issue_id)",
+        (issue_id, site, number, repo_id),
+    )
+    .await?;
+    Ok(())
+}
+
 /// All open issues (not pull requests), page by page.
 async fn open_forge_issues(state: &AppState, url: &str, page_size: usize) -> Result<Vec<Value>> {
+    /// A runaway pagination loop must not run forever.
+    const MAX_PAGES: usize = 400;
     let mut issues = vec![];
-    for page in 1.. {
+    for page in 1..=MAX_PAGES {
         let request = format!("{url}&page={page}");
         let response = state
             .http
@@ -466,10 +632,10 @@ async fn open_forge_issues(state: &AppState, url: &str, page_size: usize) -> Res
         // Forgejo sets `pull_request` to null on issues; GitHub omits it.
         issues.extend(batch.iter().filter(|i| is_issue(i)).cloned());
         if count < page_size {
-            break;
+            return Ok(issues);
         }
     }
-    Ok(issues)
+    anyhow::bail!("{url}: more than {MAX_PAGES} pages; refusing to guess")
 }
 
 /// The start of a response body, for an error message.
@@ -654,7 +820,7 @@ async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
     let maintainer = regex(r"\bMagnus[ _]Manske\b");
     for (issue_id, wikitext) in replied {
         if wikitext.trim().lines().last().is_some_and(|line| maintainer.is_match(line)) {
-            conn.exec_drop("UPDATE issue SET status='CLOSED' WHERE id=?", (issue_id,)).await?;
+            issues::set_status(conn, issue_id, "CLOSED", MAINTAINER).await?;
         }
     }
     Ok(())

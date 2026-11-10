@@ -138,19 +138,33 @@ pub async fn get_tools(conn: &mut Conn) -> Result<Value> {
 }
 
 pub async fn set_status(conn: &mut Conn, issue_id: u64, status: &str, user: &str) -> Result<()> {
-    log(conn, issue_id, "STATUS", status, user).await?;
-    conn.exec_drop("UPDATE issue SET status=? WHERE id=?", (status, issue_id)).await?;
+    let mut tx = conn.start_transaction(Default::default()).await?;
+    log(&mut tx, issue_id, "STATUS", status, user).await?;
+    tx.exec_drop("UPDATE issue SET status=? WHERE id=?", (status, issue_id)).await?;
+    tx.commit().await?;
     Ok(())
 }
 
 pub async fn set_tool(conn: &mut Conn, issue_id: u64, tool_id: u64, user: &str) -> Result<()> {
-    log(conn, issue_id, "TOOL_ID", &tool_id.to_string(), user).await?;
-    conn.exec_drop("UPDATE issue SET tool=? WHERE id=?", (tool_id, issue_id)).await?;
+    let mut tx = conn.start_transaction(Default::default()).await?;
+    log(&mut tx, issue_id, "TOOL_ID", &tool_id.to_string(), user).await?;
+    tx.exec_drop("UPDATE issue SET tool=? WHERE id=?", (tool_id, issue_id)).await?;
+    tx.commit().await?;
     Ok(())
 }
 
+/// Whether an issue exists, for the user-facing checks before a change.
+pub async fn issue_exists(conn: &mut Conn, issue_id: u64) -> Result<bool> {
+    Ok(conn.exec_first::<u64, _, _>("SELECT id FROM issue WHERE id=?", (issue_id,)).await?.is_some())
+}
+
+/// Whether a tool exists, for the user-facing checks before a change.
+pub async fn tool_exists(conn: &mut Conn, tool_id: u64) -> Result<bool> {
+    Ok(conn.exec_first::<u64, _, _>("SELECT id FROM tool WHERE id=?", (tool_id,)).await?.is_some())
+}
+
 /// Records a change, and marks the issue as touched.
-async fn log(conn: &mut Conn, issue_id: u64, event: &str, text: &str, user: &str) -> Result<()> {
+async fn log(conn: &mut impl Queryable, issue_id: u64, event: &str, text: &str, user: &str) -> Result<()> {
     let text_id = text_id(conn, text).await?;
     let user_id = user_id(conn, user).await?;
     conn.exec_drop(
@@ -162,22 +176,26 @@ async fn log(conn: &mut Conn, issue_id: u64, event: &str, text: &str, user: &str
     Ok(())
 }
 
-/// Texts are stored once.
-pub async fn text_id(conn: &mut Conn, text: &str) -> Result<u64> {
-    if let Some(id) = conn.exec_first("SELECT id FROM text WHERE text=? LIMIT 1", (text,)).await? {
-        return Ok(id);
-    }
-    conn.exec_drop("INSERT INTO text (text) VALUES (?)", (text,)).await?;
-    conn.last_insert_id().ok_or_else(|| anyhow::anyhow!("no text id"))
+/// Texts are stored once, keyed by their SHA-256.
+pub async fn text_id(conn: &mut impl Queryable, text: &str) -> Result<u64> {
+    conn.exec_drop(
+        "INSERT INTO text (hash, text) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)",
+        (super::sha256_hex(text.as_bytes()), text),
+    )
+    .await?;
+    super::last_id(conn).await
 }
 
-/// A wiki user; created if new (the PHP version failed then).
-async fn user_id(conn: &mut Conn, name: &str) -> Result<u64> {
-    if let Some(id) = conn.exec_first("SELECT id FROM user WHERE name=? AND site='WIKI' LIMIT 1", (name,)).await? {
-        return Ok(id);
-    }
-    conn.exec_drop("INSERT INTO user (name, site) VALUES (?, 'WIKI')", (name,)).await?;
-    conn.last_insert_id().ok_or_else(|| anyhow::anyhow!("no user id"))
+/// A wiki user; created if new.
+async fn user_id(conn: &mut impl Queryable, name: &str) -> Result<u64> {
+    conn.exec_drop(
+        "INSERT INTO user (name, site) VALUES (?, 'WIKI')
+         ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)",
+        (name,),
+    )
+    .await?;
+    super::last_id(conn).await
 }
 
 /// A row as column => string (or null).

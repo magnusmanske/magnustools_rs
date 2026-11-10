@@ -43,7 +43,8 @@ CREATE TABLE `dash_instance` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `service_uid` (`service_id`,`uid`),
   KEY `component_started` (`service_id`,`component`,`started_at`),
-  KEY `ended_at` (`ended_at`)
+  KEY `ended_at` (`ended_at`),
+  KEY `ended_seen` (`ended_at`,`last_seen`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
 CREATE TABLE `dash_point` (
@@ -123,13 +124,16 @@ CREATE TABLE `issue` (
   `status` enum('OPEN','CLOSED') NOT NULL DEFAULT 'OPEN',
   `date_created` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   `date_last` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
-  `site` enum('WIKI','GITHUB','BITBUCKET','TWITTER','WIKIDATA','GITLAB','CODEBERG') NOT NULL DEFAULT 'WIKI',
+  `site` enum('WIKI','GITHUB','BITBUCKET','TWITTER','WIKIDATA','GITLAB','CODEBERG','GITLAB_WMF') NOT NULL DEFAULT 'WIKI',
   `url` varchar(255) NOT NULL,
   `description_text_id` int(11) NOT NULL DEFAULT 0,
   `tool` int(11) unsigned NOT NULL DEFAULT 0,
   `priority` enum('HIGH','NORMAL','LOW') NOT NULL DEFAULT 'NORMAL',
   PRIMARY KEY (`id`),
-  KEY `status` (`status`,`priority`,`date_last`)
+  UNIQUE KEY `site_url` (`site`,`url`),
+  KEY `status` (`status`,`priority`,`date_last`),
+  KEY `tool_status` (`tool`,`status`),
+  KEY `date_last` (`date_last`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
 ;
 CREATE TABLE `keywords` (
@@ -176,6 +180,7 @@ CREATE TABLE `logging_uses` (
   `used` int(11) unsigned NOT NULL DEFAULT 0 COMMENT 'counter how often this tool/method was used on that day',
   PRIMARY KEY (`id`),
   UNIQUE KEY `tool` (`tool_id`,`date`),
+  KEY `date` (`date`),
   CONSTRAINT `logging_uses_ibfk_1` FOREIGN KEY (`tool_id`) REFERENCES `logging_tools` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ;
@@ -199,8 +204,10 @@ CREATE TABLE `tag2tool` (
 ;
 CREATE TABLE `text` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `hash` char(64) NOT NULL COMMENT 'SHA-256 of text, so equal texts are stored once',
   `text` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hash` (`hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
 ;
 CREATE TABLE `tool` (
@@ -236,6 +243,7 @@ CREATE TABLE `url_issue` (
   `url` varchar(255) NOT NULL DEFAULT '',
   `issue_id` int(11) unsigned NOT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `issue_url` (`issue_id`,`url`),
   KEY `issue_id` (`issue_id`),
   CONSTRAINT `url_issue_ibfk_1` FOREIGN KEY (`issue_id`) REFERENCES `issue` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
@@ -243,9 +251,9 @@ CREATE TABLE `url_issue` (
 CREATE TABLE `user` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL DEFAULT '',
-  `site` enum('WIKI','GITHUB','BITBUCKET','TWITTER') NOT NULL DEFAULT 'WIKI',
+  `site` enum('WIKI','GITHUB','BITBUCKET','TWITTER','WIKIDATA','GITLAB','CODEBERG','GITLAB_WMF') NOT NULL DEFAULT 'WIKI',
   PRIMARY KEY (`id`),
-  KEY `name` (`name`,`site`)
+  UNIQUE KEY `name_site` (`name`,`site`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci
 ;
 CREATE TABLE `user_issue` (
@@ -254,6 +262,7 @@ CREATE TABLE `user_issue` (
   `issue_id` int(11) unsigned NOT NULL,
   `role` enum('UNKNOWN','CREATOR') NOT NULL DEFAULT 'UNKNOWN',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `user_issue` (`user_id`,`issue_id`),
   KEY `user_id` (`user_id`),
   KEY `issue_id` (`issue_id`),
   CONSTRAINT `user_issue_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`),
