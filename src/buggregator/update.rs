@@ -660,31 +660,78 @@ async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
     Ok(())
 }
 
+/// A `tool` row for the address check: id, active, web interface, subdomain,
+/// URL (its own or its service's), service id, status, and since.
+type ToolRow = (u64, bool, bool, String, String, Option<u64>, Option<i64>, Option<i64>);
+/// A tool answering at an address, with its status and since before this run.
+type ToolStatus = (u64, Option<i64>, Option<i64>);
+
 /// Sets each tool's `http_status` to what its web address answers, after
-/// redirects; on failure, after a few tries.
+/// redirects (`0`: no answer, after a few tries), and `http_status_since` to
+/// when that answer started, for the alerts. Tools that have no address, or
+/// no web interface, get neither.
 pub async fn web_status(conn: &mut Conn) -> Result<()> {
     let client = reqwest::Client::builder()
         .user_agent(crate::state::USER_AGENT)
         .redirect(reqwest::redirect::Policy::limited(5))
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
-    conn.query_drop("UPDATE tool SET http_status=NULL WHERE subdomain=''").await?;
-    let subdomains: Vec<String> = conn.query("SELECT DISTINCT subdomain FROM tool WHERE subdomain!=''").await?;
-    for subdomain in subdomains {
-        let url = format!("https://{subdomain}.toolforge.org");
-        let mut status = None;
-        for attempt in 0..STATUS_ATTEMPTS {
-            if attempt > 0 {
-                tokio::time::sleep(STATUS_RETRY_AFTER).await;
+    let tools: Vec<ToolRow> = conn
+        .query(
+            "SELECT t.id, t.is_active, t.has_webservice, t.subdomain,
+                    COALESCE(NULLIF(s.url,''), NULLIF(t.url,'')), s.id, t.http_status, t.http_status_since
+             FROM tool t LEFT JOIN dash_service s ON s.tool_id=t.id AND s.is_active=1",
+        )
+        .await?;
+    // One request per address, however many tools answer there (Reasonator has several).
+    let mut by_address: BTreeMap<String, Vec<ToolStatus>> = BTreeMap::new();
+    let mut unchecked = vec![];
+    for (id, is_active, has_webservice, subdomain, url, service, status, since) in tools {
+        match crate::buggregator::address(&subdomain, &url) {
+            Some(address) if is_active && (has_webservice || service.is_some()) => {
+                by_address.entry(address).or_default().push((id, status, since));
             }
-            status = client.head(&url).send().await.ok().map(|r| r.status().as_u16());
-            if status == Some(200) {
-                break;
-            }
+            _ => unchecked.push(id),
         }
-        conn.exec_drop("UPDATE tool SET http_status=? WHERE subdomain=?", (status, &subdomain)).await?;
+    }
+    for id in unchecked {
+        conn.exec_drop("UPDATE tool SET http_status=NULL, http_status_since=NULL WHERE id=?", (id,)).await?;
+    }
+    let now = Utc::now().timestamp();
+    for (address, tools) in by_address {
+        let status = web_answer(&client, &address).await;
+        for (id, previous, previous_since) in tools {
+            // An unchanged answer keeps its start; one that becomes fine has none.
+            let since = if status == 200 {
+                None
+            } else if previous == Some(i64::from(status)) {
+                previous_since
+            } else {
+                Some(now)
+            };
+            conn.exec_drop(
+                "UPDATE tool SET http_status=?, http_status_since=? WHERE id=?",
+                (i64::from(status), since, id),
+            )
+            .await?;
+        }
     }
     Ok(())
+}
+
+/// What `url` answers, after redirects; `0` if it does not answer at all.
+async fn web_answer(client: &reqwest::Client, url: &str) -> u16 {
+    let mut status = 0;
+    for attempt in 0..STATUS_ATTEMPTS {
+        if attempt > 0 {
+            tokio::time::sleep(STATUS_RETRY_AFTER).await;
+        }
+        status = client.head(url).send().await.map_or(0, |r| r.status().as_u16());
+        if status == 200 {
+            break;
+        }
+    }
+    status
 }
 
 #[cfg(test)]

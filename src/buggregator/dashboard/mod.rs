@@ -1,8 +1,9 @@
 //! The service dashboard: Rust services push their health once a minute
 //! (`ingest`); the buggregator front-end shows it (`query`); `admin`
 //! registers services and keeps the tables in shape; `alerts` finds what is
-//! offline, for the `dashboard-alerts` job; `daily_uses` copies the services'
-//! tool uses into the logger's tables.
+//! offline or has no working web address, for the `dashboard-alerts` job and
+//! the front-end; `daily_uses` copies the services' tool uses into the
+//! logger's tables.
 
 pub mod admin;
 pub mod alerts;

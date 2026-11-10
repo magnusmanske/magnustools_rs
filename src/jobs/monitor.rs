@@ -1,8 +1,10 @@
 //! The tool monitor: checks that tools are working, writes the result to
-//! `tool_status.html`, and mails new alerts. Tools with a service on the
-//! dashboard are left to the dashboard's own alerts (`dashboard_alerts`).
+//! `tool_status.html`, and mails new alerts, and the same again each day while
+//! they last. Tools with a service on the dashboard are left to the
+//! dashboard's own alerts (`dashboard_alerts`).
 
 use super::mail;
+use crate::buggregator::dashboard::alerts;
 use crate::state::AppState;
 use anyhow::Result;
 use askama::Template;
@@ -11,6 +13,8 @@ use std::time::Duration;
 use wikimisc::mysql_async::prelude::Queryable;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
+/// How long an unchanged alert stays quiet before it is mailed again.
+const REMIND_AFTER: Duration = Duration::from_secs(alerts::REMIND_AFTER as u64);
 
 /// Tool name and its alerts (none: nominal), in the order checked.
 #[derive(Debug, Default)]
@@ -62,7 +66,14 @@ pub async fn run(state: &AppState) -> Result<()> {
     let failing = Alerts(alerts.0.into_iter().filter(|(_, a)| !a.is_empty()).collect());
     let message = if failing.0.is_empty() { String::new() } else { AlertMail { alerts: &failing }.render()? };
     let last = tokio::fs::read_to_string(&config.state_file).await.unwrap_or_default();
-    if message != last {
+    let stale = !last.is_empty()
+        && tokio::fs::metadata(&config.state_file)
+            .await
+            .ok()
+            .and_then(|meta| meta.modified().ok())
+            .and_then(|time| time.elapsed().ok())
+            .is_some_and(|age| age >= REMIND_AFTER);
+    if message != last || stale {
         if !message.is_empty() {
             for (tool, alerts) in &failing.0 {
                 tracing::warn!("{tool}: {}", alerts.join("; "));

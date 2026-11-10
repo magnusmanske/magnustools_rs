@@ -135,6 +135,13 @@ The same binary runs the background jobs: `magnustools_rs --help` lists them,
 and `jobs.yaml` schedules them on Toolforge. Service dashboard administration
 is `magnustools_rs dashboard add|rotate|enable|disable|list|reinfer`.
 
+Alerts go to `monitor.mail_to`. The `monitor` job covers tools without a
+dashboard service (a blocked bot, a web address that does not answer with
+200); `dashboard-alerts` covers the services on the dashboard (no report for
+ten minutes, no working web address, crash loops, memory). Each problem is
+mailed once, and again each day while it lasts; the dashboard and usage pages
+show the failing web addresses as well.
+
 ## Deploy
 
 On Toolforge, as the `magnustools` tool:

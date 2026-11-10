@@ -101,6 +101,13 @@ const dash = {
 		return dash.duration ( (now||Date.now()/1000) - ts ) + ' ago' ;
 	} ,
 
+	// A web address that does not answer with 200, for the alert lists.
+	webText ( a , now ) {
+		let what = a.status ? 'answers HTTP ' + a.status : 'does not answer' ;
+		let since = a.since ? ' since ' + ( now - a.since < 86400 ? dash.ago(a.since,now) : dash.dateTime(a.since) ) : '' ;
+		return what + since ;
+	} ,
+
 	dateTime ( ts ) {
 		if ( !ts ) return '–' ;
 		let d = new Date ( ts*1000 ) ;

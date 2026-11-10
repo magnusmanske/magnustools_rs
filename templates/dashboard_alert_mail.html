@@ -1,9 +1,10 @@
 <html>
 <body>
-<p>Offline for more than ten minutes:</p>
+<p>Needs attention:</p>
 <ul>
-{% for o in offline %}<li>{{ o.text }}</li>
+{% for a in alerts %}<li>{{ a.text }}</li>
 {% endfor %}</ul>
 <p><a href="{{ dashboard_url }}">Service dashboard</a></p>
+<p>You get this once per problem, and again each day while it lasts.</p>
 </body>
 </html>

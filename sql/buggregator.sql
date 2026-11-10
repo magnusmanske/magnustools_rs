@@ -217,6 +217,7 @@ CREATE TABLE `tool` (
   `has_webservice` tinyint(1) NOT NULL DEFAULT 0,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `http_status` int(11) DEFAULT NULL,
+  `http_status_since` int(10) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `name` (`name`,`subdomain`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

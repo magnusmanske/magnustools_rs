@@ -19,6 +19,12 @@
 	<div v-if='error' class='alert alert-warning'>{{error}}</div>
 	<div v-else-if='data===null'><i>Loading…</i></div>
 	<div v-else :class='{"dash-loading":loading}'>
+		<ul class='attention' v-if='alerts.length'>
+			<li v-for='a in alerts'>
+				<span :class='"status-icon status-"+a.severity'>{{icon(a.severity)}}</span>
+				<a :href='a.url' target='_blank' rel='noopener noreferrer'>{{a.label}}</a>: {{text(a)}}
+			</li>
+		</ul>
 		<div class='kpis'>
 			<div class='kpi'>
 				<div class='kpi-label'>Uses</div>
@@ -93,13 +99,14 @@ let UsageDashboard = Vue.extend ( {
 	props : [] ,
 	data : function () { return {
 		data : null , range : '30d' , ranges : [ '7d' , '30d' , '90d' , '365d' ] ,
-		selected : null , detail : null , loading : false , error : '' ,
+		selected : null , detail : null , alerts : [] , loading : false , error : '' ,
 	} } ,
 	created : function () {
 		let query = this.$route.query ;
 		if ( this.ranges.includes ( query.range ) ) this.range = query.range ;
 		this.selected = query.tool || null ;
 		this.load() ;
+		this.loadAlerts() ;
 	} ,
 	computed : {
 		total : function () { return this.data.tools.reduce ( function(a,t){ return a + t.uses } , 0 ) } ,
@@ -133,6 +140,11 @@ let UsageDashboard = Vue.extend ( {
 				.then ( function ( data ) { me.data = data ; me.error = '' ; if ( me.selected ) me.loadDetail() } )
 				.catch ( function ( e ) { me.error = e } )
 				.finally ( function () { me.loading = false } ) ;
+		} ,
+		// Tools whose web address does not answer, which explains a drop in uses.
+		loadAlerts : function () {
+			let me = this ;
+			dash.api ( { action:'web_alerts' } ).then ( function ( d ) { me.alerts = d.alerts } ).catch ( function () {} ) ;
 		} ,
 		loadDetail : function () {
 			let me = this , name = me.selected ;
@@ -176,6 +188,8 @@ let UsageDashboard = Vue.extend ( {
 			} ).join ( '' ) ;
 		} ,
 		day : function ( t ) { return new Date(t*1000).toISOString().slice(0,10) } ,
+		text : function ( a ) { return dash.webText ( a , Date.now()/1000 ) } ,
+		icon : function ( severity ) { return dash.SEVERITY_ICONS[severity] } ,
 		fmt : function ( v ) { return dash.format ( v , 'count' ) } ,
 		percent : function ( v ) { return dash.format ( v , 'percent' ) } ,
 	} ,

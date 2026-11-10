@@ -1,7 +1,7 @@
 //! `buggregator/api.php`: the JSON API of the buggregator front-end, and its
 //! OAuth login. Answers are `{"status": "OK" | <error>, "data": …}`.
 
-use super::dashboard::{self, admin, query};
+use super::dashboard::{self, admin, alerts, query};
 use super::issues::{self, IssueQuery, PRIORITIES, SITES, SORT_BY, STATUSES};
 use super::usage;
 use crate::oauth::{OAuth, Session, Token};
@@ -127,6 +127,10 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
             "dashboard" => {
                 let mut conn = self.state.tool_db.conn().await?;
                 out.insert("data".to_string(), json!({"services": query::overview(&mut conn, now).await?, "now": now}));
+            }
+            "web_alerts" => {
+                let mut conn = self.state.tool_db.conn().await?;
+                out.insert("data".to_string(), json!({"alerts": alerts::web(&mut conn).await?, "now": now}));
             }
             "dashboard_totals" => {
                 let mut conn = self.state.tool_db.conn().await?;
