@@ -23,9 +23,13 @@ pub(super) async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &T
         let wiki = Wiki::from_dbname(&dbname)?;
         let text = mediawiki::page_wikitext(&state.http, &wiki, &page).await?.unwrap_or_default();
         for (label, wikitext) in sections(&text) {
+            // `date_last` is a SQL timestamp; mysql_common does not convert
+            // its `Date` value to `String`, so format it in SQL for the
+            // textual comparison in `reopen_on_reply`.
             let known: Option<(u64, String, Option<String>)> = conn
                 .exec_first(
-                    "SELECT issue.id, issue.status, issue.date_last FROM issue JOIN wiki_issue ON issue_id=issue.id
+                    "SELECT issue.id, issue.status, DATE_FORMAT(issue.date_last, '%Y-%m-%d %H:%i:%s')
+                     FROM issue JOIN wiki_issue ON issue_id=issue.id
                      WHERE site='WIKI' AND label=? AND wiki_page_id=?",
                     (db_label(&label), page_id),
                 )
