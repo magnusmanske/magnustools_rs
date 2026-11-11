@@ -26,6 +26,7 @@ const PETSCAN: &str = "https://petscan.toolforge.org/";
 
 /// Exact paths. A trailing `/*` marks a directory: it and everything below are retired.
 const RETIRED: &[(&str, Fate)] = &[
+    ("/index.php", Fate::MovedTo("/")),
     ("/multistatus.html", Fate::MovedTo("/")),
     ("/toolstatus.html", Fate::MovedTo("/")),
     ("/can_i_haz_files.html", Fate::MovedTo("/can_i_haz_files/")),
@@ -202,6 +203,7 @@ mod tests {
         let moved = get(dir.path(), "/hay2.html").await;
         assert_eq!(moved.status.as_u16(), 308);
         assert_eq!(moved.headers["location"], "https://hay.toolforge.org/");
+        assert_eq!(get(dir.path(), "/index.php?x=1").await.headers["location"], "/?x=1");
     }
 
     #[tokio::test]

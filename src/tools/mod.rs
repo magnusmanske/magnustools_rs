@@ -221,7 +221,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
     ]
 }
 
-/// A tool at `/<name>/`. Its old address, `/<name>.php`, and `/<name>` redirect there.
+/// A tool at `/<name>/`. Its old addresses, `/<name>.php` and `/<name>`, redirect there.
 fn tool(router: Router<State>, name: &str, handler: MethodRouter<State>) -> Router<State> {
     let path = format!("/{name}/");
     router.route(&path, handler).route(&format!("/{name}.php"), moved(&path)).route(&format!("/{name}"), moved(&path))

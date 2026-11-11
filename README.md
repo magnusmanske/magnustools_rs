@@ -182,6 +182,13 @@ toolforge jobs load jobs.yaml
 The service reads `$TOOL_DATA_DIR/magnustools_rs.json` (see
 `config.json.template` and the `Procfile`).
 
+The tools' old subdomains redirect here with Toolforge's
+[`redirect` container](https://wikitech.wikimedia.org/wiki/Tool:Containers):
+`REDIRECT_HOST=magnustools.toolforge.org`, and `REDIRECT_PATH=/<tool>/` where the
+old site was a single page. It keeps the query string, and its 308 keeps a POST
+body. `erwin85` still serves PHP pages that were not ported, so its lighttpd
+redirects only cover the ported paths.
+
 ## License
 
 GPL-2.0-or-later
