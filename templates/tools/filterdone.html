@@ -14,21 +14,5 @@
 <p class="muted">{{ results.removed }} list entries removed; {{ results.kept }} lines remain.</p>
 <p><button type="button" data-copy="#filtered">Copy filtered text</button></p>
 <textarea id="filtered" class="code" rows="20" readonly>{{ results.output }}</textarea>
-<script>
-document.addEventListener('click', async (event) => {
-  const button = event.target.closest('button[data-copy]');
-  if (!button) return;
-  const target = document.querySelector(button.dataset.copy);
-  if (!target) return;
-  try {
-    await navigator.clipboard.writeText(target.value);
-    const label = button.textContent;
-    button.textContent = 'Copied!';
-    setTimeout(() => { button.textContent = label; }, 1500);
-  } catch {
-    button.textContent = 'Copy failed';
-  }
-});
-</script>
 {% endif %}
 {% endblock %}

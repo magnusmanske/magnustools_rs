@@ -63,15 +63,6 @@
   <button type="button" data-open-tabs="50">Open first 50 in tabs</button>
   <button type="button" data-open-tabs="0">Open all in tabs</button>
 </p>
-<script>
-document.addEventListener('click', (event) => {
-  const button = event.target.closest('button[data-open-tabs]');
-  if (!button) return;
-  const count = Number(button.dataset.openTabs) || 0;
-  const links = [...document.querySelectorAll('a[data-diff]')];
-  (count ? links.slice(0, count) : links).forEach(link => window.open(link.href, '_blank'));
-});
-</script>
 {% endif %}
 {% endif %}
 {% endif %}

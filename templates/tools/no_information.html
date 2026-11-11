@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "macros.html" as ui %}
 {% block content %}
 <p class="lead">Files without an <em>Information</em> template, or a similar one such as <em>Artwork</em> or <em>Photograph</em>; optionally only those of one uploader.</p>
 <form method="get" action="/no_information/">
@@ -21,6 +22,6 @@
   <li><a href="{{ file.url }}">File:{{ file.name }}</a> <span class="hint">(<a href="{{ file.add_url }}">add information</a>)</span></li>
 {% endfor %}
 </ol>
-{% if let Some(next_url) = results.next_url %}<p><a href="{{ next_url }}">Next {{ max }}</a></p>{% endif %}
+{% call ui::next_page(results.next_url, "Next " ~ max) %}{% endcall %}
 {% endif %}
 {% endblock %}

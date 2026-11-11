@@ -201,4 +201,44 @@ mod tests {
         assert!(timestamp("2024", "From").is_err());
         assert!(timestamp("2024010203040x", "From").is_err());
     }
+
+    #[test]
+    fn pager_links_keep_their_labels() {
+        let request = Request {
+            lang: "en".into(),
+            family: "wikipedia".into(),
+            t1: "20240101000000".into(),
+            t2: "20240102000000".into(),
+            namespaces: "0".into(),
+            invert: None,
+            limit: None,
+            offset: None,
+        };
+        let page = Page {
+            title: "New pages [Erwin85]",
+            request: &request,
+            limit: 50,
+            invert: false,
+            error: None,
+            results: Some(Results {
+                entries: vec![Entry {
+                    time: "2024-01-01 00:00:00".into(),
+                    page: "Example".into(),
+                    page_url: "https://en.wikipedia.org/wiki/Example".into(),
+                    user: "Example".into(),
+                    user_url: "https://en.wikipedia.org/wiki/User:Example".into(),
+                    contribs_url: "https://en.wikipedia.org/wiki/Special:Contributions/Example".into(),
+                    comment: String::new(),
+                    bytes: None,
+                }],
+                wiki: "en.wikipedia.org".into(),
+                previous_url: Some("/newpages/?offset=0".into()),
+                next_url: Some("/newpages/?offset=100".into()),
+            }),
+        };
+        let html = page.render().unwrap();
+        assert!(html.contains("<nav class=\"pagination\" aria-label=\"Pagination\">"));
+        assert!(html.contains("rel=\"prev\" href=\"/newpages/?offset=0\">Previous 50</a>"));
+        assert!(html.contains("rel=\"next\" href=\"/newpages/?offset=100\">Next 50</a>"));
+    }
 }

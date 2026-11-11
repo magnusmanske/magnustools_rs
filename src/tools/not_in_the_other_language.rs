@@ -595,5 +595,7 @@ mod tests {
         assert!(html.contains("https://www.wikidata.org/wiki/Q1"));
         assert!(html.contains("start=100"));
         assert!(html.contains("Results 1–1"));
+        assert!(html.contains("<nav class=\"pagination\" aria-label=\"Pagination\">"));
+        assert!(html.contains("rel=\"next\""));
     }
 }

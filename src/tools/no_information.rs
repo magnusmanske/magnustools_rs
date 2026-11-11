@@ -246,6 +246,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_next_page_link_is_rendered() {
+        let request = Request::default();
+        let results = Results { files: vec![], scanned: 0, next_url: Some("/no_information/?after=A_b.jpg".into()) };
+        let page = Page { title: "No information", request: &request, max: 100, results: Some(results) };
+        let html = page.render().unwrap();
+        assert!(html.contains("<nav class=\"pagination\" aria-label=\"Pagination\">"));
+        assert!(html.contains("rel=\"next\" href=\"/no_information/?after=A_b.jpg\">Next 100</a>"));
+    }
+
     #[tokio::test]
     async fn empty_form() {
         let dir = tempfile::tempdir().unwrap();

@@ -66,25 +66,5 @@
 </table>
 </div>
 {% endif %}
-<script>
-// Copies the wikitext, or the table's titles as wikilinks, to the clipboard.
-document.addEventListener('click', async (event) => {
-  const button = event.target.closest('button[data-copy]');
-  if (!button) return;
-  const target = document.querySelector(button.dataset.copy);
-  if (!target) return;
-  const text = target instanceof HTMLTextAreaElement
-    ? target.value
-    : [...target.querySelectorAll('tr[data-title]')].map(row => `[[${row.dataset.title}]]`).join('\n') + '\n';
-  try {
-    await navigator.clipboard.writeText(text);
-    const label = button.textContent;
-    button.textContent = 'Copied!';
-    setTimeout(() => { button.textContent = label; }, 1500);
-  } catch {
-    button.textContent = 'Copy failed';
-  }
-});
-</script>
 {% endif %}
 {% endblock %}

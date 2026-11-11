@@ -557,6 +557,8 @@ mod tests {
         assert!(html.contains("redlink"));
         assert!(html.contains("Foo bar"));
         assert!(html.contains("1,000 potential articles on enwiki"));
+        assert_eq!(html.matches("<nav class=\"pagination\" aria-label=\"Pagination\">").count(), 2);
+        assert!(html.contains("<span class=\"muted\" aria-disabled=\"true\">Start</span>"));
     }
 
     #[test]

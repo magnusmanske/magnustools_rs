@@ -34,6 +34,34 @@
   document.addEventListener('click', e => { if (!menu.contains(e.target)) menu.open = false; });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') menu.open = false; });
 })();
+
+// Copies a textarea's text, or a table's row titles as wikilinks, to the clipboard.
+document.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-copy]');
+  if (!button) return;
+  const target = document.querySelector(button.dataset.copy);
+  if (!target) return;
+  const text = target instanceof HTMLTextAreaElement
+    ? target.value
+    : [...target.querySelectorAll('tr[data-title]')].map(row => `[[${row.dataset.title}]]`).join('\n') + '\n';
+  try {
+    await navigator.clipboard.writeText(text);
+    const label = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = label; }, 1500);
+  } catch {
+    button.textContent = 'Copy failed';
+  }
+});
+
+// Opens the links marked `data-diff` in new tabs, all or the first N.
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-open-tabs]');
+  if (!button) return;
+  const count = Number(button.dataset.openTabs) || 0;
+  const links = [...document.querySelectorAll('a[data-diff]')];
+  (count ? links.slice(0, count) : links).forEach(link => window.open(link.href, '_blank'));
+});
 </script>
 </body>
 </html>

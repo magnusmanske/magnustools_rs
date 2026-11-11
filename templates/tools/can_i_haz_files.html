@@ -21,22 +21,6 @@
 {% else %}
 <p><button type="button" data-copy="#script">Copy script</button></p>
 <textarea id="script" class="code" rows="20" readonly>{{ results.script }}</textarea>
-<script>
-document.addEventListener('click', async (event) => {
-  const button = event.target.closest('button[data-copy]');
-  if (!button) return;
-  const target = document.querySelector(button.dataset.copy);
-  if (!target) return;
-  try {
-    await navigator.clipboard.writeText(target.value);
-    const label = button.textContent;
-    button.textContent = 'Copied!';
-    setTimeout(() => { button.textContent = label; }, 1500);
-  } catch {
-    button.textContent = 'Copy failed';
-  }
-});
-</script>
 {% endif %}
 {% endif %}
 {% endblock %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "macros.html" as ui %}
 {% block content %}
 <p class="lead">Red links that many articles point to. The list is rebuilt daily; only links with at least {{ min_links }} incoming links from articles are listed.</p>
 <form method="get" action="/most_wanted/">
@@ -24,9 +25,7 @@
 <p class="muted">No entries in this range.</p>
 {% else %}
 <p>List last updated {{ updated }} (UTC). {{ entries }} potential articles on {{ project }}.</p>
-<nav class="groups">
-{%- for link in nav %}{% if link.current %}<span class="muted">{{ link.label }}</span>{% else %}<a href="{{ link.url }}">{{ link.label }}</a>{% endif %}{% endfor %}
-</nav>
+{% call ui::pagination_links(nav) %}{% endcall %}
 <div class="table-wrap">
 <table>
   <thead><tr><th>Rank</th><th>Article</th><th class="num">Incoming article links</th><th>Search the web</th><th class="num">Non-template links (est.)</th>{% if show_hints %}<th>Hints</th>{% endif %}</tr></thead>
@@ -45,9 +44,7 @@
   </tbody>
 </table>
 </div>
-<nav class="groups">
-{%- for link in nav %}{% if link.current %}<span class="muted">{{ link.label }}</span>{% else %}<a href="{{ link.url }}">{{ link.label }}</a>{% endif %}{% endfor %}
-</nav>
+{% call ui::pagination_links(nav) %}{% endcall %}
 {% endif %}
 {% endif %}
 {% endblock %}

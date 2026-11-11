@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "macros.html" as ui %}
 {% block content %}
 <p class="lead">Pages shorter than 50 bytes, shortest first.</p>
 <form method="get" action="/shortpages/">
@@ -38,10 +39,7 @@
   </tbody>
 </table>
 </div>
-<p>
-{% if let Some(url) = results.previous_url %}<a href="{{ url }}">Previous {{ limit }}</a>{% endif %}
-{% if let Some(url) = results.next_url %}<a href="{{ url }}">Next {{ limit }}</a>{% endif %}
-</p>
+{% call ui::pagination(results.previous_url, results.next_url, "Previous " ~ limit, "Next " ~ limit) %}{% endcall %}
 {% endif %}
 {% endif %}
 {% endblock %}

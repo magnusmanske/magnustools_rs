@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "macros.html" as ui %}
 {% block content %}
 <p class="lead">Recent article edits by a group of users: the users with a page in a category, or a list.</p>
 <form method="get" action="/herding_sheep/">
@@ -34,7 +35,7 @@ the latest {{ results.edits.len() }} of their article edits.</p>
   </tbody>
 </table>
 </div>
-{% if let Some(url) = results.next_url %}<p><a href="{{ url }}">Older edits</a></p>{% endif %}
+{% call ui::next_page(results.next_url, "Older edits") %}{% endcall %}
 <h2>Edits per user</h2>
 <table>
   <thead><tr><th>User</th><th class="num">Edits</th></tr></thead>
