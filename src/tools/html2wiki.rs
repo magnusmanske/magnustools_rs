@@ -22,6 +22,7 @@ pub struct Request {
     oneline: Option<String>,
     escape: Option<String>,
     otherhtml: Option<String>,
+    strip_styles: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +31,7 @@ struct Options {
     oneline: bool,
     escape: bool,
     other_html: bool,
+    strip_styles: bool,
 }
 
 #[derive(Template)]
@@ -48,12 +50,16 @@ pub async fn handler(Params(request): Params<Request>) -> Result<Html<String>, A
         oneline: request.oneline.is_some_and(|o| o != "0" && !o.is_empty()),
         escape: request.escape.is_some() || !submitted,
         other_html: request.otherhtml.is_some() || !submitted,
+        strip_styles: request.strip_styles.is_some(),
     };
     let wikitext = submitted.then(|| convert(&request.html, options).trim_start_matches('\n').to_string());
     render(&Page { title: "HTML to wiki", html: request.html, options, wikitext })
 }
 
 static SPACE_BETWEEN_TAGS: LazyLock<Regex> = LazyLock::new(|| regex(r">\s+<"));
+static STYLE_ATTR: LazyLock<Regex> = LazyLock::new(|| regex(r#"(?i)\s+style\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#));
+static FONT_TAG: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)</?font\b[^>]*>"));
+static SPAN_TAG: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)</?span\b[^>]*>"));
 static TABLE_END: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)</table>"));
 static ENDS_DROPPED: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)</(caption|tr|th|td)>"));
 static TABLE: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)<table([^>]*)>"));
@@ -81,6 +87,12 @@ static OTHER_TAGS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
 
 fn convert(html: &str, options: Options) -> String {
     let mut s = html.replace('\r', "");
+    if options.strip_styles {
+        // Styling is meaningless in wikitext; keep the text, drop the decoration.
+        s = STYLE_ATTR.replace_all(&s, "").into_owned();
+        s = FONT_TAG.replace_all(&s, "").into_owned();
+        s = SPAN_TAG.replace_all(&s, "").into_owned();
+    }
     if options.escape {
         s = s.replace('!', "&#33;").replace('|', "&#124;");
     }
@@ -161,7 +173,7 @@ mod tests {
     const TABLE: &str = "<table border=1><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>";
 
     fn options(dashes: usize, oneline: bool, escape: bool, other_html: bool) -> Options {
-        Options { dashes, oneline, escape, other_html }
+        Options { dashes, oneline, escape, other_html, strip_styles: false }
     }
 
     // Expected values are from the PHP original (with its post-PHP-7 regression fixed).
@@ -190,5 +202,12 @@ mod tests {
     fn other_html_only() {
         let html = "<p>Hello <i>world</i></p><hr/><p>Bye</p>";
         assert_eq!(convert(html, options(1, false, false, true)), "\nHello ''world''\n----\n\nBye");
+    }
+
+    #[test]
+    fn strip_styles_keeps_text() {
+        let html = "<p style=\"color:red\"><span class='x'><font face=\"Arial\" size=3>Hi</font></span></p>";
+        let options = Options { strip_styles: true, ..options(1, false, false, true) };
+        assert_eq!(convert(html, options), "\nHi");
     }
 }

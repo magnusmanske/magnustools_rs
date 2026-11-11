@@ -12,6 +12,7 @@ After a script by Borislav Manolov.</p>
   <label class="check"><input type="checkbox" name="oneline" value="1"{% if options.oneline %} checked{% endif %}> Cells of a row on one line</label>
   <label class="check"><input type="checkbox" name="escape" value="1"{% if options.escape %} checked{% endif %}> Replace <code>!</code> and <code>|</code> in the text with HTML entities</label>
   <label class="check"><input type="checkbox" name="otherhtml" value="1"{% if options.other_html %} checked{% endif %}> Also convert other HTML tags where possible</label>
+  <label class="check"><input type="checkbox" name="strip_styles" value="1"{% if options.strip_styles %} checked{% endif %}> Strip styling (<code>style</code</code>> attributes, <code>&lt;font&gt;</code>, <code>&lt;span&gt;</code>)</label>
   <button>Convert</button>
 </form>
 {% if let Some(wikitext) = wikitext %}
