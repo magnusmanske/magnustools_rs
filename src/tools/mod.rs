@@ -32,6 +32,7 @@ mod map2wp;
 mod metronom;
 mod missingtopics;
 mod misstake;
+pub(crate) mod most_wanted;
 mod newpages;
 mod no_information;
 mod not_in_the_other_language;
@@ -99,6 +100,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("map2wp", "Map DNB to Wikipedia"),
     ("metronom", "Metronom"),
     ("missingtopics", "Missing topics"),
+    ("most_wanted", "Most wanted"),
     ("newpages", "New pages [Erwin85]"),
     ("no_information", "No information"),
     ("not-in-the-other-language", "Not in the other language"),
@@ -188,6 +190,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("map2wp", get(map2wp::handler).post(map2wp::handler)),
         ("metronom", get(metronom::handler)),
         ("missingtopics", get(missingtopics::handler).post(missingtopics::handler)),
+        ("most_wanted", get(most_wanted::handler)),
         ("misstake", get(misstake::handler).post(misstake::handler)),
         ("newpages", get(newpages::handler)),
         ("no_information", get(no_information::handler)),

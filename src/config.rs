@@ -41,6 +41,10 @@ pub struct Config {
     /// Cached Wikisource DNB word counts, written by the old dnbtools job.
     #[serde(default = "default_dnb_wordcount_file")]
     pub dnb_wordcount_file: PathBuf,
+    /// The `most-wanted` lists, one `<wiki>_p.links.red` per wiki, written by
+    /// the `most-wanted` job.
+    #[serde(default = "default_most_wanted_dir")]
+    pub most_wanted_dir: PathBuf,
     #[serde(default)]
     pub monitor: MonitorConfig,
     /// Service dashboard push; the token may also come from `$DASHBOARD_TOKEN`.
@@ -123,6 +127,10 @@ fn default_dnb_wordcount_file() -> PathBuf {
     "/data/project/dnbtools/ws_dnb_wordcount.tab".into()
 }
 
+fn default_most_wanted_dir() -> PathBuf {
+    "/data/project/magnustools/most_wanted".into()
+}
+
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         let text =
@@ -133,6 +141,7 @@ impl Config {
         config.public_html = config.public_html.map(|p| dir.join(p));
         config.flickr_key_file = config.flickr_key_file.map(|f| dir.join(f));
         config.dnb_wordcount_file = dir.join(&config.dnb_wordcount_file);
+        config.most_wanted_dir = dir.join(&config.most_wanted_dir);
         config.replica_credentials = dir.join(&config.replica_credentials);
         config.buggregator_oauth = dir.join(&config.buggregator_oauth);
         config.uploader_oauth = dir.join(&config.uploader_oauth);
@@ -162,6 +171,7 @@ mod tests {
         assert_eq!(config.public_html, Some(dir.path().join("php/public_html")));
         assert_eq!(config.replica_credentials, dir.path().join("replica.my.cnf"));
         assert_eq!(config.dnb_wordcount_file, Path::new("/data/project/dnbtools/ws_dnb_wordcount.tab"));
+        assert_eq!(config.most_wanted_dir, Path::new("/data/project/magnustools/most_wanted"));
         assert_eq!(config.monitor.status_page, dir.path().join("tool_status.html"));
         assert!(config.telemetry.token.is_none());
     }
@@ -176,6 +186,12 @@ mod tests {
     fn dnb_wordcount_file_is_configurable() {
         let (config, dir) = load(r#"{"dnb_wordcount_file": "dnb.tab"}"#);
         assert_eq!(config.unwrap().dnb_wordcount_file, dir.path().join("dnb.tab"));
+    }
+
+    #[test]
+    fn most_wanted_dir_is_configurable() {
+        let (config, dir) = load(r#"{"most_wanted_dir": "most_wanted"}"#);
+        assert_eq!(config.unwrap().most_wanted_dir, dir.path().join("most_wanted"));
     }
 
     #[test]

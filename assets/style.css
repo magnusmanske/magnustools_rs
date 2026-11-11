@@ -159,6 +159,8 @@ ul.hits { list-style: none; padding: 0; }
 ul.hits li { margin: 0 0 1rem; }
 
 .error { color: var(--danger); }
+.redlink { color: var(--danger); }
+.hints { font-size: 80%; }
 .diff-plus { color: #2e7d32; }
 .diff-minus { color: var(--danger); }
 .dnb-list { max-height: 30rem; overflow-y: auto; padding-left: 1.25rem; }

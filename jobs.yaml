@@ -37,3 +37,81 @@
   schedule: "9 9 * * *"
   mount: all
   mem: 100Mi
+# most-wanted: one wiki per job, as the old PHP jobs were scheduled.
+- name: most-wanted-enwiki
+  command: job most-wanted enwiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 10 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-dewiki
+  command: job most-wanted dewiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 11 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-frwiki
+  command: job most-wanted frwiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 12 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-plwiki
+  command: job most-wanted plwiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 13 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-itwiki
+  command: job most-wanted itwiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 14 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-eswiki
+  command: job most-wanted eswiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 15 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-tawiki
+  command: job most-wanted tawiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 16 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-hewiki
+  command: job most-wanted hewiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 17 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-tewiki
+  command: job most-wanted tewiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 18 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-mrwiki
+  command: job most-wanted mrwiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 19 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure
+- name: most-wanted-urwiki
+  command: job most-wanted urwiki
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "10 20 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure

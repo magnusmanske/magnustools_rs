@@ -32,6 +32,8 @@ pub enum Command {
     DashboardAlerts,
     /// Checks tools not on the dashboard, writes tool_status.html, mails new alerts (twice an hour).
     Monitor,
+    /// Rebuilds one wiki's most-wanted list (`enwiki` or `enwiki_p`; daily).
+    MostWanted { wiki: String },
     /// Service dashboard administration.
     #[command(subcommand)]
     Dashboard(DashboardCommand),
@@ -75,6 +77,7 @@ pub async fn run(command: Command, state: &AppState) -> Result<()> {
         Command::DashboardMaintenance => maintenance::maintenance(&mut conn, now).await?,
         Command::DashboardAlerts => dashboard_alerts::run(state).await?,
         Command::Monitor => monitor::run(state).await?,
+        Command::MostWanted { wiki } => crate::tools::most_wanted::update(state, &wiki).await?,
         Command::IssueStatus { issue_id, status } => {
             let status = status.to_uppercase();
             if !issues::STATUSES.contains(&status.as_str()) {
