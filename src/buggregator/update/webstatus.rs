@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use chrono::Utc;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use wikimisc::mysql_async::Conn;
 use wikimisc::mysql_async::prelude::Queryable;
 
@@ -17,9 +17,8 @@ const WEB_STATUS_CONCURRENT: usize = 8;
 const WEB_STATUS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// A `tool` row for the address check: id, active, web interface, subdomain,
-/// URL (its own or its service's; `None` when neither is set), service id,
-/// status, and since.
-type ToolRow = (u64, bool, bool, String, Option<String>, Option<u64>, Option<i64>, Option<i64>);
+/// its own URL, its service's URL and id, status, and since.
+type ToolRow = (u64, bool, bool, String, Option<String>, Option<String>, Option<u64>, Option<i64>, Option<i64>);
 /// A tool answering at an address, with its status and since before this run.
 type ToolStatus = (u64, Option<i64>, Option<i64>);
 
@@ -36,17 +35,41 @@ pub async fn web_status(conn: &mut Conn) -> Result<()> {
     let tools: Vec<ToolRow> = conn
         .query(
             "SELECT t.id, t.is_active, t.has_webservice, t.subdomain,
-                    COALESCE(NULLIF(s.url,''), NULLIF(t.url,'')), s.id, t.http_status, t.http_status_since
+                    NULLIF(t.url,''), NULLIF(s.url,''), s.id, t.http_status, t.http_status_since
              FROM tool t LEFT JOIN dash_service s ON s.tool_id=t.id AND s.is_active=1",
         )
         .await?;
+    // A service's other routes are in the same process: if the service answers,
+    // so do they. Only the service's address is checked, not each route.
+    let service_origins: HashSet<String> = tools
+        .iter()
+        .filter_map(|(_, _, _, _, _, service_url, _, _, _)| service_url.as_deref())
+        .filter_map(origin)
+        .collect();
     // One request per address, however many tools answer there (Reasonator has several).
     let mut by_address: BTreeMap<String, Vec<ToolStatus>> = BTreeMap::new();
     let mut unchecked = vec![];
-    for (id, is_active, has_webservice, subdomain, url, service, status, since) in tools {
-        let url = url.unwrap_or_default();
-        match crate::buggregator::address(&subdomain, &url) {
-            Some(address) if is_active && (has_webservice || service.is_some()) => {
+    for (id, is_active, has_webservice, subdomain, tool_url, service_url, service, status, since) in tools {
+        if !is_active {
+            unchecked.push(id);
+            continue;
+        }
+        // A tool with a service is checked at the service's address; its own
+        // URL is only a fallback when the service has none.
+        if service.is_some() {
+            let url = service_url.as_deref().or(tool_url.as_deref()).unwrap_or_default();
+            match crate::buggregator::address(&subdomain, url) {
+                Some(address) => by_address.entry(address).or_default().push((id, status, since)),
+                None => unchecked.push(id),
+            }
+            continue;
+        }
+        if !has_webservice {
+            unchecked.push(id);
+            continue;
+        }
+        match crate::buggregator::address(&subdomain, tool_url.as_deref().unwrap_or_default()) {
+            Some(address) if !covered_by_service(&address, &service_origins) => {
                 by_address.entry(address).or_default().push((id, status, since));
             }
             _ => unchecked.push(id),
@@ -89,6 +112,19 @@ pub async fn web_status(conn: &mut Conn) -> Result<()> {
     Ok(())
 }
 
+/// The scheme and host of a URL, without its path or query.
+fn origin(url: &str) -> Option<String> {
+    let url = reqwest::Url::parse(url).ok()?;
+    let host = url.host_str()?;
+    let port = url.port().map_or_else(String::new, |port| format!(":{port}"));
+    Some(format!("{}://{host}{port}", url.scheme()))
+}
+
+/// Whether another service already checks this host.
+fn covered_by_service(address: &str, service_origins: &HashSet<String>) -> bool {
+    origin(address).is_some_and(|origin| service_origins.contains(&origin))
+}
+
 /// What `url` answers, after redirects; `0` if it does not answer at all.
 async fn web_answer(client: &reqwest::Client, url: &str) -> u16 {
     let mut status = 0;
@@ -119,5 +155,28 @@ async fn answer_once(client: &reqwest::Client, url: &str) -> u16 {
         }
         Ok(response) => response.status().as_u16(),
         Err(_) => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn origins_ignore_paths() {
+        assert_eq!(
+            origin("https://magnustools.toolforge.org/dnb_ratios/").as_deref(),
+            Some("https://magnustools.toolforge.org")
+        );
+        assert_eq!(origin("http://example.org:8080/x?q=1").as_deref(), Some("http://example.org:8080"));
+        assert_eq!(origin("not a URL"), None);
+    }
+
+    #[test]
+    fn same_service_host_is_covered() {
+        let origins = HashSet::from(["https://magnustools.toolforge.org".to_string()]);
+        assert!(covered_by_service("https://magnustools.toolforge.org/dnb_ratios/", &origins));
+        assert!(!covered_by_service("https://dnbtools.toolforge.org/dnb_ratios/", &origins));
+        assert!(!covered_by_service("https://magnustools.toolforge.org.evil/", &origins));
     }
 }
