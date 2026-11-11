@@ -161,9 +161,13 @@ ul.hits li { margin: 0 0 1rem; }
 .error { color: var(--danger); }
 .diff-plus { color: #2e7d32; }
 .diff-minus { color: var(--danger); }
+.dnb-list { max-height: 30rem; overflow-y: auto; padding-left: 1.25rem; }
+.template-attribution { color: var(--accent); }
+.template-message { color: #2e7d32; }
 
 @media (prefers-color-scheme: dark) {
   .diff-plus { color: #81c784; }
+  .template-message { color: #81c784; }
 }
 
 /* Templator: required fields, and the wiki's rendering of descriptions. */

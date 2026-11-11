@@ -38,6 +38,9 @@ pub struct Config {
     /// The Flickr API key, alone in a file; without it, `flickrfree.php` is unavailable.
     #[serde(default)]
     pub flickr_key_file: Option<PathBuf>,
+    /// Cached Wikisource DNB word counts, written by the old dnbtools job.
+    #[serde(default = "default_dnb_wordcount_file")]
+    pub dnb_wordcount_file: PathBuf,
     #[serde(default)]
     pub monitor: MonitorConfig,
     /// Service dashboard push; the token may also come from `$DASHBOARD_TOKEN`.
@@ -116,6 +119,10 @@ fn default_uploader_oauth() -> PathBuf {
     "oauth.ini".into()
 }
 
+fn default_dnb_wordcount_file() -> PathBuf {
+    "/data/project/dnbtools/ws_dnb_wordcount.tab".into()
+}
+
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         let text =
@@ -125,6 +132,7 @@ impl Config {
         let dir = path.parent().unwrap_or(Path::new("."));
         config.public_html = config.public_html.map(|p| dir.join(p));
         config.flickr_key_file = config.flickr_key_file.map(|f| dir.join(f));
+        config.dnb_wordcount_file = dir.join(&config.dnb_wordcount_file);
         config.replica_credentials = dir.join(&config.replica_credentials);
         config.buggregator_oauth = dir.join(&config.buggregator_oauth);
         config.uploader_oauth = dir.join(&config.uploader_oauth);
@@ -153,6 +161,7 @@ mod tests {
         let config = config.unwrap();
         assert_eq!(config.public_html, Some(dir.path().join("php/public_html")));
         assert_eq!(config.replica_credentials, dir.path().join("replica.my.cnf"));
+        assert_eq!(config.dnb_wordcount_file, Path::new("/data/project/dnbtools/ws_dnb_wordcount.tab"));
         assert_eq!(config.monitor.status_page, dir.path().join("tool_status.html"));
         assert!(config.telemetry.token.is_none());
     }
@@ -161,6 +170,12 @@ mod tests {
     fn absolute_paths_stay() {
         let (config, _dir) = load(r#"{"public_html": "/data/project/x/public_html"}"#);
         assert_eq!(config.unwrap().public_html.as_deref(), Some(Path::new("/data/project/x/public_html")));
+    }
+
+    #[test]
+    fn dnb_wordcount_file_is_configurable() {
+        let (config, dir) = load(r#"{"dnb_wordcount_file": "dnb.tab"}"#);
+        assert_eq!(config.unwrap().dnb_wordcount_file, dir.path().join("dnb.tab"));
     }
 
     #[test]

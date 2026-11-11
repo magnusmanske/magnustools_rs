@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Broken constraints in the <a href="https://en.wikisource.org/wiki/Dictionary_of_National_Biography">Wikisource Dictionary of National Biography</a>.</p>
+<p class="muted">{{ total }} DNB biographies; {{ dnb_coded }} have a DNB00, DNB01 or DNB12 code; {{ other.len() }} have another title.</p>
+
+{% if !other.is_empty() %}
+<h2>Other titles</h2>
+{% if other_truncated %}<p class="muted">Only the first {{ other.len() }} are shown.</p>{% endif %}
+<ul class="dnb-list">
+  {%- for link in other %}
+  <li><a href="{{ link.url }}">{{ link.title }}</a></li>
+  {%- endfor %}
+</ul>
+{% endif %}
+
+<h2>Transclusions</h2>
+<p>{{ transclusions }} pages are used for transclusion on individual DNB biographies; {{ edited_pages }} original pages have been edited.</p>
+{% if not_transcluded.is_empty() %}
+<p class="muted">Every edited original page is transcluded.</p>
+{% else %}
+<h3>{{ not_transcluded.len() }} edited original pages without transclusion to individual biographies</h3>
+{% if not_transcluded_truncated %}<p class="muted">Only the first {{ not_transcluded.len() }} are shown.</p>{% endif %}
+<ul class="dnb-list">
+  {%- for link in not_transcluded %}
+  <li><a href="{{ link.url }}">{{ link.title }}</a></li>
+  {%- endfor %}
+</ul>
+{% endif %}
+
+<h2>Author → biography links without a link back</h2>
+{% if author_to_bios.is_empty() %}
+<p class="muted">None.</p>
+{% else %}
+<dl>
+  {%- for group in author_to_bios %}
+  <dt><a href="{{ group.url }}">{{ group.title }}</a></dt>
+  <dd>
+    {%- for link in group.links %}
+    <a href="{{ link.url }}">{{ link.title }}</a><br>
+    {%- endfor %}
+  </dd>
+  {%- endfor %}
+</dl>
+{% endif %}
+
+<h2>Biography → author links without a link back</h2>
+{% if bio_to_authors.is_empty() %}
+<p class="muted">None.</p>
+{% else %}
+<dl>
+  {%- for group in bio_to_authors %}
+  <dt><a href="{{ group.url }}">{{ group.title }}</a></dt>
+  <dd>
+    {%- for link in group.links %}
+    <a href="{{ link.url }}">{{ link.title }}</a><br>
+    {%- endfor %}
+  </dd>
+  {%- endfor %}
+</dl>
+{% endif %}
+{% endblock %}

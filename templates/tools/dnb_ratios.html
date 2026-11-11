@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">DNB articles on Wikisource with exactly one English Wikipedia link, comparing the cached Wikisource word count with the live Wikipedia page length.</p>
+{% if !words_available %}
+<p class="muted">The cached Wikisource word counts are not available, so no ratios can be calculated.</p>
+{% endif %}
+{% if rows.is_empty() %}
+<p class="muted">No matching articles found.</p>
+{% else %}
+{% if truncated %}<p class="muted">Only the {{ rows.len() }} highest ratios are shown.</p>{% endif %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Wikisource</th><th>Wikipedia</th><th class="num">WS words</th><th class="num">WS:WP</th><th>Templates</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="{{ row.ws_url }}" target="_blank">{{ row.ws_title }}</a></td>
+      <td><a href="{{ row.wp_url }}" target="_blank">{{ row.wp_title }}</a></td>
+      <td class="num">{{ row.words }}</td>
+      <td class="num">{{ row.ratio_text() }}</td>
+      <td>
+        {% for template in row.templates %}
+        <span class="{% if template.attribution %}template-attribution{% else %}template-message{% endif %}">{{ template.title }}</span>
+        {% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

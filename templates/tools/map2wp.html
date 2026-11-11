@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Candidate English Wikipedia articles for Wikisource biographies that have no Wikipedia link yet. A longer prefix narrows the list.</p>
+<form method="get" action="/map2wp/">
+  <label>Biography set
+    <select name="set">
+      <option value="dnb00"{% if set_code == "dnb00" %} selected{% endif %}>DNB00</option>
+      <option value="ce13"{% if set_code == "ce13" %} selected{% endif %}>Catholic Encyclopedia (1913)</option>
+      <option value="appletons"{% if set_code == "appletons" %} selected{% endif %}>Appletons' Cyclopædia</option>
+    </select>
+  </label>
+  <label>Last name starts with <input type="text" name="letter" value="{{ request.letter }}" maxlength="20" required></label>
+  <button name="doit" value="1">Find candidates</button>
+</form>
+{% if !letter.is_empty() %}
+<p class="muted">{{ total }} pages in {{ set_label }} start with “{{ letter }}”.{% if capped %} Only the first {{ rows.len() }} are shown; use a longer prefix.{% endif %}</p>
+{% if rows.is_empty() %}
+<p class="muted">No pages found for this prefix.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Wikisource</th><th>Wikipedia</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>
+        <a href="{{ row.ws_url }}" target="_blank">{{ row.ws_title }}</a>{{ row.years }}
+        {% if !row.intro.is_empty() %}<br><small>{{ row.intro }}</small>{% endif %}
+      </td>
+      <td>
+        {% if row.candidates.is_empty() %}<i>None found</i>{% endif %}
+        {% for candidate in row.candidates %}
+        {% if candidate.matches >= 2 %}<strong><em><a href="{{ candidate.url }}" target="_blank">{{ candidate.title }}</a></em></strong>
+        {% else if candidate.matches == 1 %}<strong><a href="{{ candidate.url }}" target="_blank">{{ candidate.title }}</a></strong>
+        {% else %}<a href="{{ candidate.url }}" target="_blank">{{ candidate.title }}</a>{% endif %}
+        {% if !candidate.categories.is_empty() %}: {{ candidate.categories_text() }}{% endif %}<br>
+        {% endfor %}
+        {% if row.more %}<i>More than 50 found</i><br>{% endif %}
+        <pre>{{ row.citation }}</pre>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="hint">Bold: one birth or death year matches; bold italic: both match.</p>
+{% endif %}
+{% if failed > 0 %}<p class="muted">{{ failed }} pages could not be checked.</p>{% endif %}
+{% endif %}
+{% endblock %}

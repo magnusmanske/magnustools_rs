@@ -12,6 +12,10 @@ mod contribs;
 mod coord_gen;
 mod deep_insight;
 mod deep_out_of_sight;
+mod dnb;
+mod dnb_link_finder;
+mod dnb_ratios;
+mod dnb_wikisource;
 mod filterdone;
 mod flickrfree;
 mod forest4trees;
@@ -24,6 +28,7 @@ mod index;
 mod interwiki;
 pub(crate) mod logger;
 mod makeref;
+mod map2wp;
 mod metronom;
 mod missingtopics;
 mod misstake;
@@ -79,6 +84,9 @@ pub const MENU: &[(&str, &str)] = &[
     ("deep_insight", "Deep InSight"),
     ("deep_out_of_sight", "Deep out-of-sight"),
     ("get_distinct_authors", "Distinct authors"),
+    ("dnb_ratios", "DNB article length ratios"),
+    ("dnb_link_finder", "DNB link finder"),
+    ("dnb_wikisource", "DNB on Wikisource"),
     ("filterdone", "Filter done"),
     ("transparent", "Find a translator"),
     ("flickrfree", "FlickrFree"),
@@ -88,6 +96,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("html2wiki", "HTML to wiki"),
     ("icommons", "iCommons"),
     ("makeref", "MakeRef"),
+    ("map2wp", "Map DNB to Wikipedia"),
     ("metronom", "Metronom"),
     ("missingtopics", "Missing topics"),
     ("newpages", "New pages [Erwin85]"),
@@ -168,11 +177,15 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("forest4trees", get(forest4trees::handler)),
         ("get_article_intro", get(get_article_intro::handler)),
         ("get_distinct_authors", get(get_distinct_authors::handler).post(get_distinct_authors::handler)),
+        ("dnb_ratios", get(dnb_ratios::handler)),
+        ("dnb_link_finder", get(dnb_link_finder::handler)),
+        ("dnb_wikisource", get(dnb_wikisource::handler)),
         ("herding_sheep", get(herding_sheep::handler)),
         ("html2wiki", get(html2wiki::handler).post(html2wiki::handler)),
         ("icommons", get(icommons::handler).post(icommons::handler)),
         ("logger", get(logger::handler).post(logger::handler)),
         ("makeref", get(makeref::handler).post(makeref::handler)),
+        ("map2wp", get(map2wp::handler).post(map2wp::handler)),
         ("metronom", get(metronom::handler)),
         ("missingtopics", get(missingtopics::handler).post(missingtopics::handler)),
         ("misstake", get(misstake::handler).post(misstake::handler)),

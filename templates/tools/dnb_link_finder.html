@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Wikipedia pages that cite a Google Books copy of a DNB volume. These links would better point to the corresponding page on Wikisource.</p>
+<p class="muted">{{ ids }} DNB Google Books IDs from <a href="https://en.wikisource.org/wiki/User:Charles_Matthews/DNB_referencing_data">the DNB referencing data</a>; {{ links.len() }} matching links.</p>
+{% if links.is_empty() %}
+<p class="muted">No Wikipedia pages link to these Google Books volumes.</p>
+{% else %}
+{% if truncated %}<p class="muted">Only the first {{ links.len() }} links are shown.</p>{% endif %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Wikipedia page</th><th>Google Books link</th></tr>
+  </thead>
+  <tbody>
+  {% for link in links %}
+    <tr>
+      <td><a href="{{ link.page_url }}" target="_blank">{{ link.page_title }}</a></td>
+      <td><a href="{{ link.external_url }}" target="_blank">{{ link.volume }}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

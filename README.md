@@ -34,6 +34,9 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/coord_gen/` | German Wikipedia's `{{Coordinate}}` from degrees |
 | `/deep_insight/` | Pages in a category tree that have never been sighted (formerly sighting.toolforge.org) |
 | `/deep_out_of_sight/` | Pages in a category tree whose latest revision has not been sighted, optionally with the changes since then (formerly sighting.toolforge.org) |
+| `/dnb_link_finder/` | Wikipedia pages linking to Google Books copies of DNB volumes (formerly dnbtools.toolforge.org) |
+| `/dnb_ratios/` | Wikisource DNB word counts against English Wikipedia article lengths (formerly dnbtools.toolforge.org) |
+| `/dnb_wikisource/` | Broken author, biography and transclusion links in the Wikisource DNB (formerly dnbtools.toolforge.org) |
 | `/filterdone/` | Removes list entries from a wiki page whose linked page already exists (formerly magnus-toolserver.toolforge.org) |
 | `/flickrfree/` | Latest freely licensed Flickr photos |
 | `/forest4trees/` | Articles that may be missing from a category tree |
@@ -44,6 +47,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/icommons/` | Commons for small screens: picture of the day, search, files, categories (formerly icommons.toolforge.org) |
 | `/logger/` | Counts tool uses (JSON/JSONP) |
 | `/makeref/` | A citation template filled in from a form; types and fields from `MakeRef/<Language>` on Meta (formerly makeref.toolforge.org) |
+| `/map2wp/` | Candidate English Wikipedia articles for Wikisource DNB biographies without a Wikipedia link (formerly dnbtools.toolforge.org) |
 | `/metronom/` | Page views of the articles a user started |
 | `/missingtopics/` | Red links of an article or category tree, ranked by demand (formerly missingtopics.toolforge.org) |
 | `/misstake/` | Red links on some pages, ranked by how wanted they are |
