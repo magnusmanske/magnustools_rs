@@ -1,6 +1,7 @@
 //! `dnb_link_finder.php`: Wikipedia pages that link to Google Books versions
 //! of DNB volumes, which would better point to Wikisource.
 
+use crate::cache::TimedCache;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, render};
@@ -10,12 +11,16 @@ use axum::extract::State;
 use axum::response::Html;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 use wikimisc::mysql_async::Params as DbParams;
 use wikimisc::mysql_async::Value as DbValue;
 use wikimisc::mysql_async::prelude::Queryable;
 
 const TITLE: &str = "DNB link finder";
 const DATA_PAGE: &str = "User:Charles_Matthews/DNB_referencing_data";
+/// The reference table and the external links change slowly; the replica scan takes a while.
+const CACHE_FOR: Duration = Duration::from_secs(3_600);
+static CACHE: TimedCache<String> = TimedCache::new(CACHE_FOR);
 /// Matching links shown; the list is for review, not exhaustive.
 const MAX_LINKS: usize = 1_000;
 /// The reversed-domain forms Google Books uses in `externallinks`.
@@ -43,14 +48,19 @@ struct Link {
 }
 
 pub async fn handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
-    let wikisource = Wiki::new("en", "wikisource")?;
-    let wikipedia = Wiki::new("en", "wikipedia")?;
-    let wikitext = mediawiki::page_wikitext(&state.http, &wikisource, DATA_PAGE)
-        .await?
-        .ok_or_else(|| AppError::Upstream(anyhow::anyhow!("the DNB data page is missing")))?;
-    let ids = parse_ids(&wikitext);
-    let (links, truncated) = find_links(&state, &wikipedia, &ids).await?;
-    render(&Page { title: TITLE, ids: ids.len(), links, truncated })
+    let html = CACHE
+        .get_or_fetch(async || {
+            let wikisource = Wiki::new("en", "wikisource")?;
+            let wikipedia = Wiki::new("en", "wikipedia")?;
+            let wikitext = mediawiki::page_wikitext(&state.http, &wikisource, DATA_PAGE)
+                .await?
+                .ok_or_else(|| AppError::Upstream(anyhow::anyhow!("the DNB data page is missing")))?;
+            let ids = parse_ids(&wikitext);
+            let (links, truncated) = find_links(&state, &wikipedia, &ids).await?;
+            render(&Page { title: TITLE, ids: ids.len(), links, truncated }).map(|html| html.0)
+        })
+        .await?;
+    Ok(Html(html.as_ref().clone()))
 }
 
 /// DNB IDs and their volume labels from the reference table.

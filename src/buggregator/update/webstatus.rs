@@ -12,6 +12,9 @@ const STATUS_ATTEMPTS: usize = 3;
 const STATUS_RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
 /// Addresses checked at once; the job should finish well within its window.
 const WEB_STATUS_CONCURRENT: usize = 8;
+/// Some tools legitimately take tens of seconds (large replica queries); a
+/// shorter timeout would mark a working tool as not answering.
+const WEB_STATUS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// A `tool` row for the address check: id, active, web interface, subdomain,
 /// URL (its own or its service's; `None` when neither is set), service id,
@@ -28,7 +31,7 @@ pub async fn web_status(conn: &mut Conn) -> Result<()> {
     let client = reqwest::Client::builder()
         .user_agent(crate::state::USER_AGENT)
         .redirect(reqwest::redirect::Policy::limited(5))
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(WEB_STATUS_TIMEOUT)
         .build()?;
     let tools: Vec<ToolRow> = conn
         .query(
