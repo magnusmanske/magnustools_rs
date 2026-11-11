@@ -101,7 +101,6 @@ const TOOLSERVER_GONE: &[&str] = &[
     "darBNDer.php",
     "de_bio.php",
     "dnb.php",
-    "filterdone.php",
     "flagellum.php",
     "flickr_my_nogroup.php",
     "image_pages_without_image.php",

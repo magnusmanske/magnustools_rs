@@ -243,6 +243,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn old_php_addresses_redirect_to_the_tool() {
+        let dir = tempfile::tempdir().unwrap();
+        for path in ["/bong.php", "/filterdone.php", "/unused_files.php", "/wiki_todo.php"] {
+            let page = get(dir.path(), path).await;
+            assert_eq!(page.status.as_u16(), 308, "{path}");
+            assert_eq!(page.headers["location"], path.trim_end_matches(".php").to_string() + "/", "{path}");
+        }
+    }
+
+    #[tokio::test]
     async fn pages_have_the_menu() {
         let dir = tempfile::tempdir().unwrap();
         let page = get(dir.path(), "/unused_files/").await;
