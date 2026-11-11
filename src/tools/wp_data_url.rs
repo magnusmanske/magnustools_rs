@@ -1,6 +1,7 @@
 //! `wp_data_url.php`: a Wikipedia article as one self-contained HTML page,
 //! its images inlined as `data:` URLs (e.g. for offline reading).
 
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::Wiki;
@@ -35,11 +36,8 @@ struct Page {
     title: &'static str,
 }
 
-static IMAGE_SRC: LazyLock<Regex> = LazyLock::new(|| {
-    // A constant pattern, covered by the tests.
-    #[allow(clippy::expect_used)]
-    Regex::new(r#"<img [^>]*?src="(//(?:upload|thumb)\.wikimedia\.org/[^"]+)""#).expect("valid regex")
-});
+static IMAGE_SRC: LazyLock<Regex> =
+    LazyLock::new(|| regex(r#"<img [^>]*?src="(//(?:upload|thumb)\.wikimedia\.org/[^"]+)""#));
 
 pub async fn handler(
     State(state): State<Arc<AppState>>,

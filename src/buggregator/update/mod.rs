@@ -13,6 +13,7 @@ pub use toolhub::toolhub;
 pub use webstatus::web_status;
 
 use super::issues::text_id;
+use crate::regex;
 use crate::state::AppState;
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -119,12 +120,6 @@ async fn user_id(conn: &mut impl Queryable, name: &str, site: &str) -> Result<u6
     )
     .await?;
     super::last_id(conn).await
-}
-
-fn regex(pattern: &str) -> Regex {
-    // The patterns are constants, covered by the tests.
-    #[allow(clippy::expect_used)]
-    Regex::new(pattern).expect("valid regex")
 }
 
 static HEADING: LazyLock<Regex> = LazyLock::new(|| regex(r"^\s*={2,}\s*(.+?)\s*={2,}\s*$"));

@@ -2,6 +2,7 @@
 //! markup. After the "HTML to Wiki Converter - tables" by Borislav Manolov
 //! (GPL-2.0-or-later).
 
+use crate::regex;
 use crate::web::{AppError, Params, render};
 use askama::Template;
 use axum::response::Html;
@@ -50,12 +51,6 @@ pub async fn handler(Params(request): Params<Request>) -> Result<Html<String>, A
     };
     let wikitext = submitted.then(|| convert(&request.html, options).trim_start_matches('\n').to_string());
     render(&Page { title: "HTML to wiki", html: request.html, options, wikitext })
-}
-
-fn regex(pattern: &str) -> Regex {
-    // The patterns are constants, covered by the tests.
-    #[allow(clippy::expect_used)]
-    Regex::new(pattern).expect("valid regex")
 }
 
 static SPACE_BETWEEN_TAGS: LazyLock<Regex> = LazyLock::new(|| regex(r">\s+<"));

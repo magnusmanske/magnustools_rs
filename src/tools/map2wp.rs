@@ -3,6 +3,7 @@
 
 use super::dnb;
 use crate::mediawiki;
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::Wiki;
@@ -26,15 +27,14 @@ const CONCURRENCY: usize = 4;
 const SEARCH_LIMIT: usize = 50;
 const INTRO_CHARS: usize = 400;
 
-static DNB_SUFFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\(DNB\d+\)$").expect("valid regex"));
-static FLOURISHED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bfl\.").expect("valid regex"));
-static DIED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bd\.").expect("valid regex"));
-static DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9()\-]").expect("valid regex"));
-static FOUR_DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d{4}\b").expect("valid regex"));
-static THREE_OR_FOUR_DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d{3,4}\b").expect("valid regex"));
-static BIRTH_DEATH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\d+) (births|deaths)$").expect("valid regex"));
-static VOLUME: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\|\s*volume\s*=\s*([^|\n}]+)").expect("valid regex"));
+static DNB_SUFFIX: LazyLock<Regex> = LazyLock::new(|| regex(r"\s*\(DNB\d+\)$"));
+static FLOURISHED: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)\bfl\."));
+static DIED: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)\bd\."));
+static DIGITS: LazyLock<Regex> = LazyLock::new(|| regex(r"[0-9()\-]"));
+static FOUR_DIGITS: LazyLock<Regex> = LazyLock::new(|| regex(r"\b\d{4}\b"));
+static THREE_OR_FOUR_DIGITS: LazyLock<Regex> = LazyLock::new(|| regex(r"\b\d{3,4}\b"));
+static BIRTH_DEATH: LazyLock<Regex> = LazyLock::new(|| regex(r"^(\d+) (births|deaths)$"));
+static VOLUME: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)\|\s*volume\s*=\s*([^|\n}]+)"));
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]

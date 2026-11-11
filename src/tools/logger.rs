@@ -3,6 +3,7 @@
 //! (this one, wikidata-todo) count theirs in their telemetry instead; the
 //! service dashboard's maintenance copies them here once a day ([`set_uses`]).
 
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{Params, jsonp};
 use axum::extract::State;
@@ -113,12 +114,6 @@ pub fn day_number(day: chrono::NaiveDate) -> u32 {
 struct ToolMethod {
     tool: String,
     method: String,
-}
-
-fn regex(pattern: &str) -> Regex {
-    // The patterns are constants, covered by the tests.
-    #[allow(clippy::expect_used)]
-    Regex::new(pattern).expect("valid regex")
 }
 
 /// Methods are cut at the first character that starts parameters or SQL.

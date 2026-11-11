@@ -5,6 +5,7 @@
 
 use super::no_information::TEMPLATES;
 use crate::mediawiki::{self, strip_namespace};
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::{Wiki, encode_title, upper_first};
@@ -22,10 +23,6 @@ const TOOL_URL: &str = "https://magnustools.toolforge.org/add_information/";
 const EXIF_DATES: &[&str] = &["DateTimeOriginal", "DateTimeDigitized", "DateTime"];
 /// A maintenance category that the new template makes obsolete.
 const MISSING_INFOBOX: &str = "[[category:media missing infobox template]]";
-
-fn regex(pattern: &str) -> Regex {
-    Regex::new(pattern).expect("valid regex")
-}
 
 static HAS_TEMPLATE: LazyLock<Regex> = LazyLock::new(|| {
     let names: Vec<String> = TEMPLATES.iter().map(|t| regex::escape(t).replace('_', "[ _]")).collect();

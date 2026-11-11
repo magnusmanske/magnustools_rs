@@ -3,6 +3,7 @@
 //! ("Bad Old Ones").
 
 use crate::mediawiki::Api;
+use crate::regex;
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
@@ -33,8 +34,7 @@ const REMOVE_TAGS_SUMMARY: &str = "Image description is satisfactory now, removi
 
 /// Wikitext without `{{no source…}}`, `{{no license…}}` and
 /// `{{dw no source…}}` templates.
-static NO_TAGS: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\{\{\s*(dw[ _])?no[ _](source|license)[^{}]*\}\}\s*").expect("valid regex"));
+static NO_TAGS: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)\{\{\s*(dw[ _])?no[ _](source|license)[^{}]*\}\}\s*"));
 
 #[derive(Debug, Deserialize)]
 pub struct Request {

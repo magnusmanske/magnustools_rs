@@ -4,6 +4,7 @@
 
 use super::commonsapi;
 use crate::mediawiki::{self, WikiApiError, strip_namespace};
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params};
 use crate::wiki::{Wiki, encode_component, encode_title, is_language_code, upper_first};
@@ -35,7 +36,7 @@ const GRID_COLUMNS: usize = 4;
 /// A copy of Commons: nothing for search engines to index or crawl.
 const ROBOTS: (HeaderName, &str) = (HeaderName::from_static("x-robots-tag"), "noindex, nofollow");
 
-static COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<!--.*?-->").expect("valid regex"));
+static COMMENT: LazyLock<Regex> = LazyLock::new(|| regex(r"(?s)<!--.*?-->"));
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]

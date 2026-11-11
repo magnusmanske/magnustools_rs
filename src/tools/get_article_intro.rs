@@ -2,6 +2,7 @@
 //! text, as JSONP. Without a title, a form explaining the API.
 
 use crate::mediawiki;
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, jsonp, render};
 use crate::wiki::Wiki;
@@ -105,12 +106,6 @@ fn is_image(line: &str) -> bool {
     let lower = line.to_lowercase();
     FILE_LINK.is_match(line)
         || ["|thumb|", "|frame|", "|right|", "|miniatur|", "|hochkant="].iter().any(|s| lower.contains(s))
-}
-
-fn regex(pattern: &str) -> Regex {
-    // The patterns are constants, covered by the tests.
-    #[allow(clippy::expect_used)]
-    Regex::new(pattern).expect("valid regex")
 }
 
 static COMMENT: LazyLock<Regex> = LazyLock::new(|| regex(r"<!--.*?-->"));

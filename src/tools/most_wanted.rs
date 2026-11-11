@@ -3,6 +3,7 @@
 //! `most-wanted` job rebuilds daily; this page reads one and batches the
 //! replica queries the original ran per article.
 
+use crate::regex;
 use crate::replicas::select_in;
 use crate::state::AppState;
 use crate::web::{AppError, Pager, PagerLink, Params, render, thousands};
@@ -33,8 +34,7 @@ const MIN_LINKS: u64 = 10;
 const IGNORE: &[(&str, &[&str])] =
     &[("dewiki", &[r"Droga_wojewódzka_\d+", r"Europastraße_\d+", r"\bDivision\b"]), ("enwiki", &[r"\bDivision\b"])];
 /// Hints that say nothing about the topic.
-static BORING_HINT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\b(?:articles|living people)\b").expect("valid hint pattern"));
+static BORING_HINT: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)\b(?:articles|living people)\b"));
 
 #[derive(Debug, Deserialize)]
 pub struct Request {

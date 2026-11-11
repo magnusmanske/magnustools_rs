@@ -3,6 +3,7 @@
 //! `Templator/<Language>` on Meta, which anyone can extend.
 
 use crate::mediawiki;
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::{Wiki, encode_component, is_language_code, upper_first};
@@ -18,9 +19,8 @@ const DEFAULT_LANGUAGE: &str = "de";
 /// Between descriptions, to render them all in one go.
 const SPLIT: &str = "TEMPLATORSPLIT";
 
-static COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)<!--.*?-->").expect("valid regex"));
-static SPLIT_HTML: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(&format!(r"(?:<p>)?\s*{SPLIT}\s*(?:</p>)?")).expect("valid regex"));
+static COMMENT: LazyLock<Regex> = LazyLock::new(|| regex(r"(?s)<!--.*?-->"));
+static SPLIT_HTML: LazyLock<Regex> = LazyLock::new(|| regex(&format!(r"(?:<p>)?\s*{SPLIT}\s*(?:</p>)?")));
 
 /// A `==` section: a template, or, without fields, a heading over the next ones.
 #[derive(Debug, PartialEq)]

@@ -3,6 +3,7 @@
 //! `MakeRef/<Language>` on Meta, which anyone can extend.
 
 use crate::mediawiki;
+use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
 use crate::wiki::{Wiki, encode_component, is_language_code, upper_first};
@@ -20,8 +21,8 @@ const REF_NAME: &str = "Reference ID|refid|Reuters 2006-07-21";
 const BIBTEX: &str = "bibtex";
 const ACCESS_DATES: &[&str] = &["access-date", "accessdate", "access_date"];
 
-static LINE_BREAK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)<br\s*/?>").expect("valid regex"));
-static PLACEHOLDER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{\$([^{}$]+)\}").expect("valid regex"));
+static LINE_BREAK: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)<br\s*/?>"));
+static PLACEHOLDER: LazyLock<Regex> = LazyLock::new(|| regex(r"\{\$([^{}$]+)\}"));
 
 /// A kind of reference, such as "CS1 News article".
 #[derive(Debug, PartialEq)]
