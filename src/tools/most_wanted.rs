@@ -5,7 +5,7 @@
 
 use crate::replicas::select_in;
 use crate::state::AppState;
-use crate::web::{AppError, Params, render, thousands};
+use crate::web::{AppError, Pager, PagerLink, Params, render, thousands};
 use crate::wiki::{Wiki, encode_component, encode_title, upper_first};
 use anyhow::{Context, Result};
 use askama::Template;
@@ -88,22 +88,6 @@ struct Choice {
     selected: bool,
 }
 
-struct Link {
-    label: String,
-    url: String,
-    current: bool,
-}
-
-impl Link {
-    fn new(label: &str, url: String) -> Self {
-        Self { label: label.to_string(), url, current: false }
-    }
-
-    fn disabled(label: &str) -> Self {
-        Self { label: label.to_string(), url: String::new(), current: true }
-    }
-}
-
 /// The same title with its first letter uppercased, if that page exists.
 struct Alternative {
     title: String,
@@ -134,7 +118,7 @@ struct Page {
     entries: String,
     updated: String,
     min_links: u64,
-    nav: Vec<Link>,
+    nav: Pager,
     rows: Vec<Row>,
     show_hints: bool,
     error: Option<String>,
@@ -161,7 +145,7 @@ pub async fn handler(
                 entries: "0".to_string(),
                 updated: String::new(),
                 min_links: MIN_LINKS,
-                nav: vec![],
+                nav: Pager::default(),
                 rows: vec![],
                 show_hints: hints,
                 error: Some(format!("Not a wiki: “{requested}” ({e}).")),
@@ -178,7 +162,7 @@ pub async fn handler(
         entries: "0".to_string(),
         updated: String::new(),
         min_links: MIN_LINKS,
-        nav: vec![],
+        nav: Pager::default(),
         rows: vec![],
         show_hints: hints,
         error: None,
@@ -375,30 +359,30 @@ fn boring_hint(category: &str) -> bool {
 }
 
 /// Start, Previous, Next, End and Random, as the original had them.
-fn navigation(project: &str, number: usize, hints: bool, start: usize, entries: usize) -> Vec<Link> {
+fn navigation(project: &str, number: usize, hints: bool, start: usize, entries: usize) -> Pager {
     let at = |start: usize| url(project, number, hints, start);
     let mut nav = vec![];
     if start > 1 {
-        nav.push(Link::new("Start", at(1)));
-        nav.push(Link::new(&format!("Previous {number}"), at(start.saturating_sub(number).max(1))));
+        nav.push(PagerLink::new("Start", at(1)));
+        nav.push(PagerLink::new(format!("Previous {number}"), at(start.saturating_sub(number).max(1))));
     } else {
-        nav.push(Link::disabled("Start"));
-        nav.push(Link::disabled(&format!("Previous {number}")));
+        nav.push(PagerLink::disabled("Start"));
+        nav.push(PagerLink::disabled(format!("Previous {number}")));
     }
     let end = entries.saturating_sub(number).saturating_add(1);
     if start < end {
-        nav.push(Link::new(&format!("Next {number}"), at(start + number)));
-        nav.push(Link::new("End", at(end)));
+        nav.push(PagerLink::new(format!("Next {number}"), at(start + number)));
+        nav.push(PagerLink::new("End", at(end)));
     } else {
-        nav.push(Link::disabled(&format!("Next {number}")));
-        nav.push(Link::disabled("End"));
+        nav.push(PagerLink::disabled(format!("Next {number}")));
+        nav.push(PagerLink::disabled("End"));
     }
     let random = match entries {
         0 => 1,
         entries => rand::rng().random_range(0..entries) / number * number + 1,
     };
-    nav.push(Link::new("Random", at(random)));
-    nav
+    nav.push(PagerLink::new("Random", at(random)));
+    Pager::new(nav)
 }
 
 fn url(project: &str, number: usize, hints: bool, start: usize) -> String {
@@ -499,17 +483,18 @@ mod tests {
 
     #[test]
     fn navigation_mirrors_the_original() {
-        let labels =
-            |start| navigation("enwiki", 50, false, start, 1000).iter().map(|l| l.label.clone()).collect::<Vec<_>>();
+        let labels = |start| {
+            navigation("enwiki", 50, false, start, 1000).links.iter().map(|l| l.label.clone()).collect::<Vec<_>>()
+        };
         assert_eq!(labels(1), ["Start", "Previous 50", "Next 50", "End", "Random"]);
         assert_eq!(labels(501), ["Start", "Previous 50", "Next 50", "End", "Random"]);
         let first = navigation("enwiki", 50, false, 1, 1000);
-        assert!(first[0].current && first[1].current);
-        assert!(!first[2].current);
-        let urls: Vec<&str> = first.iter().map(|l| l.url.as_str()).collect();
+        assert!(first.links[0].is_disabled() && first.links[1].is_disabled());
+        assert!(!first.links[2].is_disabled());
+        let urls: Vec<&str> = first.links.iter().map(|l| l.url.as_deref().unwrap_or_default()).collect();
         assert_eq!(urls[2], "/most_wanted/?project=enwiki&number=50&hints=0&start=51");
         let last = navigation("enwiki", 50, false, 951, 1000);
-        assert!(last[2].current && last[3].current);
+        assert!(last.links[2].is_disabled() && last.links[3].is_disabled());
     }
 
     #[test]

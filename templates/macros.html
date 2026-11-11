@@ -1,37 +1,14 @@
 {# Shared visual elements of the tools. #}
 
-{# Previous/next paging for result lists. #}
-{% macro pagination(previous, next, previous_label, next_label) -%}
-{% if previous.is_some() || next.is_some() %}
+{# Paging through a result list: previous, next, and disabled controls. #}
+{% macro pagination(pager: crate::web::Pager) -%}
+{% if !pager.links.is_empty() %}
 <nav class="pagination" aria-label="Pagination">
-  {%- if let Some(url) = previous %}
-  <a rel="prev" href="{{ url }}">{{ previous_label }}</a>
-  {%- endif %}
-  {%- if let Some(url) = next %}
-  <a rel="next" href="{{ url }}">{{ next_label }}</a>
-  {%- endif %}
-</nav>
-{% endif %}
-{%- endmacro %}
-
-{# Only a next page, such as an older-edits link. #}
-{% macro next_page(next, label) -%}
-{% if let Some(url) = next %}
-<nav class="pagination" aria-label="Pagination">
-  <a rel="next" href="{{ url }}">{{ label }}</a>
-</nav>
-{% endif %}
-{%- endmacro %}
-
-{# A list of paging links, including disabled ones (`current`). #}
-{% macro pagination_links(links) -%}
-{% if !links.is_empty() %}
-<nav class="pagination" aria-label="Pagination">
-  {%- for link in links %}
-  {%- if link.current %}
-  <span class="muted" aria-disabled="true">{{ link.label }}</span>
+  {%- for link in pager.links %}
+  {%- if let Some(url) = link.url %}
+  <a{% if let Some(rel) = link.rel %} rel="{{ rel }}"{% endif %} href="{{ url }}">{{ link.label }}</a>
   {%- else %}
-  <a href="{{ link.url }}">{{ link.label }}</a>
+  <span class="muted" aria-disabled="true">{{ link.label }}</span>
   {%- endif %}
   {%- endfor %}
 </nav>

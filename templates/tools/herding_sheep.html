@@ -35,7 +35,7 @@ the latest {{ results.edits.len() }} of their article edits.</p>
   </tbody>
 </table>
 </div>
-{% call ui::next_page(results.next_url, "Older edits") %}{% endcall %}
+{% call ui::pagination(results.pager) %}{% endcall %}
 <h2>Edits per user</h2>
 <table>
   <thead><tr><th>User</th><th class="num">Edits</th></tr></thead>

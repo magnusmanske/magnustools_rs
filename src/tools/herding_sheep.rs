@@ -3,7 +3,7 @@
 
 use crate::replicas::{db_title, display_title, format_timestamp, select_in};
 use crate::state::AppState;
-use crate::web::{AppError, Params, render};
+use crate::web::{AppError, Pager, Params, render};
 use crate::wiki::{Wiki, encode_component};
 use askama::Template;
 use axum::extract::State;
@@ -57,7 +57,7 @@ struct Results {
     category_url: Option<String>,
     edits: Vec<Edit>,
     per_user: Vec<(String, String, usize)>,
-    next_url: Option<String>,
+    pager: Pager,
 }
 
 #[derive(Template)]
@@ -132,16 +132,18 @@ async fn results(state: &AppState, request: &Request, limit: u64) -> Result<Resu
             }
         })
         .collect();
-    let next_url = match rows.last() {
-        Some((.., last)) if rows.len() as u64 == limit => Some(next_url(request, limit, last)),
-        _ => None,
+    let pager = match rows.last() {
+        Some((.., last)) if rows.len() as u64 == limit => {
+            Pager::next(Some(next_url(request, limit, last)), "Older edits")
+        }
+        _ => Pager::default(),
     };
     Ok(Results {
         users: names.len(),
         category_url: (!category.is_empty()).then(|| wiki.page_url(&format!("Category:{category}"))),
         edits,
         per_user,
-        next_url,
+        pager,
     })
 }
 

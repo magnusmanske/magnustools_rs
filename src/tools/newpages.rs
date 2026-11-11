@@ -3,7 +3,7 @@
 use crate::mediawiki;
 use crate::replicas::format_timestamp;
 use crate::state::AppState;
-use crate::web::{AppError, Params, render};
+use crate::web::{AppError, Pager, Params, render};
 use crate::wiki::{Wiki, encode_component};
 use askama::Template;
 use axum::extract::State;
@@ -59,8 +59,7 @@ struct Entry {
 struct Results {
     entries: Vec<Entry>,
     wiki: String,
-    previous_url: Option<String>,
-    next_url: Option<String>,
+    pager: Pager,
 }
 
 #[derive(Template)]
@@ -164,10 +163,14 @@ async fn results(
             }
         })
         .collect();
-    let previous_url = (offset > 0).then(|| page_url(request, namespace, t1, t2, limit, offset.saturating_sub(limit)));
-    let next_url = (entries.len() as u64 == limit)
-        .then(|| page_url(request, namespace, t1, t2, limit, offset.saturating_add(limit)));
-    Ok(Results { entries, wiki: wiki.to_string(), previous_url, next_url })
+    let pager = Pager::previous_next(
+        (offset > 0).then(|| page_url(request, namespace, t1, t2, limit, offset.saturating_sub(limit))),
+        (entries.len() as u64 == limit)
+            .then(|| page_url(request, namespace, t1, t2, limit, offset.saturating_add(limit))),
+        format!("Previous {limit}"),
+        format!("Next {limit}"),
+    );
+    Ok(Results { entries, wiki: wiki.to_string(), pager })
 }
 
 fn page_url(request: &Request, namespace: i64, t1: &str, t2: &str, limit: u64, offset: u64) -> String {
@@ -232,8 +235,12 @@ mod tests {
                     bytes: None,
                 }],
                 wiki: "en.wikipedia.org".into(),
-                previous_url: Some("/newpages/?offset=0".into()),
-                next_url: Some("/newpages/?offset=100".into()),
+                pager: Pager::previous_next(
+                    Some("/newpages/?offset=0".into()),
+                    Some("/newpages/?offset=100".into()),
+                    "Previous 50",
+                    "Next 50",
+                ),
             }),
         };
         let html = page.render().unwrap();

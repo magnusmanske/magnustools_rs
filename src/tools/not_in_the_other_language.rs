@@ -3,7 +3,7 @@
 
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
-use crate::web::{AppError, Params, render};
+use crate::web::{AppError, Pager, Params, render};
 use crate::wiki::{Wiki, upper_first};
 use askama::Template;
 use axum::extract::State;
@@ -142,12 +142,6 @@ struct Results {
     pile_truncated: bool,
     capped: bool,
     no_pile: bool,
-}
-
-#[derive(Default)]
-struct Pager {
-    prev: Option<String>,
-    next: Option<String>,
 }
 
 #[derive(Template)]
@@ -506,7 +500,12 @@ fn make_pager(form: &Form, start: usize, limit: usize, has_next: bool) -> Pager 
         let query = serde_urlencoded::to_string(pairs).unwrap_or_default();
         format!("/not-in-the-other-language/?{query}")
     };
-    Pager { prev: (start > 0).then(|| link(start.saturating_sub(limit))), next: has_next.then(|| link(start + limit)) }
+    Pager::previous_next(
+        (start > 0).then(|| link(start.saturating_sub(limit))),
+        has_next.then(|| link(start + limit)),
+        "Previous",
+        "Next",
+    )
 }
 
 #[cfg(test)]
@@ -589,7 +588,7 @@ mod tests {
                 capped: false,
                 no_pile: false,
             }),
-            pager: Pager { prev: None, next: Some("/not-in-the-other-language/?lang1=de&start=100&doit=1".into()) },
+            pager: Pager::next(Some("/not-in-the-other-language/?lang1=de&start=100&doit=1".into()), "Next"),
         };
         let html = page.render().unwrap();
         assert!(html.contains("https://www.wikidata.org/wiki/Q1"));

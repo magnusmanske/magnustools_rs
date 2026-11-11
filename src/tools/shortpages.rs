@@ -3,7 +3,7 @@
 
 use crate::mediawiki;
 use crate::state::AppState;
-use crate::web::{AppError, Params, render};
+use crate::web::{AppError, Pager, Params, render};
 use crate::wiki::{Wiki, encode_component};
 use askama::Template;
 use axum::extract::State;
@@ -50,8 +50,7 @@ struct Row {
 struct Results {
     rows: Vec<Row>,
     wiki: String,
-    previous_url: Option<String>,
-    next_url: Option<String>,
+    pager: Pager,
 }
 
 #[derive(Template)]
@@ -138,9 +137,13 @@ async fn results(
             Row { url: crate::wiki::page_url(wiki.host(), &page), page, length }
         })
         .collect();
-    let previous_url = (offset > 0).then(|| page_url(request, namespace, invert, limit, offset.saturating_sub(limit)));
-    let next_url = more.then(|| page_url(request, namespace, invert, limit, offset.saturating_add(limit)));
-    Ok(Results { rows, wiki: wiki.to_string(), previous_url, next_url })
+    let pager = Pager::previous_next(
+        (offset > 0).then(|| page_url(request, namespace, invert, limit, offset.saturating_sub(limit))),
+        more.then(|| page_url(request, namespace, invert, limit, offset.saturating_add(limit))),
+        format!("Previous {limit}"),
+        format!("Next {limit}"),
+    );
+    Ok(Results { rows, wiki: wiki.to_string(), pager })
 }
 
 fn page_url(request: &Request, namespace: i64, invert: bool, limit: u64, offset: u64) -> String {

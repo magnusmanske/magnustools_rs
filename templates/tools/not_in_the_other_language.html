@@ -65,6 +65,6 @@
 {% if results.category_truncated %}<p class="muted">Only the first part of the category tree was used.</p>{% endif %}
 {% if results.pile_truncated %}<p class="muted">Only the first part of the PagePile was used.</p>{% endif %}
 {% if results.capped %}<p class="muted">More results were found; narrow the category, starts-with or PagePile for a complete list.</p>{% endif %}
-{% call ui::pagination(pager.prev, pager.next, "Previous", "Next") %}{% endcall %}
+{% call ui::pagination(pager) %}{% endcall %}
 {% endif %}
 {% endblock %}

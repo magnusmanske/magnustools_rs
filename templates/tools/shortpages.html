@@ -39,7 +39,7 @@
   </tbody>
 </table>
 </div>
-{% call ui::pagination(results.previous_url, results.next_url, "Previous " ~ limit, "Next " ~ limit) %}{% endcall %}
+{% call ui::pagination(results.pager) %}{% endcall %}
 {% endif %}
 {% endif %}
 {% endblock %}

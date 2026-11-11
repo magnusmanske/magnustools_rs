@@ -16,12 +16,12 @@
 {% if let Some(results) = results %}
 <h2>{{ results.files.len() }} files</h2>
 <p class="muted">Out of {{ results.scanned }} files looked at.
-{% if let Some(next_url) = results.next_url %}There are more: <a href="{{ next_url }}">go on</a>.{% endif %}</p>
+{% if let Some(next_url) = results.pager.next_url() %}There are more: <a href="{{ next_url }}">go on</a>.{% endif %}</p>
 <ol>
 {% for file in results.files %}
   <li><a href="{{ file.url }}">File:{{ file.name }}</a> <span class="hint">(<a href="{{ file.add_url }}">add information</a>)</span></li>
 {% endfor %}
 </ol>
-{% call ui::next_page(results.next_url, "Next " ~ max) %}{% endcall %}
+{% call ui::pagination(results.pager) %}{% endcall %}
 {% endif %}
 {% endblock %}

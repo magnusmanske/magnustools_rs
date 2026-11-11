@@ -7,7 +7,7 @@
 
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
-use crate::web::{AppError, Params, render};
+use crate::web::{AppError, Pager, Params, render};
 use crate::wiki::{Wiki, encode_component};
 use askama::Template;
 use axum::extract::State;
@@ -92,7 +92,7 @@ struct File {
 struct Results {
     files: Vec<File>,
     scanned: usize,
-    next_url: Option<String>,
+    pager: Pager,
 }
 
 #[derive(Template)]
@@ -208,13 +208,14 @@ fn results(wiki: &Wiki, request: &Request, user: &str, max: usize, scan: Scan) -
         pairs.iter().map(|(k, v)| format!("{k}={}", encode_component(v))).collect::<Vec<_>>().join("&")
     };
     let max = max.to_string();
-    let next_url = scan.after.map(|after| {
+    let next = scan.after.map(|after| {
         let mut extra = vec![("max", max.as_str()), ("after", after.as_str())];
         if !user.is_empty() {
             extra.push(("user", user));
         }
         format!("/no_information/?{}", query(&extra))
     });
+    let pager = Pager::next(next, format!("Next {max}"));
     let files = scan
         .files
         .into_iter()
@@ -224,7 +225,7 @@ fn results(wiki: &Wiki, request: &Request, user: &str, max: usize, scan: Scan) -
             name: display_title(&name),
         })
         .collect();
-    Results { files, scanned: scan.scanned, next_url }
+    Results { files, scanned: scan.scanned, pager }
 }
 
 #[cfg(test)]
@@ -241,7 +242,7 @@ mod tests {
         assert_eq!(results.files[0].url, "https://commons.wikimedia.org/wiki/File:A_b.jpg");
         assert_eq!(results.files[0].add_url, "/add_information/?language=commons&project=wikimedia&image=A_b.jpg");
         assert_eq!(
-            results.next_url.as_deref(),
+            results.pager.next_url(),
             Some("/no_information/?language=commons&project=wikimedia&max=1&after=A_b.jpg&user=Some%20One")
         );
     }
@@ -249,7 +250,11 @@ mod tests {
     #[test]
     fn the_next_page_link_is_rendered() {
         let request = Request::default();
-        let results = Results { files: vec![], scanned: 0, next_url: Some("/no_information/?after=A_b.jpg".into()) };
+        let results = Results {
+            files: vec![],
+            scanned: 0,
+            pager: Pager::next(Some("/no_information/?after=A_b.jpg".into()), "Next 100"),
+        };
         let page = Page { title: "No information", request: &request, max: 100, results: Some(results) };
         let html = page.render().unwrap();
         assert!(html.contains("<nav class=\"pagination\" aria-label=\"Pagination\">"));

@@ -5,11 +5,13 @@ mod apps;
 mod error;
 mod legacy;
 mod page;
+mod pager;
 mod params;
 mod static_files;
 
 pub use error::AppError;
 pub use page::{jsonp, render, thousands};
+pub use pager::{Pager, PagerLink};
 pub use params::Params;
 
 use crate::state::AppState;
