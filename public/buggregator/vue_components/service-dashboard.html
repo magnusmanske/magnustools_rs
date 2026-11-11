@@ -11,7 +11,7 @@
 		<div class='btn-group btn-group-sm' role='group' aria-label='Time range'>
 			<button v-for='r in ranges' type='button' :class='"btn btn-outline-secondary"+(r==range?" active":"")' @click='setRange(r)'>{{r}}</button>
 		</div>
-		<label class='mb-0 ml-2'><input type='checkbox' v-model='auto_refresh' /> refresh every minute</label>
+		<label class='mb-0 ml-2'><input type='checkbox' v-model='auto_refresh' @change='updateUrl' /> refresh every minute</label>
 		<span class='dash-muted ml-2' v-if='now'>updated {{time(now)}}</span>
 		<router-link to='/' class='ml-auto'>Issues</router-link>
 		<router-link to='/usage'>Usage</router-link>
@@ -32,7 +32,7 @@
 		<div class='attention dash-muted' v-else-if='acked_count'><span class='status-icon status-good'>✓</span>Nothing new needs attention: all current alerts have been acknowledged.</div>
 		<div class='attention dash-muted' v-else><span class='status-icon status-good'>✓</span>Nothing needs attention: all services up and answering, no unplanned restarts in the last 24 hours.</div>
 		<div class='dash-muted mb-3' v-if='acked_count'>
-			<a href='#' @click.prevent='show_acked=!show_acked'>{{show_acked?'Hide':'Show'}} {{acked_count}} acknowledged alert{{acked_count>1?'s':''}}</a>
+			<a href='#' @click.prevent='toggleAcked'>{{show_acked?'Hide':'Show'}} {{acked_count}} acknowledged alert{{acked_count>1?'s':''}}</a>
 		</div>
 
 		<div class='kpis'>
@@ -87,7 +87,10 @@ let ServiceDashboard = Vue.extend ( {
 		auto_refresh : true , refresh_tick : 0 , loading : false , error : '' , show_acked : false ,
 	} } ,
 	created : function () {
-		let me = this ;
+		let me = this , query = me.$route.query ;
+		if ( me.ranges.indexOf ( query.range ) != -1 ) me.range = query.range ;
+		if ( query.refresh == '0' ) me.auto_refresh = false ;
+		if ( query.acked == '1' ) me.show_acked = true ;
 		me.loaded_at = 0 ; // Not reactive: only read on return to the tab
 		me.load() ;
 		me.timer = setInterval ( function () {
@@ -102,9 +105,6 @@ let ServiceDashboard = Vue.extend ( {
 	beforeDestroy : function () {
 		clearInterval ( this.timer ) ;
 		document.removeEventListener ( 'visibilitychange' , this.onVisible ) ;
-	} ,
-	watch : {
-		range : function () { this.loadTotals() } ,
 	} ,
 	computed : {
 		// Services with a component that is not up
@@ -192,7 +192,23 @@ let ServiceDashboard = Vue.extend ( {
 			this.load() ;
 			this.refresh_tick++ ;
 		} ,
-		setRange : function ( r ) { this.range = r } ,
+		setRange : function ( r ) {
+			this.range = r ;
+			this.loadTotals() ;
+			this.updateUrl() ;
+		} ,
+		toggleAcked : function () {
+			this.show_acked = !this.show_acked ;
+			this.updateUrl() ;
+		} ,
+		// Only what differs from the defaults, so the URL stays short.
+		updateUrl : function () {
+			let query = {} ;
+			if ( this.range != '24h' ) query.range = this.range ;
+			if ( !this.auto_refresh ) query.refresh = '0' ;
+			if ( this.show_acked ) query.acked = '1' ;
+			this.$router.replace ( { path:'/dashboard' , query:query } ).catch ( function(){} ) ;
+		} ,
 		can_edit : function () {
 			return typeof widar != 'undefined' && widar.is_logged_in && config.write_access.indexOf(widar.getUserName()) != -1 ;
 		} ,

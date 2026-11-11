@@ -163,9 +163,10 @@ let UsageDashboard = Vue.extend ( {
 			this.updateUrl() ;
 			if ( this.selected ) this.loadDetail() ;
 		} ,
-		// Range and tool in the URL, to link to and reload.
+		// Range and tool in the URL, to link to and reload; the default range is left out.
 		updateUrl : function () {
-			let query = { range:this.range } ;
+			let query = {} ;
+			if ( this.range != '30d' ) query.range = this.range ;
 			if ( this.selected ) query.tool = this.selected ;
 			this.$router.replace ( { path:'/usage' , query:query } ).catch ( function(){} ) ;
 		} ,

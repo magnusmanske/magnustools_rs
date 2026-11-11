@@ -65,7 +65,7 @@
 					<a href='#' @click.prevent='go_to_offset(filters.offset-filters.limit)' tt='prev'></a>
 				</span>
 				<span class='mr-1'>
-					<input style='width: 6rem;' type='number' v-model='filters.offset' @keyup.enter='go_to_offset(filters.offset)' />
+					<input style='width: 6rem;' type='number' v-model.number='filters.offset' @keyup.enter='go_to_offset(filters.offset)' />
 				</span>
 				<span v-if='filters.offset+filters.limit<stats.this_query'>
 					<a href='#' @click.prevent='go_to_offset(filters.offset+filters.limit)' tt='next'></a>
@@ -136,7 +136,7 @@ let IssueList = Vue.extend ( {
 			$.each ( config[key] , function(dummy,value){Vue.set(me.filters[key],value,false)})
 		} ) ;
 		me.filters.status.OPEN = true ;
-		if ( /^\d+$/.test(me.$route.query.tool||'') ) me.filters.tool = me.$route.query.tool ; // #/?tool=<id>, e.g. from the service dashboard
+		me.readUrl() ;
 		me.load_results();
 		tt.updateInterface(this.$el) ;
 	} ,
@@ -145,8 +145,47 @@ let IssueList = Vue.extend ( {
 	} ,
     updated : function () { tt.updateInterface(this.$el) ; } ,
 	methods : {
+		// Restore the filters from the URL; anything unknown keeps its default.
+		readUrl : function () {
+			let me = this , q = me.$route.query ;
+			if ( typeof q.search == 'string' ) me.filters.search = q.search ;
+			if ( me.sort_by_options.indexOf ( q.sort_by ) != -1 ) me.filters.sort_by = q.sort_by ;
+			if ( me.sort_orders.indexOf ( q.sort_order ) != -1 ) me.filters.sort_order = q.sort_order ;
+			if ( typeof q.tool == 'string' && ( q.tool == '0' || /^\d+$/.test(q.tool) ) ) me.filters.tool = q.tool ;
+			$.each ( me.button_groups , function ( dummy , group ) {
+				if ( typeof q[group] != 'string' ) return ;
+				let wanted = q[group].split ( ',' ) ;
+				$.each ( me.filters[group] , function ( key ) {
+					me.filters[group][key] = wanted.indexOf ( key ) != -1 ;
+				} ) ;
+			} ) ;
+			if ( typeof q.limit == 'string' && /^\d+$/.test(q.limit) ) me.filters.limit = Math.max ( 1 , parseInt ( q.limit , 10 ) ) ;
+			if ( typeof q.offset == 'string' && /^\d+$/.test(q.offset) ) me.filters.offset = parseInt ( q.offset , 10 ) ;
+		} ,
+		// Only what differs from the defaults, so the URL stays short.
+		updateUrl : function () {
+			let me = this , query = {} ;
+			if ( me.filters.search ) query.search = me.filters.search ;
+			if ( me.filters.sort_by != 'date_last' ) query.sort_by = me.filters.sort_by ;
+			if ( me.filters.sort_order != 'descending' ) query.sort_order = me.filters.sort_order ;
+			if ( me.filters.tool !== '' ) query.tool = me.filters.tool ;
+			if ( me.filters.limit != 25 ) query.limit = me.filters.limit.toString() ;
+			if ( me.filters.offset > 0 ) query.offset = me.filters.offset.toString() ;
+			let selected = function ( group ) {
+				return Object.keys ( me.filters[group] ).filter ( function ( key ) { return me.filters[group][key] } ) ;
+			} ;
+			$.each ( [ 'site' , 'priority' ] , function ( dummy , group ) {
+				let values = selected ( group ) ;
+				if ( values.length ) query[group] = values.join ( ',' ) ;
+			} ) ;
+			// The default is OPEN only; an empty selection has to stay expressible.
+			let statuses = selected ( 'status' ) ;
+			if ( statuses.length != 1 || statuses[0] != 'OPEN' ) query.status = statuses.join ( ',' ) ;
+			me.$router.replace ( { path:'/' , query:query } ).catch ( function(){} ) ;
+		} ,
 		load_results : function () {
 			let me = this ;
+			me.updateUrl() ;
 			me.loading = true ;
 			me.results = [] ;
 			let params = JSON.parse ( JSON.stringify(me.filters) ) ;
@@ -174,7 +213,7 @@ let IssueList = Vue.extend ( {
 			return ret.join(',');
 		} ,
 		go_to_offset : function ( new_offset ) {
-			this.filters.offset = new_offset*1 ;
+			this.filters.offset = Math.max ( 0 , Math.floor ( new_offset * 1 ) || 0 ) ;
 			this.load_results();
 		} ,
 		can_edit : function () {
