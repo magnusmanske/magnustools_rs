@@ -412,9 +412,9 @@ dependencies = [
 
 [[package]]
 name = "bookmeta"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc78e5656837d483c7fa5f7151de61499e350a458d773add59d7c83803912ca2"
+checksum = "324ab31534a96a793ded94e7942c0ba7c4be139e95f471f08b164e95c76be2b5"
 dependencies = [
  "futures",
  "isbn",
@@ -3083,7 +3083,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
