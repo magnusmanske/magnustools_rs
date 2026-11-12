@@ -13,8 +13,7 @@ askama = "0.16"
 axum = "0.8"
 axum-extra = { version = "0.12", features = ["cookie-private"] }
 base64 = "0.22"
-# Local checkout; switch to the git dependency before deploying.
-bookmeta = { path = "../bookmeta" }
+bookmeta = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive", "env"] }
 hmac = "0.12"
