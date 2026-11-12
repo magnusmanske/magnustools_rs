@@ -7,6 +7,7 @@
   "buggregator_oauth": "buggregator_oauth.ini",
   "uploader_oauth": "oauth.ini",
   "flickr_key_file": "flickr_key.txt",
+  "google_books_api_key": "",
   "dnb_wordcount_file": "/data/project/dnbtools/ws_dnb_wordcount.tab",
   "most_wanted_dir": "/data/project/magnustools/most_wanted",
   "monitor": { "mail_to": "<address for alerts>" },

@@ -45,6 +45,7 @@ Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
 | `/herding_sheep/` | Recent edits by a group of users |
 | `/html2wiki/`, `/tab2wiki/` | HTML or spreadsheet tables to wiki markup |
 | `/icommons/` | Commons for small screens: picture of the day, search, files, categories (formerly icommons.toolforge.org) |
+| `/isbn2wiki/` | Book metadata by ISBN from several catalogues, as wiki-markup references (formerly isbn2wiki.toolforge.org) |
 | `/logger/` | Counts tool uses (JSON/JSONP) |
 | `/makeref/` | A citation template filled in from a form; types and fields from `MakeRef/<Language>` on Meta (formerly makeref.toolforge.org) |
 | `/map2wp/` | Candidate English Wikipedia articles for Wikisource DNB biographies without a Wikipedia link (formerly dnbtools.toolforge.org) |
@@ -115,6 +116,11 @@ anything else comes from there: the libraries other tools load
   and `assets/style.css` give all pages one look.
 - `src/wiki.rs`, `src/mediawiki.rs`, `src/replicas.rs`, `src/tool_db.rs`,
   `src/oauth.rs`: wikis, their API and databases, the tool database, OAuth.
+- `bookmeta` (the checkout next to this one, repository
+  `https://github.com/magnusmanske/bookmeta`): ISBN validation and catalogue
+  lookups, shared with other tools. Set `google_books_api_key` in
+  `config.json` to use the quota-based Google Books API instead of its legacy
+  feed. Deploying needs the git dependency instead of the local path.
 
 ```bash
 cargo test

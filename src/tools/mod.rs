@@ -26,6 +26,7 @@ mod html2wiki;
 mod icommons;
 mod index;
 mod interwiki;
+mod isbn2wiki;
 pub(crate) mod logger;
 mod makeref;
 mod map2wp;
@@ -96,6 +97,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("herding_sheep", "Herding sheep"),
     ("html2wiki", "HTML to wiki"),
     ("icommons", "iCommons"),
+    ("isbn2wiki", "ISBN to wiki"),
     ("makeref", "MakeRef"),
     ("map2wp", "Map DNB to Wikipedia"),
     ("metronom", "Metronom"),
@@ -185,6 +187,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("herding_sheep", get(herding_sheep::handler)),
         ("html2wiki", get(html2wiki::handler).post(html2wiki::handler)),
         ("icommons", get(icommons::handler).post(icommons::handler)),
+        ("isbn2wiki", get(isbn2wiki::handler).post(isbn2wiki::handler)),
         ("logger", get(logger::handler).post(logger::handler)),
         ("makeref", get(makeref::handler).post(makeref::handler)),
         ("map2wp", get(map2wp::handler).post(map2wp::handler)),
@@ -314,6 +317,18 @@ mod tests {
             assert_eq!(page.status.as_u16(), 200, "{path}");
             assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");
         }
+    }
+
+    #[tokio::test]
+    async fn isbn_form_renders_and_rejects_a_bad_isbn() {
+        let dir = tempfile::tempdir().unwrap();
+        let page = get(dir.path(), "/isbn2wiki/").await;
+        assert_eq!(page.status.as_u16(), 200);
+        assert!(page.body.contains("<h1>ISBN to wiki</h1>"));
+        assert!(page.body.contains("{{cite book}}"));
+        let page = get(dir.path(), "/isbn2wiki/?isbn=9780140328722").await;
+        assert_eq!(page.status.as_u16(), 200);
+        assert!(page.body.contains("Not an ISBN"));
     }
 
     #[tokio::test]

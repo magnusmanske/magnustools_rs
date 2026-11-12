@@ -38,6 +38,10 @@ pub struct Config {
     /// The Flickr API key, alone in a file; without it, `flickrfree.php` is unavailable.
     #[serde(default)]
     pub flickr_key_file: Option<PathBuf>,
+    /// Google Books API key. Without one, the legacy GData feed is used;
+    /// the v1 API needs a key, as keyless requests hit the shared quota.
+    #[serde(default)]
+    pub google_books_api_key: Option<String>,
     /// Cached Wikisource DNB word counts, written by the old dnbtools job.
     #[serde(default = "default_dnb_wordcount_file")]
     pub dnb_wordcount_file: PathBuf,
@@ -192,6 +196,13 @@ mod tests {
     fn most_wanted_dir_is_configurable() {
         let (config, dir) = load(r#"{"most_wanted_dir": "most_wanted"}"#);
         assert_eq!(config.unwrap().most_wanted_dir, dir.path().join("most_wanted"));
+    }
+
+    #[test]
+    fn google_books_api_key_is_optional() {
+        assert!(load("{}").0.unwrap().google_books_api_key.is_none());
+        let (config, _dir) = load(r#"{"google_books_api_key": "key"}"#);
+        assert_eq!(config.unwrap().google_books_api_key.as_deref(), Some("key"));
     }
 
     #[test]

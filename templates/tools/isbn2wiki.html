@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Looks a book up by ISBN in several catalogues and writes a wiki-markup reference from each, plus one merged entry. The default line is the same as the old tool's; the citation templates are for the English, German and French Wikipedias.</p>
+<form method="get" action="/isbn2wiki/">
+  <label>ISBN <span class="hint">e.g. 978-3-423-30666-9, or 3-423-30666-1</span>
+    <input type="text" name="isbn" value="{{ isbn }}" required>
+  </label>
+  <div class="row">
+    <label>Output format
+      <select name="template">
+      {% for (key, label) in formats %}
+        <option value="{{ key }}"{% if *key == template %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+      </select>
+    </label>
+    <label>Book language <span class="hint">for the citation</span>
+      <select name="language">
+      {% for (key, label) in languages %}
+        <option value="{{ key }}"{% if *key == language %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+      </select>
+    </label>
+  </div>
+  <button>Look up</button>
+</form>
+{% if let Some(error) = error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+{% if let Some(results) = results %}
+<h2>Results for {{ results.isbn }}</h2>
+{% if results.plain %}
+<p class="hint">Each result has the wiki line and, below it, the same line without link brackets.</p>
+{% endif %}
+{% if results.books.is_empty() %}
+<p><i>None.</i></p>
+{% else %}
+{% for book in results.books %}
+<h3>{{ book.source }}</h3>
+<p><button type="button" data-copy="#{{ book.id }}">Copy</button></p>
+<textarea id="{{ book.id }}" class="code" rows="3" readonly>{{ book.text }}</textarea>
+{% endfor %}
+{% endif %}
+{% if let Some(merged) = results.merged %}
+<h3>{{ merged.source }}</h3>
+<p><button type="button" data-copy="#{{ merged.id }}">Copy</button></p>
+<textarea id="{{ merged.id }}" class="code" rows="3" readonly>{{ merged.text }}</textarea>
+{% endif %}
+{% if !results.failures.is_empty() %}
+<p class="muted">No answer from {% for source in results.failures %}{{ source }}{% if !loop.last %}, {% endif %}{% endfor %}.</p>
+{% endif %}
+{% if !results.wikidata.is_empty() %}
+<h2>Wikidata</h2>
+<ul>
+{% for item in results.wikidata %}
+  <li><a href="{{ item.url }}">{{ item.id }}</a>{% if let Some(label) = item.label %} – {{ label }}{% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
+<p class="hint">Create or extend a Wikidata item for this ISBN with <a href="{{ results.wd_infernal_url }}">wd-infernal</a>.</p>
+{% endif %}
+{% endblock %}

@@ -31,6 +31,13 @@ const USER_CACHE_USERS: usize = 64;
 const DASHBOARD_CACHE_FOR: Duration = Duration::from_secs(30);
 /// The usage overview changes once a day; one minute is plenty.
 const USAGE_CACHE_FOR: Duration = Duration::from_secs(60);
+/// ISBN lookups change slowly; a day of sharing keeps the catalogues quiet.
+const ISBN2WIKI_CACHE_FOR: Duration = Duration::from_secs(86_400);
+const ISBN2WIKI_CACHE_ENTRIES: usize = 1000;
+
+/// Book sources not to query. Library of Congress' ISBN index is unreliable,
+/// but it sometimes answers; add `bookmeta::Source::Loc` here to skip it.
+const DISABLED_BOOK_SOURCES: &[bookmeta::Source] = &[];
 
 pub struct AppState {
     pub config: Config,
@@ -40,6 +47,10 @@ pub struct AppState {
     pub cookie_key: Key,
     pub buggregator_oauth: Option<OAuth>,
     pub uploader_oauth: Option<OAuth>,
+    /// Book metadata lookups, shared by the ISBN tools.
+    pub book_sources: bookmeta::BookSources,
+    /// ISBN lookups, by the 13 digits.
+    pub isbn2wiki_cache: TimedMap<String, bookmeta::Lookup>,
     /// API clients with each wiki's cached site info.
     apis: TimedMap<String, Api>,
     /// Access-token hash => MediaWiki user name, for the write check.
@@ -53,6 +64,9 @@ pub struct AppState {
 impl AppState {
     pub fn new(config: Config) -> Result<Self> {
         let http = wikimisc::http::client(USER_AGENT)?;
+        let book_sources = bookmeta::BookSources::new(http.clone())
+            .with_google_books_api_key(config.google_books_api_key.clone())
+            .without_all(DISABLED_BOOK_SOURCES.iter().copied());
         let cookie_key = match &config.cookie_key {
             Some(hex) => Key::try_from(decode_hex(hex)?.as_slice()).context("cookie_key must be 64 bytes")?,
             None => {
@@ -67,6 +81,8 @@ impl AppState {
             uploader_oauth: oauth(&config.uploader_oauth, &http),
             cookie_key,
             http,
+            book_sources,
+            isbn2wiki_cache: TimedMap::new(ISBN2WIKI_CACHE_FOR, ISBN2WIKI_CACHE_ENTRIES),
             config,
             apis: TimedMap::new(API_CACHE_FOR, API_CACHE_WIKIS),
             user_names: TimedMap::new(USER_CACHE_FOR, USER_CACHE_USERS),
