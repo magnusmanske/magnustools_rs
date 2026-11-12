@@ -116,11 +116,11 @@ anything else comes from there: the libraries other tools load
   and `assets/style.css` give all pages one look.
 - `src/wiki.rs`, `src/mediawiki.rs`, `src/replicas.rs`, `src/tool_db.rs`,
   `src/oauth.rs`: wikis, their API and databases, the tool database, OAuth.
-- `bookmeta` (the checkout next to this one, repository
+- `bookmeta` (the [crate](https://crates.io/crates/bookmeta), repository
   `https://github.com/magnusmanske/bookmeta`): ISBN validation and catalogue
   lookups, shared with other tools. Set `google_books_api_key` in
   `config.json` to use the quota-based Google Books API instead of its legacy
-  feed. Deploying needs the git dependency instead of the local path.
+  feed.
 
 ```bash
 cargo test

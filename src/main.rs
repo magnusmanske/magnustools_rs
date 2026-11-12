@@ -4,7 +4,11 @@ use magnustools_rs::jobs::{self, Command};
 use magnustools_rs::{config::Config, state::AppState, web};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use wikimisc::telemetry::Telemetry;
+
+/// How often a stopped web server is restarted before the process gives up.
+const MAX_SERVER_FAILURES: u8 = 5;
 
 /// The magnustools web service; or, with a command, one of its jobs.
 #[derive(Debug, Parser)]
@@ -35,9 +39,41 @@ async fn main() -> Result<()> {
         .version(env!("CARGO_PKG_VERSION"))
         .handle_signals(false)
         .install_or_log();
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", cli.port)).await?;
-    tracing::info!("listening on http://{}", listener.local_addr()?);
-    let state = AppState::new(config)?;
-    wikimisc::server::serve(listener, web::router(Arc::new(state))).await?;
-    Ok(())
+    let state = Arc::new(AppState::new(config)?);
+    let router = web::router(state);
+    let mut failures = 0u8;
+    loop {
+        let listener = match tokio::net::TcpListener::bind(("0.0.0.0", cli.port)).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                tracing::error!("cannot listen on port {}: {error}", cli.port);
+                wikimisc::telemetry::shutdown(wikimisc::telemetry::ExitReason::Other(format!(
+                    "cannot listen on port {}: {error}",
+                    cli.port
+                )))
+                .await;
+                return Err(error.into());
+            }
+        };
+        match listener.local_addr() {
+            Ok(address) => tracing::info!("listening on http://{address}"),
+            Err(error) => tracing::warn!("cannot report the listen address: {error}"),
+        }
+        match wikimisc::server::serve(listener, router.clone()).await {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                failures += 1;
+                tracing::error!("web server stopped ({failures}): {error:#}");
+                wikimisc::telemetry::event(wikimisc::telemetry::Level::Error, format!("web server stopped: {error}"));
+                if failures >= MAX_SERVER_FAILURES {
+                    wikimisc::telemetry::shutdown(wikimisc::telemetry::ExitReason::Other(format!(
+                        "web server stopped: {error}"
+                    )))
+                    .await;
+                    return Err(error.into());
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
+    }
 }

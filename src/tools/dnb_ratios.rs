@@ -56,7 +56,7 @@ impl Row {
 pub async fn handler(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
     let wikisource = Wiki::new("en", "wikisource")?;
     let wikipedia = Wiki::new("en", "wikipedia")?;
-    let words = read_wordcounts(&state.config.dnb_wordcount_file);
+    let words = read_wordcounts(&state.config.dnb_wordcount_file).await;
     let words_available = !words.is_empty();
     let (mut rows, truncated) = results(&state, &wikisource, &wikipedia, &words).await?;
     rows.sort_by(|a, b| {
@@ -158,8 +158,8 @@ async fn add_templates(
 
 /// Cached word counts from the old dnbtools job: Wikisource page, Wikipedia
 /// page, and words.
-fn read_wordcounts(path: &std::path::Path) -> HashMap<String, (String, u64)> {
-    let Ok(text) = std::fs::read_to_string(path) else {
+async fn read_wordcounts(path: &std::path::Path) -> HashMap<String, (String, u64)> {
+    let Ok(text) = tokio::fs::read_to_string(path).await else {
         tracing::warn!("cannot read {}", path.display());
         return HashMap::new();
     };
@@ -179,15 +179,15 @@ fn read_wordcounts(path: &std::path::Path) -> HashMap<String, (String, u64)> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn wordcounts_ignore_bad_lines() {
+    #[tokio::test]
+    async fn wordcounts_ignore_bad_lines() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("words.tab");
         std::fs::write(&path, "A_(DNB00)\tA\t100\t12\nbad\nB_(DNB00)\tB\t200\tx\nC_(DNB00)\tC\t300\t7\n").unwrap();
-        let words = read_wordcounts(&path);
+        let words = read_wordcounts(&path).await;
         assert_eq!(words.get("A_(DNB00)"), Some(&("A".to_string(), 12)));
         assert_eq!(words.get("C_(DNB00)"), Some(&("C".to_string(), 7)));
         assert_eq!(words.len(), 2);
-        assert!(read_wordcounts(&dir.path().join("missing")).is_empty());
+        assert!(read_wordcounts(&dir.path().join("missing")).await.is_empty());
     }
 }
