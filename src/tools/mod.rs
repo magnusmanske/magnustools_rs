@@ -241,7 +241,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("usualsuspects", get(usualsuspects::handler).post(usualsuspects::handler)),
         ("wiki2playlist", get(wiki2playlist::handler)),
         ("wiki_todo", get(wiki_todo::handler).post(wiki_todo::handler)),
-        ("wikidata-terminator", get(terminator::handler)),
+        ("wikidata-terminator", get(terminator::handler).post(terminator::handler)),
         ("wp_data_url", get(wp_data_url::handler)),
         ("xcontribs", get(xcontribs::handler)),
     ]

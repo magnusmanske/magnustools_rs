@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="lead">Wikidata items that are missing a label, description or sitelink in the languages you choose, most important first. A SPARQL restriction makes the search live and less restricted in the languages it can handle.</p>
-<form method="get" action="/wikidata-terminator/">
+<form method="post" action="/wikidata-terminator/">
   <div class="row">
     <label>Type
       <select name="type">
