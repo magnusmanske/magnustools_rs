@@ -384,24 +384,30 @@ pub async fn api(State(state): State<Arc<AppState>>, Params(request): Params<Req
             }
             Err(e) => json!({"status": format!("ERROR: {}", public_error(&e))}),
         },
-        "run_query" => match query::run(&state, &request.params()).await {
-            Ok(search) => {
-                let mut value = json!({
-                    "status": "OK",
-                    "results": search.results,
-                    "offset": search.offset,
-                    "mode": search.mode.as_str(),
-                });
-                if let Some(tier) = search.tier {
-                    value["tier"] = Value::String(tier.to_string());
-                }
-                if let Some(note) = search.note {
-                    value["note"] = Value::String(note);
-                }
-                value
+        "run_query" => {
+            let mut params = request.params();
+            if request.languages.trim().is_empty() {
+                params.missing_languages = vec!["en".to_string()];
             }
-            Err(e) => json!({"status": format!("ERROR: {}", public_error(&e))}),
-        },
+            match query::run(&state, &params).await {
+                Ok(search) => {
+                    let mut value = json!({
+                        "status": "OK",
+                        "results": search.results,
+                        "offset": search.offset,
+                        "mode": search.mode.as_str(),
+                    });
+                    if let Some(tier) = search.tier {
+                        value["tier"] = Value::String(tier.to_string());
+                    }
+                    if let Some(note) = search.note {
+                        value["note"] = Value::String(note);
+                    }
+                    value
+                }
+                Err(e) => json!({"status": format!("ERROR: {}", public_error(&e))}),
+            }
+        }
         action => json!({"status": format!("ERROR: bad action '{action}'")}),
     };
     Json(out)
