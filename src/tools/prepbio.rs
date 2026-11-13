@@ -5,7 +5,7 @@
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::Wiki;
+use crate::wiki::{Wiki, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -225,7 +225,7 @@ impl Biography<'_> {
         let birth = self.date("Day of birth", "Year of birth");
         let death = self.date("Day of death", "Year of death");
         let nation = self.get("Nationality");
-        let occupation = ucfirst(&self.get("Occupation"));
+        let occupation = ucfirst(&self.get("Occupation")).into_owned();
         let last_name = self.get("Last name");
         let full_name = format!("{} {last_name}", self.get("First name(s)"));
         let died = !self.get("Year of death").is_empty();
@@ -264,7 +264,7 @@ impl Biography<'_> {
         }
 
         if self.has("stub") {
-            let nation = ucfirst(nation.replace('.', "").trim());
+            let nation = ucfirst(nation.replace('.', "").trim()).into_owned();
             if !nation.is_empty() {
                 text += &format!("{{{{{nation}-bio-stub}}}}\n");
             }
@@ -339,14 +339,9 @@ impl Biography<'_> {
     }
 }
 
-fn ucfirst(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
-}
-
 /// `Sept. 5` → `September 5`, `jan 3` → `January 3`.
 fn expand_month(day: &str) -> String {
-    let day = ucfirst(day.trim_start());
+    let day = ucfirst(day.trim_start()).into_owned();
     for (abbreviation, month) in MONTH_ABBREVIATIONS {
         if day.contains(abbreviation) {
             return day.replacen(abbreviation, month, 1);

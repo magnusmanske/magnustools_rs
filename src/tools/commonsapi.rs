@@ -12,7 +12,7 @@ use crate::cache::TimedCache;
 use crate::mediawiki::{self, strip_namespace};
 use crate::state::AppState;
 use crate::web::{AppError, Params, jsonp, render};
-use crate::wiki::Wiki;
+use crate::wiki::{Wiki, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -699,11 +699,6 @@ fn scalar(value: &Value) -> String {
         Value::Null => String::new(),
         other => other.to_string(),
     }
-}
-
-fn ucfirst(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
 #[cfg(test)]

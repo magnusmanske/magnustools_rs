@@ -4,6 +4,7 @@
 use crate::cache::TimedCache;
 use crate::state::AppState;
 use crate::web::{AppError, render, thousands};
+use crate::wiki::ucfirst;
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -82,7 +83,7 @@ async fn load(state: &AppState) -> anyhow::Result<MainPage> {
         let name = match name.as_str() {
             "SUGGESTED TOOL" => return None,
             "WHOLE TOOL" => format!("[Wrapper entry for {subdomain}]"),
-            _ => ucfirst(name.replace('_', " ").trim()),
+            _ => ucfirst(name.replace('_', " ").trim()).into_owned(),
         };
         let on_a_wiki = ["wikidata.org", "wikipedia.org", "commons.wikimedia.org"].iter().any(|w| url.contains(w));
         Some(Tool {
@@ -215,11 +216,6 @@ fn day_number(date: NaiveDate) -> u32 {
 
 fn non_empty(s: &str) -> Option<String> {
     Some(s.trim().to_string()).filter(|s| !s.is_empty())
-}
-
-fn ucfirst(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
 #[cfg(test)]
