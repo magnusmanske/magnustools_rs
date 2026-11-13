@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<p class="lead">Looks a book up by ISBN in several catalogues and writes a wiki-markup reference from each, plus one merged entry. The default line is the same as the old tool's; the citation templates are for the English, German and French Wikipedias.</p>
+<p class="lead">Looks a book up by ISBN in several catalogues and writes a wiki-markup reference from each, plus one merged entry.</p>
 <form method="get" action="/isbn2wiki/">
   <label>ISBN <span class="hint">e.g. 978-3-423-30666-9, or 3-423-30666-1</span>
     <input type="text" name="isbn" value="{{ isbn }}" required>
