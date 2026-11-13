@@ -3,13 +3,13 @@
 
 use super::builder;
 use super::{Mode, SearchType, SortField};
+use crate::cache::TimedCache;
 use crate::state::AppState;
 use crate::web::AppError;
 use rand::Rng;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::time::Duration;
-use wikimisc::cache::TimedCache;
 use wikimisc::mysql_async::prelude::Queryable;
 use wikimisc::mysql_async::{Conn, Params as DbParams, Value as DbValue};
 use wikimisc::sparql_client::SparqlClient;
