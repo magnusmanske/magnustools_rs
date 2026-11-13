@@ -3,6 +3,7 @@
   "public_url": "https://magnustools.toolforge.org",
   "replica_credentials": "replica.my.cnf",
   "tool_db": { "database": "{user}__buggregator" },
+  "terminator_db": { "database": "{user}__terminator_p" },
   "cookie_key": "<128 hex digits: openssl rand -hex 64>",
   "buggregator_oauth": "buggregator_oauth.ini",
   "uploader_oauth": "oauth.ini",

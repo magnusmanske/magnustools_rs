@@ -115,3 +115,10 @@
   mount: all
   mem: 1Gi
   emails: onfailure
+- name: terminator-refresh
+  command: job terminator-refresh
+  image: tool-magnustools/tool-magnustools:latest
+  schedule: "17 4 * * *"
+  mount: all
+  mem: 1Gi
+  emails: onfailure

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The articles in a category, grouped by the other categories they are in. A group needs at least the given number of articles.</p>
+<form method="get" action="/catnap/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.language }}" placeholder="en"></label>
+    <label>Project <input type="text" name="project" value="{{ request.project }}" placeholder="wikipedia"></label>
+    <label>Min group <input type="number" name="min_group" value="{{ min_group }}" min="1"></label>
+  </div>
+  <label>Category <input type="text" name="category" value="{{ request.category }}" placeholder="Category name"></label>
+  <label>Ignore categories <span class="hint">one per line</span><textarea name="ignore" rows="5">{{ request.ignore }}</textarea></label>
+  <button>Do it</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if !category.is_empty() && error.is_none() %}
+<h2>{{ category }}</h2>
+{% if pages == 0 %}
+<p class="muted">No articles found in this category.</p>
+{% else %}
+<p class="muted">{{ pages }} articles{% if truncated %}; only the first {{ pages }} are shown{% endif %}.</p>
+{% if !groups.is_empty() %}
+<nav class="groups" aria-label="Categories">
+  {%- for group in groups %}
+  <a href="#g{{ loop.index }}">{{ group.title }} ({{ group.pages.len() }})</a>
+  {%- endfor %}
+  <a href="#other">Other pages ({{ other.len() }})</a>
+</nav>
+{% for group in groups %}
+<h3 id="g{{ loop.index }}"><a href="{{ group.url }}">{{ group.title }}</a> (<a href="{{ group.self_url }}">CatNap</a>)</h3>
+<ol>
+  {%- for page in group.pages %}
+  <li><a href="{{ page.url }}">{{ page.title }}</a></li>
+  {%- endfor %}
+</ol>
+{% endfor %}
+{% endif %}
+<h3 id="other">Other pages</h3>
+{% if other.is_empty() %}
+<p class="muted">None.</p>
+{% else %}
+<ol>
+  {%- for page in other %}
+  <li><a href="{{ page.url }}">{{ page.title }}</a></li>
+  {%- endfor %}
+</ol>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

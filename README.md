@@ -30,6 +30,7 @@ old tool's subdomain, use Toolforge's redirect container; see `PHP2RUST.md`.
 | `/bong/` | One search box over Wikipedia, Commons, Wikinews, Wiktionary, places |
 | `/can_i_haz_files/` | A shell script to download all files in a Commons category tree (formerly magnustools.toolforge.org) |
 | `/cas/` | Links for a CAS registry number |
+| `/catnap/` | Articles in a category, grouped by their other categories (formerly catnap.toolforge.org) |
 | `/commonsapi/` | XML (or JSON) summary of Commons files |
 | `/contribs/` | The contributions of several users, interleaved by time (formerly erwin85.toolforge.org) |
 | `/coord_gen/` | German Wikipedia's `{{Coordinate}}` from degrees |
@@ -39,6 +40,8 @@ old tool's subdomain, use Toolforge's redirect container; see `PHP2RUST.md`.
 | `/dnb_ratios/` | Wikisource DNB word counts against English Wikipedia article lengths (formerly dnbtools.toolforge.org) |
 | `/dnb_wikisource/` | Broken author, biography and transclusion links in the Wikisource DNB (formerly dnbtools.toolforge.org) |
 | `/filterdone/` | Removes list entries from a wiki page whose linked page already exists (formerly magnus-toolserver.toolforge.org) |
+| `/file-siblings/` | A file's neighbours in its categories and in the articles that use it (formerly file-siblings.toolforge.org) |
+| `/filedupes/` | Files marked as duplicates, by uploader or by category (formerly filedupes.toolforge.org) |
 | `/flickrfree/` | Latest freely licensed Flickr photos |
 | `/forest4trees/` | Articles that may be missing from a category tree |
 | `/get_article_intro/` | An article's first paragraph (JSON/JSONP) |
@@ -53,6 +56,8 @@ old tool's subdomain, use Toolforge's redirect container; see `PHP2RUST.md`.
 | `/metronom/` | Page views of the articles a user started |
 | `/missingtopics/` | Red links of an article or category tree, ranked by demand (formerly missingtopics.toolforge.org) |
 | `/misstake/` | Red links on some pages, ranked by how wanted they are |
+| `/multidesc/` | Multi-language descriptions for a Commons file or article (formerly multidesc.toolforge.org) |
+| `/new-page-linker/` | New articles, their backlinks and possible missing links (formerly new-page-linker.toolforge.org) |
 | `/newpages/` | Pages created within a time range (formerly erwin85.toolforge.org) |
 | `/no_information/` | Files without an `{{Information}}` or similar template (formerly add-information.toolforge.org) |
 | `/not-in-the-other-language/` | Wikidata items with a page in one wiki but not another, optionally limited by a category tree or PagePile (formerly not-in-the-other-language.toolforge.org) |
@@ -75,6 +80,7 @@ old tool's subdomain, use Toolforge's redirect container; see `PHP2RUST.md`.
 | `/usualsuspects/` | The uploaders of the files in a category (Bad Boys), and files whose description pages have been left alone (Bad Old Ones) (formerly usualsuspects.toolforge.org) |
 | `/wiki2playlist/` | M3U playlist from a wiki page or category |
 | `/wiki_todo/` | Things to do in a random article, from `Wiki-ToDo/<Language>` on Meta (also at wiki-todo.toolforge.org) |
+| `/wikidata-terminator/` | Wikidata items missing a label, description or sitelink (formerly wikidata-terminator.toolforge.org; `/api.php` kept) |
 | `/wp_data_url/` | An article with its images inlined |
 | `/xcontribs/` | How a user's edits are spread over the Wikimedia projects (formerly erwin85.toolforge.org) |
 | `/buggregator/api/` | Buggregator API; the front-end (`public/buggregator/`) has the issues, the service dashboard, and the usage dashboard (what the logger counted) |

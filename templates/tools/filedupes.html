@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Files marked as duplicates, either among one user's uploads or by a <code>&#123;&#123;duplicate&#125;&#125;</code> template in a category.</p>
+<form method="get" action="/filedupes/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ language }}" placeholder="commons"></label>
+    <label>Project <input type="text" name="project" value="{{ project }}" placeholder="wikimedia"></label>
+  </div>
+  <fieldset>
+    <legend>Either: a user's uploads</legend>
+    <label>User <input type="text" name="username" value="{{ request.username }}"></label>
+    <div class="row">
+      <label class="check"><input type="checkbox" name="identicalsonly" value="1"{% if identicals_only %} checked{% endif %}> Identical only</label>
+      <label class="check"><input type="checkbox" name="showdesc" value="1"{% if show_description %} checked{% endif %}> Show descriptions</label>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Or: categories</legend>
+    <label>Categories <span class="hint">one per line, or separated by |</span><textarea name="category" rows="3">{{ request.category }}</textarea></label>
+    <div class="row">
+      <label>Starts with <input type="text" name="startat" value="{{ request.startat.as_deref().unwrap_or_default() }}"></label>
+      <label>Limit <input type="number" name="limit" value="{{ request.limit() }}" min="1" max="100"></label>
+      <label>Offset <input type="number" name="offset" value="{{ request.offset() }}" min="1"></label>
+    </div>
+  </fieldset>
+  <button name="doit" value="1">Do it</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(message) = message %}<p class="muted">{{ message }}</p>{% endif %}
+{% if !user_rows.is_empty() %}
+<h2>Duplicate uploads</h2>
+{% if !user_found %}<p class="muted">No duplicates found.</p>{% endif %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>File</th><th>Delete this copy of another</th></tr></thead>
+  <tbody>
+  {% for row in user_rows %}
+    <tr{% if row.duplicate %} class="duplicate"{% endif %}>
+      <td>
+        <div class="file-card">
+          <a href="{{ row.card.page_url }}">{{ row.card.name }}</a>
+          [<a href="{{ row.card.file_url }}">file</a>]
+          [<a href="{{ row.card.delete_url }}">delete</a>]
+          [<a href="{{ row.card.links_url }}">usage</a>]
+          <br>
+          <a href="{{ row.card.file_url }}"><img src="{{ row.card.thumb_url }}" alt="{{ row.card.name }}"></a><br>
+          {{ row.card.size }} bytes · {{ row.card.width }}×{{ row.card.height }}{% if let Some(age) = row.card.age_days %} · {{ age }} days old{% endif %}
+          {% if !row.card.description.is_empty() %}<div class="description source">{{ row.card.description }}</div>{% endif %}
+        </div>
+      </td>
+      <td>
+        {% if row.duplicate %}
+        <ul>
+          {%- for (name, url) in row.others %}
+          <li><a href="{{ url }}" target="_blank">{{ name }}</a></li>
+          {%- endfor %}
+        </ul>
+        {% else %}<span class="muted">Not a duplicate.</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% for category in categories %}
+<h2>{{ category.name }}</h2>
+{% if category.pairs.is_empty() %}
+<p class="muted">No duplicates found in this range.</p>
+{% else %}
+<div class="table-wrap">
+<table class="pairs">
+  <thead><tr><th>File</th><th>Difference</th><th>Duplicate of</th></tr></thead>
+  <tbody>
+  {% for pair in category.pairs %}
+    <tr>
+      <td>
+        <div class="file-card">
+          <a href="{{ pair.original.page_url }}">{{ pair.original.name }}</a>
+          [<a href="{{ pair.original.file_url }}">file</a>]
+          [<a href="{{ pair.original.delete_url }}">delete</a>]
+          [<a href="{{ pair.original.links_url }}">usage</a>]
+          <br>
+          <a href="{{ pair.original.file_url }}"><img src="{{ pair.original.thumb_url }}" alt="{{ pair.original.name }}"></a><br>
+          {{ pair.original.size }} bytes · {{ pair.original.width }}×{{ pair.original.height }}{% if let Some(age) = pair.original.age_days %} · {{ age }} days old{% endif %}
+          {% if !pair.original.description.is_empty() %}<div class="description source">{{ pair.original.description }}</div>{% endif %}
+          {% if let Some(form) = pair.original.superseded %}
+          <form method="post" action="{{ form.action }}" target="_blank" class="inline">
+            <input type="hidden" name="wpTextbox1" value="{{ form.text }}">
+            <input type="hidden" name="wpSummary" value="{{ form.summary }}">
+            <input type="hidden" name="wpStarttime" value="{{ form.starttime }}">
+            <input type="hidden" name="wpEdittime" value="{{ form.edittime }}">
+            <input type="hidden" name="wpPreview" value="wpPreview">
+            <button type="submit" class="link">Change to “superseded”</button>
+          </form>
+          {% endif %}
+          {% if let Some(form) = pair.original.universal %}
+          <form method="post" action="{{ form.action }}" target="_blank" class="inline">
+            <input type="hidden" name="wpTextbox1" value="{{ form.text }}">
+            <input type="hidden" name="wpSummary" value="{{ form.summary }}">
+            <input type="hidden" name="wpStarttime" value="{{ form.starttime }}">
+            <input type="hidden" name="wpEdittime" value="{{ form.edittime }}">
+            <input type="hidden" name="wpPreview" value="wpPreview">
+            <button type="submit" class="link">Universal replace with the other image</button>
+          </form>
+          {% endif %}
+        </div>
+      </td>
+      <td class="num {% if pair.same_size %}diff-plus{% else %}diff-minus{% endif %}">
+        {% if pair.same_size %}same size{% else %}size differs{% endif %}<br>
+        {% if pair.exact %}exact duplicate{% else %}different type{% endif %}
+      </td>
+      <td>
+        <div class="file-card">
+          <a href="{{ pair.duplicate.page_url }}">{{ pair.duplicate.name }}</a>
+          [<a href="{{ pair.duplicate.file_url }}">file</a>]
+          [<a href="{{ pair.duplicate.delete_url }}">delete</a>]
+          [<a href="{{ pair.duplicate.links_url }}">usage</a>]
+          <br>
+          <a href="{{ pair.duplicate.file_url }}"><img src="{{ pair.duplicate.thumb_url }}" alt="{{ pair.duplicate.name }}"></a><br>
+          {{ pair.duplicate.size }} bytes · {{ pair.duplicate.width }}×{{ pair.duplicate.height }}{% if let Some(age) = pair.duplicate.age_days %} · {{ age }} days old{% endif %}
+          {% if !pair.duplicate.description.is_empty() %}<div class="description source">{{ pair.duplicate.description }}</div>{% endif %}
+        </div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endfor %}
+{% if let Some(next) = next_url %}<p><a href="{{ next }}">Next page</a></p>{% endif %}
+{% endblock %}

@@ -34,6 +34,8 @@ pub enum Command {
     Monitor,
     /// Rebuilds one wiki's most-wanted list (`enwiki` or `enwiki_p`; daily).
     MostWanted { wiki: String },
+    /// Rebuilds the Wikidata Terminator's candidate index (daily).
+    TerminatorRefresh,
     /// Service dashboard administration.
     #[command(subcommand)]
     Dashboard(DashboardCommand),
@@ -78,6 +80,7 @@ pub async fn run(command: Command, state: &AppState) -> Result<()> {
         Command::DashboardAlerts => dashboard_alerts::run(state).await?,
         Command::Monitor => monitor::run(state).await?,
         Command::MostWanted { wiki } => crate::tools::most_wanted::update(state, &wiki).await?,
+        Command::TerminatorRefresh => crate::tools::terminator::refresh(state).await?,
         Command::IssueStatus { issue_id, status } => {
             let status = status.to_uppercase();
             if !issues::STATUSES.contains(&status.as_str()) {

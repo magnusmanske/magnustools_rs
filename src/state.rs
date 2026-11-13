@@ -44,6 +44,8 @@ pub struct AppState {
     pub http: reqwest::Client,
     pub replicas: Replicas,
     pub tool_db: ToolDb,
+    /// The Wikidata Terminator's candidate index, a separate ToolsDB database.
+    pub terminator_db: ToolDb,
     pub cookie_key: Key,
     pub buggregator_oauth: Option<OAuth>,
     pub uploader_oauth: Option<OAuth>,
@@ -77,6 +79,7 @@ impl AppState {
         Ok(Self {
             replicas: Replicas::new(&config.replica_credentials)?,
             tool_db: ToolDb::new(&config.tool_db, &config.replica_credentials)?,
+            terminator_db: ToolDb::new(&config.terminator_db, &config.replica_credentials)?,
             buggregator_oauth: oauth(&config.buggregator_oauth, &http),
             uploader_oauth: oauth(&config.uploader_oauth, &http),
             cookie_key,

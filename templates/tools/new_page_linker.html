@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">New articles on a Wikipedia, with the pages that already link to them and search results that might want a link.</p>
+<form method="get" action="/new-page-linker/">
+  <div class="row">
+    <label>Language <span class="hint">en, de, fr, …</span> <input type="text" name="language" value="{{ request.language }}" placeholder="en"></label>
+    <label>New pages <input type="number" name="number" value="{{ number }}" min="1" max="100"></label>
+  </div>
+  <button>Show</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if !rows.is_empty() %}
+<h2>New pages on {{ wiki }}.wikipedia.org</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>New page</th><th>Links to it</th><th>Search results without a link</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><a href="{{ row.url }}" target="_blank">{{ row.title }}</a></td>
+      <td>
+        <div class="result-box">
+        {% for page in row.backlinks %}
+          <div><a href="{{ page.url }}" target="_blank">{{ page.title }}</a>{% if page.url.ends_with("?redirect=no") %} <small class="muted">[redirect]</small>{% endif %}</div>
+        {% else %}<span class="muted">None.</span>{% endfor %}
+        </div>
+      </td>
+      <td>
+        <div class="result-box">
+        {% for page in row.search %}
+          <div><a href="{{ page.url }}" target="_blank">{{ page.title }}</a>{% if page.url.ends_with("?redirect=no") %} <small class="muted">[redirect]</small>{% endif %}</div>
+        {% else %}<span class="muted">None.</span>{% endfor %}
+        </div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+{% if error.is_none() && !request.language.is_empty() %}<p class="muted">No new pages found.</p>{% endif %}
+{% endif %}
+<script>
+// Old links used the hash router: /#/en/10.
+(() => {
+  const match = location.hash.match(/^#\/([a-z][a-z0-9-]*)(?:\/(\d+))?$/);
+  if (!match || new URLSearchParams(location.search).has('language')) return;
+  const params = new URLSearchParams({ language: match[1], number: match[2] || '10' });
+  location.replace('/new-page-linker/?' + params);
+})();
+</script>
+{% endblock %}

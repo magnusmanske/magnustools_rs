@@ -22,6 +22,9 @@ pub struct Config {
     pub replica_credentials: PathBuf,
     #[serde(default)]
     pub tool_db: ToolDbConfig,
+    /// The Wikidata Terminator's candidate index, on ToolsDB.
+    #[serde(default = "default_terminator_db")]
+    pub terminator_db: ToolDbConfig,
     /// Where this service is reachable, for OAuth callbacks.
     #[serde(default = "default_public_url")]
     pub public_url: String,
@@ -115,6 +118,10 @@ fn default_replica_credentials() -> PathBuf {
     "replica.my.cnf".into()
 }
 
+fn default_terminator_db() -> ToolDbConfig {
+    ToolDbConfig { database: "{user}__terminator_p".to_string(), url: None }
+}
+
 fn default_public_url() -> String {
     "https://magnustools.toolforge.org".to_string()
 }
@@ -177,7 +184,14 @@ mod tests {
         assert_eq!(config.dnb_wordcount_file, Path::new("/data/project/dnbtools/ws_dnb_wordcount.tab"));
         assert_eq!(config.most_wanted_dir, Path::new("/data/project/magnustools/most_wanted"));
         assert_eq!(config.monitor.status_page, dir.path().join("tool_status.html"));
+        assert_eq!(config.terminator_db.database, "{user}__terminator_p");
         assert!(config.telemetry.token.is_none());
+    }
+
+    #[test]
+    fn terminator_db_is_configurable() {
+        let (config, _dir) = load(r#"{"terminator_db": {"database": "x__y"}}"#);
+        assert_eq!(config.unwrap().terminator_db.database, "x__y");
     }
 
     #[test]

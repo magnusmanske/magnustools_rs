@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">The neighbours of a file in each of its categories, and in the article pages that use it.</p>
+<form method="get" action="/file-siblings/">
+  <div class="row">
+    <label>Language <input type="text" name="language" value="{{ request.language }}" placeholder="commons"></label>
+    <label>Project <input type="text" name="project" value="{{ project }}" placeholder="wikimedia"></label>
+  </div>
+  <label>File <input type="text" name="file" value="{{ file }}" placeholder="File name"></label>
+  <fieldset>
+    <legend>Siblings</legend>
+    <div class="row">
+      <label class="check"><input type="checkbox" name="sib_cat" value="1"{% if request.sib_cat.as_deref() != Some("0") %} checked{% endif %}> Categories</label>
+      <label class="check"><input type="checkbox" name="sib_gal" value="1"{% if request.sib_gal.as_deref() != Some("0") %} checked{% endif %}> Galleries</label>
+      <label class="check"><input type="checkbox" name="sort_by_date" value="1"{% if request.sort_by_date.as_deref() == Some("1") %} checked{% endif %}> Categories by date added</label>
+    </div>
+  </fieldset>
+  <div class="row">
+    <label>Header text <span class="hint">optional</span> <input type="text" name="message" value="{{ request.message }}"></label>
+    <label>Output
+      <select name="mode">
+        <option value="html"{% if request.mode.as_deref().unwrap_or("html") == "html" %} selected{% endif %}>HTML</option>
+        <option value="text"{% if request.mode.as_deref() == Some("text") %} selected{% endif %}>HTML (text)</option>
+        <option value="json"{% if request.mode.as_deref() == Some("json") %} selected{% endif %}>JSON/callback</option>
+      </select>
+    </label>
+  </div>
+  <button>Do it</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if !file.is_empty() && error.is_none() %}
+{% if truncated %}<p class="muted">The file is in more categories than are shown.</p>{% endif %}
+{% if !has_rows %}
+<p class="muted">No siblings found.</p>
+{% else %}
+{% for section in sections %}
+{% if !section.rows.is_empty() %}
+<h2>{% if section.kind == "categories" %}Categories{% else %}Galleries{% endif %}</h2>
+<div class="table-wrap">
+<table class="siblings">
+  <thead><tr><th>Page</th><th class="num">Previous</th><th class="num">Next</th></tr></thead>
+  <tbody>
+  {% for row in section.rows %}
+    <tr>
+      <td><a href="{{ row.heading_url }}">{{ row.heading }}</a>{{ row.note }}</td>
+      <td class="num">
+        {% if let Some(thumb) = &row.prev %}
+        <a href="{{ thumb.url }}">{% if let Some(src) = &thumb.src %}<img src="{{ src }}" width="{{ thumb.width }}" height="{{ thumb.height }}" alt="{{ thumb.label }}">{% else %}{{ thumb.label }}{% endif %}</a>
+        {% else %}<div class="thumb-empty"></div>{% endif %}
+      </td>
+      <td class="num">
+        {% if let Some(thumb) = &row.next %}
+        <a href="{{ thumb.url }}">{% if let Some(src) = &thumb.src %}<img src="{{ src }}" width="{{ thumb.width }}" height="{{ thumb.height }}" alt="{{ thumb.label }}">{% else %}{{ thumb.label }}{% endif %}</a>
+        {% else %}<div class="thumb-empty"></div>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endblock %}

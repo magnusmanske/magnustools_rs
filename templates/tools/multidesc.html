@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Multi-language descriptions for a Commons file, taken from the articles that use it, or a first paragraph per language for an article.</p>
+<form method="get" action="/multidesc/">
+  <fieldset>
+    <legend>Describe a file</legend>
+    <label>File on Commons <input type="text" name="image" value="{{ request.image.as_deref().unwrap_or_default() }}" placeholder="File name"></label>
+    <div class="row">
+      <label class="check"><input type="checkbox" name="onlynew" value="1"{% if request.onlynew.as_deref() == Some("1") %} checked{% endif %}> Only languages not already marked in the file description</label>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Or: describe an article</legend>
+    <div class="row">
+      <label>Article <input type="text" name="title" value="{{ request.title.as_deref().unwrap_or_default() }}"></label>
+      <label>Language <input type="text" name="baseon" value="{{ baseon }}" placeholder="en"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="directlinks" value="1"{% if request.directlinks.as_deref() == Some("1") %} checked{% endif %}> Add direct links to the language article to each language section</label>
+  </fieldset>
+  <label class="check"><input type="checkbox" name="raw" value="1"{% if request.raw.as_deref() == Some("1") %} checked{% endif %}> Raw text</label>
+  <button>Do it</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if !output.is_empty() %}
+<h2>Result</h2>
+<textarea rows="15" readonly>{{ output }}</textarea>
+{% if !missing.is_empty() %}
+<h3>Missing language links</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Article</th><th>Could link to</th></tr></thead>
+  <tbody>
+  {% for row in missing %}
+    <tr>
+      <td><a href="{{ row.edit_url }}">{{ row.language }}:{{ row.title }}</a></td>
+      <td>{% for (language, title, url) in row.links %}<a href="{{ url }}">{{ language }}:{{ title }}</a><br>{% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

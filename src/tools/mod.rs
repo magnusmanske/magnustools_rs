@@ -7,6 +7,7 @@ mod blockfinder;
 mod bong;
 mod can_i_haz_files;
 mod cas;
+mod catnap;
 mod commonsapi;
 mod contribs;
 mod coord_gen;
@@ -16,6 +17,8 @@ mod dnb;
 mod dnb_link_finder;
 mod dnb_ratios;
 mod dnb_wikisource;
+mod file_siblings;
+mod filedupes;
 mod filterdone;
 mod flickrfree;
 mod forest4trees;
@@ -34,6 +37,8 @@ mod metronom;
 mod missingtopics;
 mod misstake;
 pub(crate) mod most_wanted;
+mod multidesc;
+mod new_page_linker;
 mod newpages;
 mod no_information;
 mod not_in_the_other_language;
@@ -52,6 +57,7 @@ mod sugart;
 mod tab2wiki;
 mod talkcatintersect;
 mod templator;
+pub(crate) mod terminator;
 mod transparent;
 mod unused_files;
 mod uploader_distribution;
@@ -80,6 +86,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("bong", "BONG"),
     ("can_i_haz_files", "Can I haz files?"),
     ("cas", "CAS number links"),
+    ("catnap", "CatNap"),
     ("commonsapi", "Commons API"),
     ("contribs", "Contribs [Erwin85]"),
     ("coord_gen", "Coordinate generator"),
@@ -89,6 +96,8 @@ pub const MENU: &[(&str, &str)] = &[
     ("dnb_ratios", "DNB article length ratios"),
     ("dnb_link_finder", "DNB link finder"),
     ("dnb_wikisource", "DNB on Wikisource"),
+    ("filedupes", "File duplicates"),
+    ("file-siblings", "File siblings"),
     ("filterdone", "Filter done"),
     ("transparent", "Find a translator"),
     ("flickrfree", "FlickrFree"),
@@ -103,6 +112,8 @@ pub const MENU: &[(&str, &str)] = &[
     ("metronom", "Metronom"),
     ("missingtopics", "Missing topics"),
     ("most_wanted", "Most wanted"),
+    ("multidesc", "MultiDesc"),
+    ("new-page-linker", "New page linker"),
     ("newpages", "New pages [Erwin85]"),
     ("no_information", "No information"),
     ("not-in-the-other-language", "Not in the other language"),
@@ -127,6 +138,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("uploader_distribution", "Uploader distribution"),
     ("wiki2playlist", "Wiki to playlist"),
     ("wiki_todo", "Wiki ToDo"),
+    ("wikidata-terminator", "Wikidata Terminator"),
     ("wp_data_url", "Wikipedia article with inline images"),
     ("xcontribs", "xContribs [Erwin85]"),
 ];
@@ -136,14 +148,19 @@ pub fn routes() -> Router<State> {
         .route("/", get(index::handler))
         .route("/index.html", get(index::handler))
         .route("/main.html", moved("/"));
-    tools().into_iter().fold(router, |router, (name, handler)| {
-        // The logger is called by the tools themselves: neither a use nor traffic of its own.
-        let handler = match name {
-            "logger" => handler,
-            _ => handler.layer(middleware::from_fn(move |request: Request, next: Next| count(name, request, next))),
-        };
-        tool(router, name, handler)
-    })
+    tools()
+        .into_iter()
+        .fold(router, |router, (name, handler)| {
+            // The logger is called by the tools themselves: neither a use nor traffic of its own.
+            let handler = match name {
+                "logger" => handler,
+                _ => handler.layer(middleware::from_fn(move |request: Request, next: Next| count(name, request, next))),
+            };
+            tool(router, name, handler)
+        })
+        // The Terminator's old API, for callers that kept the address.
+        .route("/wikidata-terminator/api.php", get(terminator::api).post(terminator::api))
+        .route("/wikidata-terminator/api/", get(terminator::api).post(terminator::api))
 }
 
 /// Counts each request to a tool for the service dashboard, by status
@@ -171,12 +188,15 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("bong", get(bong::handler)),
         ("can_i_haz_files", get(can_i_haz_files::handler)),
         ("cas", get(cas::handler)),
+        ("catnap", get(catnap::handler).post(catnap::handler)),
         ("commonsapi", get(commonsapi::handler)),
         ("contribs", get(contribs::handler)),
         ("coord_gen", get(coord_gen::handler).post(coord_gen::handler)),
         ("deep_insight", get(deep_insight::handler).post(deep_insight::handler)),
         ("deep_out_of_sight", get(deep_out_of_sight::handler).post(deep_out_of_sight::handler)),
         ("filterdone", get(filterdone::handler)),
+        ("file-siblings", get(file_siblings::handler).post(file_siblings::handler)),
+        ("filedupes", get(filedupes::handler)),
         ("flickrfree", get(flickrfree::handler)),
         ("forest4trees", get(forest4trees::handler)),
         ("get_article_intro", get(get_article_intro::handler)),
@@ -194,6 +214,8 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("metronom", get(metronom::handler)),
         ("missingtopics", get(missingtopics::handler).post(missingtopics::handler)),
         ("most_wanted", get(most_wanted::handler)),
+        ("multidesc", get(multidesc::handler).post(multidesc::handler)),
+        ("new-page-linker", get(new_page_linker::handler)),
         ("misstake", get(misstake::handler).post(misstake::handler)),
         ("newpages", get(newpages::handler)),
         ("no_information", get(no_information::handler)),
@@ -219,6 +241,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("usualsuspects", get(usualsuspects::handler).post(usualsuspects::handler)),
         ("wiki2playlist", get(wiki2playlist::handler)),
         ("wiki_todo", get(wiki_todo::handler).post(wiki_todo::handler)),
+        ("wikidata-terminator", get(terminator::handler)),
         ("wp_data_url", get(wp_data_url::handler)),
         ("xcontribs", get(xcontribs::handler)),
     ]
@@ -251,10 +274,38 @@ mod tests {
     #[tokio::test]
     async fn old_php_addresses_redirect_to_the_tool() {
         let dir = tempfile::tempdir().unwrap();
-        for path in ["/bong.php", "/filterdone.php", "/unused_files.php", "/wiki_todo.php"] {
+        for path in [
+            "/bong.php",
+            "/filterdone.php",
+            "/unused_files.php",
+            "/wiki_todo.php",
+            "/catnap.php",
+            "/file-siblings.php",
+            "/filedupes.php",
+            "/multidesc.php",
+            "/new-page-linker.php",
+            "/wikidata-terminator.php",
+        ] {
             let page = get(dir.path(), path).await;
             assert_eq!(page.status.as_u16(), 308, "{path}");
             assert_eq!(page.headers["location"], path.trim_end_matches(".php").to_string() + "/", "{path}");
+        }
+    }
+
+    #[tokio::test]
+    async fn new_tool_forms_render() {
+        let dir = tempfile::tempdir().unwrap();
+        for (path, title) in [
+            ("/catnap/", "CatNap"),
+            ("/file-siblings/", "File siblings"),
+            ("/filedupes/", "File duplicates"),
+            ("/multidesc/", "MultiDesc"),
+            ("/new-page-linker/", "New page linker"),
+            ("/wikidata-terminator/", "Wikidata Terminator"),
+        ] {
+            let page = get(dir.path(), path).await;
+            assert_eq!(page.status.as_u16(), 200, "{path}");
+            assert!(page.body.contains(&format!("<h1>{title}</h1>")), "{path}");
         }
     }
 

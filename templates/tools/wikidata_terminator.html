@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Wikidata items that are missing a label, description or sitelink in the languages you choose, most important first. A SPARQL restriction makes the search live and less restricted in the languages it can handle.</p>
+<form method="get" action="/wikidata-terminator/">
+  <div class="row">
+    <label>Type
+      <select name="type">
+        <option value="labels"{% if search_type == "labels" %} selected{% endif %}>Labels</option>
+        <option value="descriptions"{% if search_type == "descriptions" %} selected{% endif %}>Descriptions</option>
+        <option value="sites"{% if search_type == "sites" %} selected{% endif %}>Sitelinks</option>
+      </select>
+    </label>
+    <label>Missing in <span class="hint">en, de, …</span> <input type="text" name="languages" value="{{ missing_languages }}" placeholder="en"></label>
+    <label>Also has <span class="hint">optional</span> <input type="text" name="present" value="{{ present_languages }}"></label>
+  </div>
+  <div class="row">
+    <label>Sort by
+      <select name="sort_by">
+        <option value="score"{% if sort == "score" %} selected{% endif %}>Score</option>
+        <option value="claims"{% if sort == "claims" %} selected{% endif %}>Claims</option>
+        <option value="identifiers"{% if sort == "identifiers" %} selected{% endif %}>Identifiers</option>
+        <option value="sitelinks"{% if sort == "sitelinks" %} selected{% endif %}>Sitelinks</option>
+      </select>
+    </label>
+    <label>Results
+      <select name="max_results">
+        {%- for (number, selected) in result_choices %}
+        <option value="{{ number }}"{% if selected %} selected{% endif %}>{{ number }}</option>
+        {%- endfor %}
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" name="sui" value="1"{% if request.sui.as_deref() == Some("1") %} checked{% endif %}> Show untranslatables</label>
+  </div>
+  <fieldset>
+    <legend>Mode</legend>
+    <div class="row">
+      <label class="check"><input type="radio" name="mode" value="top"{% if mode == "top" %} checked{% endif %}> List</label>
+      <label class="check"><input type="radio" name="mode" value="game"{% if mode == "game" %} checked{% endif %}> One random item</label>
+    </div>
+  </fieldset>
+  <label>SPARQL restriction <span class="hint">optional; select the items into ?q</span>
+    <textarea name="sparql" rows="4" placeholder="SELECT ?q { ?q wdt:P31 wd:Q4915012 }">{{ request.sparql }}</textarea>
+  </label>
+  <button>Find items</button>
+</form>
+{% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if let Some(search) = search %}
+{% if let Some(note) = search.note %}<p class="muted">{{ note }}</p>{% endif %}
+{% if let Some(tier) = search.tier %}<p class="muted">Results from the {{ tier }} search.</p>{% endif %}
+{% if search.rows.is_empty() %}
+<p class="muted">No items found.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Description</th><th>Type</th><th class="num">Claims</th><th class="num">IDs</th><th class="num">Sitelinks</th><th class="num">Score</th></tr></thead>
+  <tbody>
+  {% for row in search.rows %}
+    <tr>
+      <td><a href="{{ row.url }}" target="_blank">{{ row.label }}</a><br><span class="muted">{{ row.qid }}</span></td>
+      <td>{{ row.description }}</td>
+      <td>{% if row.p31 > 0 %}<a href="{{ row.p31_url }}" target="_blank">{{ row.p31_id }}</a>{% if !row.p31_label.is_empty() %} <span class="muted">{{ row.p31_label }}</span>{% endif %}{% endif %}</td>
+      <td class="num">{{ row.claims }}</td>
+      <td class="num">{{ row.identifiers }}</td>
+      <td class="num">{{ row.sitelinks }}</td>
+      <td class="num">{{ row.score }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<nav class="pagination" aria-label="Pagination">
+  {%- if let Some(prev) = search.prev_url %}<a rel="prev" href="{{ prev }}">Previous</a>{% else %}<span class="muted">Previous</span>{% endif %}
+  <a rel="next" href="{{ search.next_url }}">Next</a>
+</nav>
+{% endif %}
+{% endif %}
+<script>
+// Old links used the hash router: /#/top/labels/cy?present=eu&mode=game&autorun=1
+(() => {
+  const match = location.hash.match(/^#\/top\/(labels|descriptions|sites)(?:\/([a-z0-9,-]+))?(?:\?(.*))?$/);
+  if (!match || new URLSearchParams(location.search).has('languages')) return;
+  const params = new URLSearchParams(match[3] || '');
+  params.set('type', match[1]);
+  if (match[2]) params.set('languages', match[2]);
+  location.replace('/wikidata-terminator/?' + params);
+})();
+</script>
+{% endblock %}
