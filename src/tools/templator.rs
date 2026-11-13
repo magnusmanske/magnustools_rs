@@ -6,7 +6,7 @@ use crate::mediawiki;
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component, is_language_code, upper_first};
+use crate::wiki::{Wiki, is_language_code, percent_encode, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -62,7 +62,7 @@ fn parse_config(wikitext: &str) -> Config {
             continue;
         }
         if line.starts_with("==") {
-            let name = upper_first(line.replace('=', "").trim());
+            let name = ucfirst(line.replace('=', "").trim()).into_owned();
             let key = name.to_lowercase().replace(' ', "");
             config.sections.push(Section { key, name, fields: vec![] });
             in_table = false;
@@ -179,7 +179,7 @@ pub async fn handler(
         l => return Err(AppError::BadRequest(format!("“{l}” is not a language code."))),
     };
     let meta = Wiki::new("meta", "wikimedia")?;
-    let config_title = format!("{CONFIG_PREFIX}{}", upper_first(&language));
+    let config_title = format!("{CONFIG_PREFIX}{}", ucfirst(&language));
     let wikitext = mediawiki::page_wikitext(&state.http, &meta, &config_title)
         .await?
         .ok_or_else(|| AppError::BadRequest(format!("There is no {config_title} on Meta for this language yet.")))?;
@@ -249,11 +249,8 @@ fn groups(sections: &[Section], language: &str, current: &str) -> Vec<Group> {
             groups.push(Group { heading: Some(section.name.clone()), links: vec![] });
             continue;
         }
-        let url = format!(
-            "/templator/?language={}&templatekey={}",
-            encode_component(language),
-            encode_component(&section.key)
-        );
+        let url =
+            format!("/templator/?language={}&templatekey={}", percent_encode(language), percent_encode(&section.key));
         let link = Link { name: section.name.clone(), url, current: section.key == current };
         match groups.last_mut() {
             Some(group) => group.links.push(link),

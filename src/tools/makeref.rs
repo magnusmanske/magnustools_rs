@@ -6,7 +6,7 @@ use crate::mediawiki;
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component, is_language_code, upper_first};
+use crate::wiki::{Wiki, is_language_code, percent_encode, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -61,7 +61,7 @@ fn parse_config(wikitext: &str) -> Vec<RefType> {
         let (level, text) = heading(line.trim());
         match level {
             2 => {
-                let name = upper_first(text.trim());
+                let name = ucfirst(text.trim()).into_owned();
                 let key = name.to_lowercase().replace(' ', "_");
                 types.push(RefType { key, name, fields: vec![], code: String::new() });
                 (section, sections) = ("", 0);
@@ -287,7 +287,7 @@ pub async fn handler(
         l => return Err(AppError::BadRequest(format!("“{l}” is not a language code."))),
     };
     let meta = Wiki::new("meta", "wikimedia")?;
-    let config_title = format!("{CONFIG_PREFIX}{}", upper_first(&language));
+    let config_title = format!("{CONFIG_PREFIX}{}", ucfirst(&language));
     let wikitext = mediawiki::page_wikitext(&state.http, &meta, &config_title)
         .await?
         .ok_or_else(|| AppError::BadRequest(format!("There is no {config_title} on Meta for this language yet.")))?;
@@ -339,7 +339,7 @@ pub async fn handler(
         .iter()
         .map(|t| TypeLink {
             name: t.name.clone(),
-            url: format!("/makeref/?language={}&reftype={}", encode_component(&language), encode_component(&t.key)),
+            url: format!("/makeref/?language={}&reftype={}", percent_encode(&language), percent_encode(&t.key)),
             current: t.key == ref_type.key,
         })
         .collect();

@@ -7,7 +7,7 @@ use crate::mediawiki::{self, WikiApiError, strip_namespace};
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params};
-use crate::wiki::{Wiki, encode_component, encode_title, is_language_code, upper_first};
+use crate::wiki::{Wiki, is_language_code, percent_encode, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::HeaderName;
@@ -74,7 +74,7 @@ struct Thumb {
 impl Thumb {
     /// With a link to the description here, if `link`.
     fn new(image: &str, src: String, (width, height): (u32, u32), link: bool) -> Self {
-        let link = link.then(|| format!("?mode=desc&image={}", encode_component(image)));
+        let link = link.then(|| format!("?mode=desc&image={}", percent_encode(image)));
         Self { src, width, height, ogg: is_ogg(image), link }
     }
 
@@ -260,7 +260,8 @@ async fn search_results(http: &reqwest::Client, search: &str) -> anyhow::Result<
 
 async fn description(http: &reqwest::Client, image: &str) -> anyhow::Result<Body> {
     let image = image.trim();
-    let image = upper_first(strip_namespace(image, &["file", "image"]).unwrap_or(image).replace('_', " ").trim());
+    let image =
+        ucfirst(strip_namespace(image, &["file", "image"]).unwrap_or(image).replace('_', " ").trim()).into_owned();
     let name = display_name(&image);
     let Some(file) = commonsapi::summary(http, &image).await? else {
         return Ok(Body::Description { name, thumb: None, rows: vec![("Commons", "No such file.".to_string())] });
@@ -449,7 +450,7 @@ fn redirect_thumb(image: &str, width: f64, height: f64, (max_width, max_height):
         return None;
     }
     let fitted = fit_width(width, height, max_width, max_height);
-    let mut src = format!("//commons.wikimedia.org/wiki/Special:Redirect/file/{}", encode_title(image));
+    let mut src = format!("//commons.wikimedia.org/wiki/Special:Redirect/file/{}", wiki_urlencode(image));
     if fitted <= width {
         src.push_str(&format!("?width={fitted}"));
     }
@@ -469,7 +470,7 @@ fn without_namespace(title: &str) -> String {
 
 /// A file name without extension, for display.
 fn display_name(image: &str) -> String {
-    upper_first(image.rsplit_once('.').map_or(image, |(name, _)| name).trim())
+    ucfirst(image.rsplit_once('.').map_or(image, |(name, _)| name).trim()).into_owned()
 }
 
 fn is_ogg(image: &str) -> bool {
@@ -477,7 +478,7 @@ fn is_ogg(image: &str) -> bool {
 }
 
 fn category_url(name: &str) -> String {
-    format!("?mode=category&category={}", encode_component(name))
+    format!("?mode=category&category={}", percent_encode(name))
 }
 
 fn category_link(name: &str) -> Link {

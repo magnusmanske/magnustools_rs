@@ -5,7 +5,7 @@
 use crate::mediawiki::{self, html_to_text};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -90,7 +90,7 @@ pub async fn handler(
         .iter()
         .map(|(m, name, label)| Tab {
             label,
-            url: format!("/bong/?mode={name}&q={}", encode_component(q)),
+            url: format!("/bong/?mode={name}&q={}", percent_encode(q)),
             current: *m == mode,
         })
         .collect();

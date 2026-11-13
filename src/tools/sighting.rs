@@ -2,7 +2,7 @@
 //! flagged revisions, capped replica queries, and RSS.
 
 use crate::replicas::{display_title, placeholders};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use wikimisc::escape;
@@ -42,7 +42,7 @@ pub(super) fn pending_changes_url(wiki: &Wiki, category: &str) -> String {
     format!(
         "{}?title=Special:PendingChanges&namespace={NS_ARTICLE}&category={}",
         wiki.index_url(),
-        encode_component(&display_title(category))
+        percent_encode(&display_title(category))
     )
 }
 

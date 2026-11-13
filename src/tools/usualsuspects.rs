@@ -7,7 +7,7 @@ use crate::regex;
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_title, upper_first};
+use crate::wiki::{Wiki, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -188,7 +188,7 @@ fn category_title(input: &str) -> String {
         Some(prefix) if prefix.eq_ignore_ascii_case("category:") => input.get(9..).unwrap_or_default(),
         _ => input,
     };
-    upper_first(&without_prefix.replace(' ', "_"))
+    ucfirst(&without_prefix.replace(' ', "_")).into_owned()
 }
 
 fn min_days(value: Option<&str>) -> u32 {
@@ -352,7 +352,7 @@ fn old_row(
     now: i64,
 ) -> Option<OldRow> {
     let file_url = wiki.page_url(&format!("File:{file}"));
-    let edit_url = format!("{}?title={}&action=edit", wiki.index_url(), encode_title(&format!("File:{file}")));
+    let edit_url = format!("{}?title={}&action=edit", wiki.index_url(), wiki_urlencode(&format!("File:{file}")));
     let page = revisions.get(&(NS_FILE, file.to_string()));
     let Some(page) = page else {
         return Some(OldRow {
@@ -395,7 +395,7 @@ fn old_row(
         file: display_title(file),
         file_url,
         edit_url,
-        thumbnail: format!("https://{}/wiki/Special:Redirect/file/{}?width=60", wiki.host(), encode_title(file)),
+        thumbnail: format!("https://{}/wiki/Special:Redirect/file/{}?width=60", wiki.host(), wiki_urlencode(file)),
         age_days,
         old: age_days >= i64::from(min_days),
         problem: false,
@@ -427,7 +427,7 @@ fn usage(file: &str, usages: Option<&BTreeMap<String, BTreeMap<String, u64>>>) -
                 .collect::<Vec<_>>()
                 .join(", ");
             UsageLine {
-                wiki_url: format!("https://{host}/wiki/{}#filelinks", encode_title(&format!("File:{file}"))),
+                wiki_url: format!("https://{host}/wiki/{}#filelinks", wiki_urlencode(&format!("File:{file}"))),
                 wiki: host,
                 namespaces: counts,
             }

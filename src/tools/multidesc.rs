@@ -4,7 +4,7 @@
 use crate::mediawiki::page_contents;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_title, upper_first};
+use crate::wiki::{Wiki, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -125,7 +125,7 @@ async fn image_output(state: &AppState, image: &str, onlynew: bool) -> Result<St
     let mut lines = vec![];
     for (dbname, pages) in by_wiki {
         let Some((language, wiki)) = wikipedia_for_dbname(&dbname) else { continue };
-        if already.contains(&upper_first(&language).to_lowercase()) {
+        if already.contains(&ucfirst(&language).to_lowercase()) {
             continue;
         }
         let pages: Vec<&str> = pages.iter().take(MAX_PAGES_PER_LANGUAGE).map(String::as_str).collect();
@@ -238,7 +238,7 @@ async fn article_output(
         let wiki = Wiki::new(language, "wikipedia");
         let edit_url = wiki.map_or_else(
             |_| String::new(),
-            |wiki| format!("{}?action=edit&title={}", wiki.index_url(), encode_title(title)),
+            |wiki| format!("{}?action=edit&title={}", wiki.index_url(), wiki_urlencode(title)),
         );
         missing.push(Missing { language: language.clone(), title: title.clone(), edit_url, links: absent });
     }

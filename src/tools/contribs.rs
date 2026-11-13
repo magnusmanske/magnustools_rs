@@ -5,7 +5,7 @@ use crate::mediawiki;
 use crate::replicas::{format_timestamp, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, upper_first};
+use crate::wiki::{Wiki, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -92,7 +92,7 @@ pub async fn handler(
 fn users(input: &str) -> Vec<String> {
     let mut users: Vec<String> = input
         .split(['|', '\n', ','])
-        .map(|u| upper_first(&u.trim().replace('_', " ")))
+        .map(|u| ucfirst(&u.trim().replace('_', " ")).into_owned())
         .filter(|u| !u.is_empty())
         .take(MAX_USERS)
         .collect();

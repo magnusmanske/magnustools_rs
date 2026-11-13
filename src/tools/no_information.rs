@@ -8,7 +8,7 @@
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Pager, Params, render};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -205,7 +205,7 @@ fn results(wiki: &Wiki, request: &Request, user: &str, max: usize, scan: Scan) -
     let query = |extra: &[(&str, &str)]| {
         let mut pairs = vec![("language", request.language.trim()), ("project", request.project.trim())];
         pairs.extend_from_slice(extra);
-        pairs.iter().map(|(k, v)| format!("{k}={}", encode_component(v))).collect::<Vec<_>>().join("&")
+        pairs.iter().map(|(k, v)| format!("{k}={}", percent_encode(v))).collect::<Vec<_>>().join("&")
     };
     let max = max.to_string();
     let next = scan.after.map(|after| {

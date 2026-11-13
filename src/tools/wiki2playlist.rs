@@ -4,7 +4,7 @@
 use crate::mediawiki::{self, strip_namespace};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_title};
+use crate::wiki::{Wiki, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -88,7 +88,7 @@ pub async fn handler(
             }
             Some(Entry {
                 title: display_title(&file),
-                url: format!("https://{}/wiki/Special:Redirect/file/{}", wiki.host(), encode_title(&file)),
+                url: format!("https://{}/wiki/Special:Redirect/file/{}", wiki.host(), wiki_urlencode(&file)),
                 seconds: info.and_then(|i| i.seconds),
             })
         })

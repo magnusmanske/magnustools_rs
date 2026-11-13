@@ -4,7 +4,7 @@
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component, encode_title};
+use crate::wiki::{Wiki, percent_encode, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -109,13 +109,13 @@ fn file(commons: &Wiki, name: &str, width: u32, height: u32) -> File {
         _ => THUMB_SIZE,
     };
     let thumbnail = (thumb_width > 0).then(|| {
-        format!("https://{}/wiki/Special:Redirect/file/{}?width={thumb_width}", commons.host(), encode_title(name))
+        format!("https://{}/wiki/Special:Redirect/file/{}?width={thumb_width}", commons.host(), wiki_urlencode(name))
     });
     let stem = display_title(name.rsplit_once('.').map_or(name, |(stem, _)| stem));
     let search = |terms: &str| {
         format!(
             "https://www.google.com/search?q={}",
-            encode_component(&format!("{terms} site:wikipedia.org -site:commons.wikimedia.org"))
+            percent_encode(&format!("{terms} site:wikipedia.org -site:commons.wikimedia.org"))
         )
     };
     File {

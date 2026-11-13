@@ -4,7 +4,7 @@
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Pager, Params, render};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -162,7 +162,7 @@ fn page_url(request: &Request, namespace: i64, invert: bool, limit: u64, offset:
     if invert {
         params.push(("invert", "1"));
     }
-    let query: Vec<String> = params.iter().map(|(k, v)| format!("{k}={}", encode_component(v))).collect();
+    let query: Vec<String> = params.iter().map(|(k, v)| format!("{k}={}", percent_encode(v))).collect();
     format!("/shortpages/?{}", query.join("&"))
 }
 

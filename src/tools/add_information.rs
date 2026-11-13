@@ -8,7 +8,7 @@ use crate::mediawiki::{self, strip_namespace};
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_title, upper_first};
+use crate::wiki::{Wiki, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -154,7 +154,7 @@ async fn edit(state: &AppState, request: &Request, image: &str) -> Result<Edit, 
     });
     Ok(Edit {
         file_url: wiki.page_url(&file),
-        action_url: format!("{}?title={}&action=submit", wiki.index_url(), encode_title(&file)),
+        action_url: format!("{}?title={}&action=submit", wiki.index_url(), wiki_urlencode(&file)),
         file,
         template: draft.template,
         summary: format!("Adding {{{{{}}}}} template (using {TOOL_URL} )", draft.template),
@@ -404,7 +404,7 @@ impl Fields {
             self.date.push(year);
         }
         let title = title.replace("  ", " ").replace(" IBI", "");
-        Some(upper_first(title.trim()))
+        Some(ucfirst(title.trim()).into_owned())
     }
 
     fn information(&self) -> String {

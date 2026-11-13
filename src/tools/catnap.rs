@@ -4,7 +4,7 @@
 use crate::replicas::{CATEGORY_TABLES, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -169,9 +169,9 @@ async fn load(state: &AppState, wiki: &Wiki, request: &Request, min_group: usize
                 url: wiki.page_url(&format!("Category:{title}")),
                 self_url: format!(
                     "/catnap/?category={}&language={}&project={}&min_group={}",
-                    encode_component(&title),
-                    encode_component(&request.language.trim().to_lowercase()),
-                    encode_component(&request.project.trim().to_lowercase()),
+                    percent_encode(&title),
+                    percent_encode(&request.language.trim().to_lowercase()),
+                    percent_encode(&request.project.trim().to_lowercase()),
                     min_group
                 ),
                 title,

@@ -4,7 +4,7 @@
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component, encode_title, upper_first};
+use crate::wiki::{Wiki, percent_encode, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -364,7 +364,7 @@ fn thumbnail(wiki: &Wiki, file: &str, sizes: &HashMap<String, (u32, u32)>) -> Th
     } else {
         (width * THUMB_SIZE / height, THUMB_SIZE)
     };
-    let mut src = format!("//{}/wiki/Special:Redirect/file/{}", wiki.host(), encode_title(file));
+    let mut src = format!("//{}/wiki/Special:Redirect/file/{}", wiki.host(), wiki_urlencode(file));
     if !file.to_lowercase().ends_with(".gif") {
         src.push_str(&format!("?width={width}"));
     }
@@ -418,7 +418,7 @@ fn fragment(wiki: &Wiki, sections: &[Section], message: &str, uselang: &str) -> 
 fn thumb_html(wiki: &Wiki, thumb: &Thumb, uselang: &str) -> String {
     let mut url = wiki.page_url(&format!("File:{}", thumb.label));
     if !uselang.is_empty() {
-        url.push_str(&format!("?uselang={}", encode_component(uselang)));
+        url.push_str(&format!("?uselang={}", percent_encode(uselang)));
     }
     match &thumb.src {
         Some(src) => format!(
@@ -449,7 +449,7 @@ fn file_title(input: &str) -> String {
         }
         _ => input,
     };
-    upper_first(&input.trim().replace(' ', "_"))
+    ucfirst(&input.trim().replace(' ', "_")).into_owned()
 }
 
 fn is_ignored_category(category: &str, ignored: &[String]) -> bool {

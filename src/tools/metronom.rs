@@ -3,7 +3,7 @@
 use crate::replicas::format_date;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render, thousands};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -134,7 +134,7 @@ async fn results(
         for title in chunk {
             let url = format!(
                 "{PAGEVIEWS_API}/{project}/all-access/user/{}/monthly/{}/{}",
-                encode_component(title),
+                percent_encode(title),
                 month.first_day(),
                 month.last_day()
             );

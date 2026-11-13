@@ -5,7 +5,7 @@ use crate::cache::TimedMap;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -109,7 +109,7 @@ pub async fn handler(
 
 /// The template's placeholders all sit in link URLs.
 fn fill_in(html: &str, cas: &Cas, name: &str) -> String {
-    html.replace("{cas}", &cas.0).replace("{cas9}", &cas.nine_digits()).replace("{title}", &encode_component(name))
+    html.replace("{cas}", &cas.0).replace("{cas9}", &cas.nine_digits()).replace("{title}", &percent_encode(name))
 }
 
 #[cfg(test)]

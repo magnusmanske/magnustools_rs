@@ -4,7 +4,7 @@
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Pager, Params, render};
-use crate::wiki::{Wiki, upper_first};
+use crate::wiki::{Wiki, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{IntoResponse, Redirect, Response};
@@ -76,7 +76,7 @@ fn category_title(input: &str) -> String {
         Some(prefix) if prefix.eq_ignore_ascii_case("category:") => input.get(9..).unwrap_or_default(),
         _ => input,
     };
-    upper_first(&without_prefix.replace(' ', "_"))
+    ucfirst(&without_prefix.replace(' ', "_")).into_owned()
 }
 
 fn parse_start(value: Option<&str>) -> usize {

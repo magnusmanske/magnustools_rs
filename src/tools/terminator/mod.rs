@@ -11,7 +11,7 @@ mod update;
 
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::encode_component;
+use crate::wiki::percent_encode;
 use askama::Template;
 use axum::Json;
 use axum::extract::State;
@@ -353,18 +353,18 @@ fn public_error(error: &AppError) -> String {
 fn page_url(request: &Request, offset: usize) -> String {
     let mut url = format!(
         "/wikidata-terminator/?type={}&languages={}&present={}&sort_by={}&sui={}&max_results={}&offset={}&mode={}",
-        encode_component(request.search_type().as_str()),
-        encode_component(&request.languages),
-        encode_component(&request.present),
-        encode_component(request.sort().as_str()),
+        percent_encode(request.search_type().as_str()),
+        percent_encode(&request.languages),
+        percent_encode(&request.present),
+        percent_encode(request.sort().as_str()),
         u8::from(request.sui),
         request.max_results(),
         offset,
-        encode_component(request.mode().as_str())
+        percent_encode(request.mode().as_str())
     );
     if !request.sparql.trim().is_empty() {
         url.push_str("&sparql=");
-        url.push_str(&encode_component(&request.sparql));
+        url.push_str(&percent_encode(&request.sparql));
     }
     url
 }

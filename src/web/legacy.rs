@@ -5,7 +5,7 @@
 
 use super::{AppError, Params, moved};
 use crate::mediawiki::strip_namespace;
-use crate::wiki::encode_component;
+use crate::wiki::percent_encode;
 use axum::Router;
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::get;
@@ -180,7 +180,7 @@ async fn commander(Params(request): Params<CommanderRequest>) -> Redirect {
     let category = request.category.as_deref().map(|c| strip_namespace(c, &["category"]).unwrap_or(c).trim());
     match category.filter(|c| !c.is_empty()) {
         Some(category) => {
-            Redirect::permanent(&format!("{COMMANDER}&pane1=cat&cat1={}&run1=1&pane2=cat", encode_component(category)))
+            Redirect::permanent(&format!("{COMMANDER}&pane1=cat&cat1={}&run1=1&pane2=cat", percent_encode(category)))
         }
         None => Redirect::permanent(COMMANDER),
     }

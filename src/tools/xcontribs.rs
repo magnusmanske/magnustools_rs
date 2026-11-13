@@ -4,7 +4,7 @@
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render, thousands};
-use crate::wiki::{Wiki, upper_first};
+use crate::wiki::{Wiki, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -50,7 +50,7 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Params(request): Params<Request>,
 ) -> Result<Html<String>, AppError> {
-    let user = upper_first(&request.user.trim().replace('_', " "));
+    let user = ucfirst(&request.user.trim().replace('_', " ")).into_owned();
     let results = match user.is_empty() {
         true => None,
         false => Some(results(&state, &user).await?),
@@ -95,7 +95,7 @@ async fn results(state: &AppState, user: &str) -> Result<Results, AppError> {
             url: format!(
                 "{}/wiki/Special:Contributions/{}",
                 url.trim_end_matches('/'),
-                crate::wiki::encode_component(user)
+                crate::wiki::percent_encode(user)
             ),
             dbname,
             edits: thousands(edits),

@@ -7,7 +7,7 @@ use crate::replicas::select_in;
 use crate::state::AppState;
 use crate::tools::interwiki::{self, MAX_RESULTS};
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -161,7 +161,7 @@ async fn results(
             let search = format!("{page} site:*.{project}.org -site:{language}.{project}.org");
             Row {
                 url: crate::wiki::page_url(wiki.host(), &page),
-                search_url: format!("https://www.google.com/search?q={}", encode_component(&search)),
+                search_url: format!("https://www.google.com/search?q={}", percent_encode(&search)),
                 page,
             }
         })

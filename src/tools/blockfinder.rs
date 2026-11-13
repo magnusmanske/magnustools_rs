@@ -105,7 +105,7 @@ async fn global_blocks(state: &AppState, ip: &str) -> Result<Vec<Block>, AppErro
                 time: display_time(&field(&block, "timestamp").unwrap_or_default()),
                 by,
                 by_url,
-                target_url: format!("{meta_url}/Special:GlobalBlockList?ip={}", crate::wiki::encode_component(&target)),
+                target_url: format!("{meta_url}/Special:GlobalBlockList?ip={}", crate::wiki::percent_encode(&target)),
                 target,
                 options: options(&block),
                 reason: field(&block, "reason").unwrap_or_default(),
@@ -131,7 +131,7 @@ async fn local_blocks(state: &AppState, wiki: &Wiki, ip: &str) -> Result<Vec<Blo
                 target_url: format!(
                     "https://{}/wiki/Special:BlockList?ip={}",
                     wiki.host(),
-                    crate::wiki::encode_component(&target)
+                    crate::wiki::percent_encode(&target)
                 ),
                 target,
                 options: options(&block),

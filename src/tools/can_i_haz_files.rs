@@ -6,7 +6,7 @@ use crate::mediawiki;
 use crate::replicas::select_in;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_title};
+use crate::wiki::{Wiki, wiki_urlencode};
 use anyhow::Context;
 use askama::Template;
 use axum::body::Body;
@@ -102,8 +102,11 @@ pub async fn handler(
     let commons = Wiki::commons();
     let (names, truncated) = names(&state, category, depth, limit).await?;
     let files = existing_files(&state, &names).await?;
-    let category_url =
-        format!("https://{}/wiki/Category:{}", commons.host(), encode_title(category.trim_start_matches("Category:")));
+    let category_url = format!(
+        "https://{}/wiki/Category:{}",
+        commons.host(),
+        wiki_urlencode(category.trim_start_matches("Category:"))
+    );
     let script = script(&commons, &files, category, depth);
     page.results =
         Some(Results { category: category.to_string(), category_url, depth, files: files.len(), truncated, script });
@@ -371,7 +374,7 @@ fn script(commons: &Wiki, files: &[String], category: &str, depth: u32) -> Strin
         count = files.len(),
     );
     for file in files {
-        let url = format!("https://{}/wiki/Special:FilePath/{}", commons.host(), encode_title(file));
+        let url = format!("https://{}/wiki/Special:FilePath/{}", commons.host(), wiki_urlencode(file));
         script.push_str(&format!("curl -L --fail --url {} -o {}\n", quote(&url), quote(&format!("tmp/{file}"))));
     }
     script.push_str(&format!("tar -cvf {} tmp\nrm -rf tmp\n", quote(&stem)));

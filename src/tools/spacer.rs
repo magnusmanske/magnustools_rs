@@ -6,7 +6,7 @@ use crate::cache::TimedCache;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component};
+use crate::wiki::{Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -60,7 +60,7 @@ pub async fn handler(
 
 /// The configured links, with the ID filled in. Only web links count.
 fn links(config: &str, id: &str) -> Vec<Link> {
-    let id = encode_component(id);
+    let id = percent_encode(id);
     let mut links: Vec<Link> = vec![];
     for line in config.lines() {
         let Some(inner) = line.trim().strip_prefix('*').map(str::trim) else { continue };

@@ -8,7 +8,7 @@ use crate::buggregator::MAINTAINER;
 use crate::buggregator::issues::{self, text_id};
 use crate::mediawiki;
 use crate::state::AppState;
-use crate::wiki::{Wiki, encode_title};
+use crate::wiki::{Wiki, wiki_urlencode};
 use anyhow::Result;
 use std::collections::HashSet;
 use wikimisc::mysql_async::Conn;
@@ -36,7 +36,7 @@ pub(super) async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &T
                 .await?;
             let times = signature_times(&wikitext);
             let issue = NewIssue {
-                url: format!("https://{}/wiki/{}#{}", wiki.host(), encode_title(&page), encode_title(&label)),
+                url: format!("https://{}/wiki/{}#{}", wiki.host(), wiki_urlencode(&page), wiki_urlencode(&label)),
                 tool: tools.find(&label).or_else(|| tools.find(&wikitext)).or(tool_hint),
                 status: "OPEN".to_string(),
                 date_created: times.iter().min().map(format_time),

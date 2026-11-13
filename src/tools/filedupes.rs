@@ -6,7 +6,7 @@ use crate::mediawiki::{PageContent, page_contents, title_key};
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component, encode_title, upper_first};
+use crate::wiki::{Wiki, percent_encode, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -73,7 +73,7 @@ impl Request {
             .filter(|line| !line.is_empty())
             .map(|line| {
                 let line = crate::mediawiki::strip_namespace(line, &["category"]).unwrap_or(line);
-                db_title(&upper_first(line))
+                db_title(&ucfirst(line))
             })
             .collect()
     }
@@ -417,13 +417,17 @@ fn file_card(
     Ok(FileCard {
         name: display.clone(),
         page_url: wiki.page_url(&format!("File:{display}")),
-        file_url: format!("https://{}/wiki/Special:Redirect/file/{}", wiki.host(), encode_title(&info.name)),
-        thumb_url: format!("https://{}/wiki/Special:Redirect/file/{}?width=150", wiki.host(), encode_title(&info.name)),
+        file_url: format!("https://{}/wiki/Special:Redirect/file/{}", wiki.host(), wiki_urlencode(&info.name)),
+        thumb_url: format!(
+            "https://{}/wiki/Special:Redirect/file/{}?width=150",
+            wiki.host(),
+            wiki_urlencode(&info.name)
+        ),
         delete_url: delete_url(wiki, &info.name, ""),
         links_url: format!(
             "{}?title=Special:WhatLinksHere&target={}",
             wiki.index_url(),
-            encode_component(&format!("File:{display}"))
+            percent_encode(&format!("File:{display}"))
         ),
         size: info.size,
         width: info.width,
@@ -444,9 +448,9 @@ fn delete_url(wiki: &Wiki, file: &str, duplicate: &str) -> String {
     format!(
         "{}?title=File:{}&image={}&action=delete&wpReason={}",
         wiki.index_url(),
-        encode_title(&display_title(file)),
-        encode_title(&display_title(file)),
-        encode_component(&reason)
+        wiki_urlencode(&display_title(file)),
+        wiki_urlencode(&display_title(file)),
+        percent_encode(&reason)
     )
 }
 
@@ -457,7 +461,7 @@ fn superseded_form(wiki: &Wiki, info: &ImageInfo, content: &PageContent, note: &
         action: format!(
             "{}?title={}&action=edit",
             wiki.index_url(),
-            encode_title(&format!("File:{}", display_title(&info.name)))
+            wiki_urlencode(&format!("File:{}", display_title(&info.name)))
         ),
         text,
         summary: format!(
@@ -473,7 +477,7 @@ fn universal_form(wiki: &Wiki, reason: &str, original: &str, duplicate: &str, no
         action: format!(
             "{}?title={}&action=edit&section=new",
             wiki.index_url(),
-            encode_title("User:CommonsDelinker/commands")
+            wiki_urlencode("User:CommonsDelinker/commands")
         ),
         text: format!(
             "{{{{universal replace|{}|{}|reason={}}}}}",
@@ -529,17 +533,17 @@ fn normalize_file(input: &str) -> String {
         }
         _ => input,
     };
-    upper_first(&input.trim().replace(' ', "_"))
+    ucfirst(&input.trim().replace(' ', "_")).into_owned()
 }
 
 fn next_url(request: &Request, paging: &Paging) -> String {
     let offset = paging.offset + paging.limit;
     format!(
         "/filedupes/?language={}&project={}&category={}&startat={}&limit={}&offset={}&doit=1{}{}",
-        encode_component(&request.language),
-        encode_component(&crate::wiki::effective_project(&request.language, request.project.as_deref())),
-        encode_component(&request.category),
-        encode_component(&paging.startat),
+        percent_encode(&request.language),
+        percent_encode(&crate::wiki::effective_project(&request.language, request.project.as_deref())),
+        percent_encode(&request.category),
+        percent_encode(&paging.startat),
         paging.limit,
         offset,
         if request.identicals_only { "&identicalsonly=1" } else { "" },

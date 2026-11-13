@@ -12,7 +12,7 @@ use crate::mediawiki::{self, Api};
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, encode_component, encode_title};
+use crate::wiki::{Wiki, percent_encode, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -111,7 +111,7 @@ pub async fn handler(
     let mut page = Page {
         title: "Wiki ToDo",
         labels: Labels::default(),
-        edit_meta_url: format!("{}/{}", META_PAGE, encode_component(&language)),
+        edit_meta_url: format!("{}/{}", META_PAGE, percent_encode(&language)),
         language,
         project,
         title_input: title.clone(),
@@ -246,7 +246,7 @@ async fn analyze(
     }
     let title = page["title"].as_str().unwrap_or(title).to_string();
     let view_url = wiki.page_url(&title);
-    let edit_url = format!("{}?action=edit&title={}", wiki.index_url(), encode_title(&title));
+    let edit_url = format!("{}?action=edit&title={}", wiki.index_url(), wiki_urlencode(&title));
 
     let mut images = entry_titles(page, "images", NS_FILE, true);
     let templates = entry_titles(page, "templates", NS_TEMPLATE, true);
@@ -606,7 +606,7 @@ fn check_common(
     }
     if !is_disambig && backlinks.is_empty() {
         let search_page =
-            format!("{}?search={}&fulltext=Search", wiki.page_url("Special:Search"), encode_component(title));
+            format!("{}?search={}&fulltext=Search", wiki.page_url("Special:Search"), percent_encode(title));
         found.push(finding(config.filled("orphan", &[("$1", &search_page)])));
     }
     if links.is_empty() {
@@ -735,7 +735,7 @@ fn starts_with_list_marker(config: &Config, title: &str) -> bool {
 fn commons_image_search(title: &str) -> String {
     format!(
         "https://commons.wikimedia.org/w/index.php?search={}&title=Special:MediaSearch&type=image",
-        encode_component(title)
+        percent_encode(title)
     )
 }
 
@@ -743,7 +743,7 @@ fn google_search(wiki: &Wiki, title: &str) -> String {
     format!(
         "https://www.google.com/search?q=-site:static.wikipedia.org+-site:{}+{}",
         wiki.host(),
-        encode_component(title)
+        percent_encode(title)
     )
 }
 
@@ -752,7 +752,7 @@ fn article_link(wiki: &Wiki, title: &str) -> String {
 }
 
 fn edit_link(wiki: &Wiki, title: &str) -> String {
-    link(&format!("{}?action=edit&title={}", wiki.index_url(), encode_title(title)), title)
+    link(&format!("{}?action=edit&title={}", wiki.index_url(), wiki_urlencode(title)), title)
 }
 
 fn link(url: &str, text: &str) -> String {

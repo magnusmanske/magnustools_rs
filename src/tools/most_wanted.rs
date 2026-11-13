@@ -7,7 +7,7 @@ use crate::regex;
 use crate::replicas::select_in;
 use crate::state::AppState;
 use crate::web::{AppError, Pager, PagerLink, Params, render, thousands};
-use crate::wiki::{Wiki, encode_component, encode_title, upper_first};
+use crate::wiki::{Wiki, percent_encode, ucfirst, wiki_urlencode};
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::State;
@@ -183,7 +183,7 @@ pub async fn handler(
     let mut conn =
         state.replicas.conn(&wiki, &["page", "pagelinks", "linktarget", "templatelinks", "categorylinks"]).await?;
     let existing = existing_titles(&mut conn, &titles).await?;
-    let capitalized: Vec<String> = titles.iter().map(|t| upper_first(&t.to_lowercase())).collect();
+    let capitalized: Vec<String> = titles.iter().map(|t| ucfirst(&t.to_lowercase()).into_owned()).collect();
     let existing_capitalized = existing_titles(&mut conn, &capitalized).await?;
     let via_templates = template_links(&mut conn, &titles).await?;
     let hints_by_title = if hints { hint_categories(&mut conn, &titles).await? } else { HashMap::new() };
@@ -209,12 +209,12 @@ pub async fn handler(
                 title: pretty.clone(),
                 url: wiki.page_url(title),
                 links_url: wiki.index_url()
-                    + &format!("?title=Special%3AWhatLinksHere&target={}&namespace=0", encode_title(title)),
+                    + &format!("?title=Special%3AWhatLinksHere&target={}&namespace=0", wiki_urlencode(title)),
                 links: thousands(entry.count),
-                google: format!("https://www.google.com/search?q={}", encode_component(&pretty)),
+                google: format!("https://www.google.com/search?q={}", percent_encode(&pretty)),
                 google_wikipedia: format!(
                     "https://www.google.com/search?q={}",
-                    encode_component(&format!("{pretty} site:wikipedia.org"))
+                    percent_encode(&format!("{pretty} site:wikipedia.org"))
                 ),
                 non_template: entry.count.saturating_sub(links),
                 exists: existing.contains(title),
@@ -398,11 +398,7 @@ fn navigation(project: &str, number: usize, hints: bool, start: usize, entries: 
 }
 
 fn url(project: &str, number: usize, hints: bool, start: usize) -> String {
-    format!(
-        "/most_wanted/?project={}&number={number}&hints={}&start={start}",
-        encode_component(project),
-        u8::from(hints)
-    )
+    format!("/most_wanted/?project={}&number={number}&hints={}&start={start}", percent_encode(project), u8::from(hints))
 }
 
 /// Rebuilds `<project>_p.links.red`: the red links with at least
