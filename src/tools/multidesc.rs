@@ -418,7 +418,7 @@ fn caption_from_wikitext(text: &str, image: &str) -> Vec<String> {
     let mut rest = text;
     while let Some(start) = rest.find("[[") {
         let after = &rest[start + 2..];
-        let Some(end) = after.find("]]") else { break };
+        let Some(end) = find_link_end(after) else { break };
         let link = &after[..end];
         rest = &after[end + 2..];
         let mut parts = link.split('|');
@@ -481,6 +481,29 @@ fn normalized_file(name: &str) -> String {
     name.trim().trim_start_matches(':').replace('_', " ").to_lowercase()
 }
 
+/// The byte offset of the `]]` that closes the link whose `[[` was consumed,
+/// ignoring nested links in the caption.
+fn find_link_end(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut index = 0;
+    while index < text.len() {
+        let rest = &text[index..];
+        if rest.starts_with("[[") {
+            depth += 1;
+            index += 2;
+        } else if rest.starts_with("]]") {
+            if depth == 0 {
+                return Some(index);
+            }
+            depth -= 1;
+            index += 2;
+        } else {
+            index += rest.chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    None
+}
+
 fn normalize_image(image: &str) -> String {
     let image = image.trim();
     let image = match image.split_once(':') {
@@ -516,6 +539,8 @@ mod tests {
         let text = "x [[File:A.jpg|thumb|right|200px|A caption]] y [[Image:A.jpg|thumb|Other]]";
         assert_eq!(caption_from_wikitext(text, "A.jpg"), vec!["A caption", "Other"]);
         assert!(caption_from_wikitext(text, "B.jpg").is_empty());
+        let nested = "[[File:A.jpg|thumb|A [[linked]] caption]]";
+        assert_eq!(caption_from_wikitext(nested, "A.jpg"), vec!["A [[linked]] caption"]);
     }
 
     #[test]
