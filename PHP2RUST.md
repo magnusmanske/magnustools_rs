@@ -49,6 +49,7 @@ toolforge webservice start
 - **WD-FIST**: the core is already Rust. Decide whether to retire/redirect the standalone PHP UI or expose the existing `petscan_rs` module; do not port the algorithm again. Legacy FIST is still best retired or pointed at FIST2; it still had ~207k uses in the 30 days to 2026-11-11, so redirect deliberately rather than removing the address.
 - **WikiShootMe**: the map and search work is in the browser; PHP is OAuth, upload and API pass-through. It is still on php8.2 and had ~12k uses/30d. Fix the PHP in place (php8.2→8.4, timeouts on `file_get_contents`, OAuth token handling) instead of porting.
 - **Reasonator**: do not port. V2 (`public_html/v2/`) is client-side JS; the PHP layer only handles OAuth and OpenGraph/Twitter metadata. The service answers 200, and the 2026-11-11 triage left 4 open rows (WIKI 54, 66, 315; Codeberg #40). Fix V2/autodesc, not the PHP shell.
+- **wikidata-terminator**: ported on 2026-11-13; the old `/api.php` read API is kept, the Vue app is now a server-rendered page, and the daily `terminator-refresh` job rebuilds the candidate index (`src/tools/terminator/`). The index moved to `s51079__terminator_p`; the old subdomain redirects with its path (`REDIRECT_PATH=/wikidata-terminator%s`).
 
 ## Ranking (new PHP ports)
 
@@ -66,7 +67,6 @@ Ranked by expected gain, not raw traffic: isbn2wiki had more requests but was he
 - **Legacy FIST `fist.php`**: the least stable code (~13.4k "max_user_connections" fatals/30d from opening a replica connection per language link, ~4.4k from unmapped wiki names), but many of its scrapers target dead sites. It still had ~207k uses in the 30 days to 2026-11-11, so point its JSON at FIST2 rather than removing it. Do not port 3.7k lines.
 - **WikiShootMe**: the map work runs in the browser; PHP is OAuth and upload pass-through. A PHP cleanup (old `.user.ini`, php8.2) beats a port.
 - **Wikidata Game**: the shared game API (`desc`/`tiles`/`log_action`) is already in `wikidata_todo_rs`, but the PHP `get_candidate` logic and batch jobs remain. With broken batch jobs and stale tickets, retire or fix the PHP tool rather than porting it whole; secure `update_game`/`update_all_games` meanwhile.
-- **wikidata-terminator**: ported on 2026-11-13 (`src/tools/terminator/`, with the daily `terminator-refresh` job); the old `/api.php` read API is kept and the Vue app is now a server-rendered page. The candidate index moved to `s51079__terminator_p`; the old subdomain redirects with its path (`REDIRECT_PATH=/wikidata-terminator%s`).
 - **commonshelper**: 32 uses/30d, 24 open issues (17 Codeberg + 7 WIKI; 2026-11-11), ~45 KB of PHP. Triage, retire, or redirect.
 - **sourcemd** (0 logged uses, ongoing SPARQL failures; 32 open rows), **geograph2commons** (0 logged uses; 18 open rows): don't port. Reasonator is in "Finish, don't rewrite": V2 is JS, not a PHP port.
 - **tooltranslate consumers**: consumers load static JSON from tools-static; only the editor is PHP. The fragile part for other tools is `tt.php` (`file_get_contents` without timeout). The editor API is a small security fix (see above); the rest is not worth porting.
