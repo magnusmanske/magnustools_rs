@@ -135,11 +135,11 @@ async fn backlinks(state: &AppState, wiki: &Wiki, title: &str) -> Result<Vec<Lin
 }
 
 async fn search(state: &AppState, wiki: &Wiki, title: &str) -> Result<Vec<LinkPage>, AppError> {
-    let query = title.split(" (").next().unwrap_or(title).trim();
-    if query.is_empty() {
+    let query = title.split(" (").next().unwrap_or(title).trim().replace('"', " ");
+    if query.trim().is_empty() {
         return Ok(vec![]);
     }
-    let search = format!("\"{query}\"");
+    let search = format!("\"{}\"", query.trim());
     let limit = MAX_LINKS.to_string();
     let json = crate::mediawiki::api(
         &state.http,

@@ -28,6 +28,7 @@
   <button>Do it</button>
 </form>
 {% if let Some(error) = error %}<p class="error">{{ error }}</p>{% endif %}
+{% if !request.message.is_empty() %}<h2>{{ request.message }}</h2>{% endif %}
 {% if !file.is_empty() && error.is_none() %}
 {% if truncated %}<p class="muted">The file is in more categories than are shown.</p>{% endif %}
 {% if !has_rows %}
