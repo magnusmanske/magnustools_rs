@@ -14,6 +14,35 @@ PagePile's service is also Rust (`~/rust/pagepile`, plus the `pagepile` client c
 
 Usage figures below are from the 30 days ending 2026-11-11. Those tools are no longer counted as down.
 
+## Redirecting an old tool
+
+Do not add a redirect page to the old PHP code. Use Toolforge's
+[redirect container](https://wikitech.wikimedia.org/wiki/Tool:Containers#Redirect_container),
+which redirects every path and keeps the query string (308, so a POST body
+survives too).
+
+As the old tool's account (`become <tool>` on `login.toolforge.org`):
+
+```bash
+toolforge envvars create REDIRECT_HOST magnustools.toolforge.org
+toolforge envvars create REDIRECT_PATH /<new-tool>/
+cat > "$HOME/service.template" <<'EOF'
+type: buildservice
+buildservice-image: tool-containers/redirect:latest
+health-check-path: /healthz
+mount: none
+cpu: 125m
+mem: 128Mi
+EOF
+toolforge webservice stop
+toolforge webservice start
+```
+
+`REDIRECT_PATH` without `%s` sends every old path to the same new page; use
+`/<new-tool>%s` to keep the old path suffix. `REDIRECT_PROTO` defaults to
+`https`. Example: `isbn2wiki.toolforge.org` →
+`https://magnustools.toolforge.org/isbn2wiki/` (2026-11-12).
+
 ## Finish, don't rewrite
 
 - **PagePile**: done; the `tool` table row is now `rust/axum` (checked 2026-11-11). The PHP class stays for tools that include it.

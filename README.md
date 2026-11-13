@@ -17,7 +17,8 @@ which this service serves from its checkout.
 ## Tools
 
 Each tool lives at `/<name>/`; its old address, `/<name>.php`, redirects there
-(permanently, keeping the query string and, for POST, the body).
+(permanently, keeping the query string and, for POST, the body). To retire an
+old tool's subdomain, use Toolforge's redirect container; see `PHP2RUST.md`.
 
 | Path | What it does |
 |---|---|
