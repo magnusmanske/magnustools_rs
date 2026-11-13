@@ -5,11 +5,14 @@ pub use wikimisc::title::*;
 pub use wikimisc::wiki::{UnknownWiki, Wiki, is_language_code};
 
 /// The effective project for the old tools' `language`/`project` pair:
-/// Commons is always `wikimedia`, and an empty project is `wikipedia`.
+/// Commons is always `wikimedia` (whatever `project` says), and an empty
+/// project is `wikipedia`.
 pub fn effective_project(language: &str, project: Option<&str>) -> String {
+    if language.trim().eq_ignore_ascii_case("commons") {
+        return "wikimedia".to_string();
+    }
     match project.map(str::trim).filter(|project| !project.is_empty()) {
         Some(project) => project.to_lowercase(),
-        None if language.trim().eq_ignore_ascii_case("commons") => "wikimedia".to_string(),
         None => "wikipedia".to_string(),
     }
 }
@@ -31,6 +34,10 @@ mod tests {
     fn project_defaults_and_validation() {
         assert_eq!(
             wiki_and_project(" Commons ", None).unwrap(),
+            ("commons".into(), "wikimedia".into(), Wiki::commons())
+        );
+        assert_eq!(
+            wiki_and_project("commons", Some("wikisource")).unwrap(),
             ("commons".into(), "wikimedia".into(), Wiki::commons())
         );
         assert_eq!(wiki_and_project("de", None).unwrap().1, "wikipedia");
