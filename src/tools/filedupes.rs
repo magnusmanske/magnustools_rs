@@ -230,6 +230,8 @@ async fn user_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<(
         .into_iter()
         .map(|(name, size, width, height, bits)| ImageInfo { name, size, width, height, bits })
         .collect();
+    let mut infos = infos;
+    infos.sort_by(|a, b| a.signature().cmp(&b.signature()).then_with(|| a.name.cmp(&b.name)));
     let mut groups: BTreeMap<String, Vec<&ImageInfo>> = BTreeMap::new();
     for info in &infos {
         groups.entry(info.signature()).or_default().push(info);
