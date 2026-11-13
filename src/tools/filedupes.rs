@@ -272,6 +272,7 @@ async fn user_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<(
 
 async fn category_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<Vec<CategoryResult>, AppError> {
     let mut conn = state.replicas.conn(wiki, &["page", "categorylinks", "linktarget"]).await?;
+    let mut image_conn = state.replicas.conn(wiki, &["image"]).await?;
     let limit = request.limit();
     let offset = request.offset().saturating_sub(1);
     let startat = request.startat();
@@ -312,7 +313,6 @@ async fn category_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Resu
             }
         }
         let target_contents = descriptions(state, wiki, &targets).await?;
-        let mut image_conn = state.replicas.conn(wiki, &["image"]).await?;
         let mut all_infos = image_infos(&mut image_conn, &names).await?;
         all_infos.extend(image_infos(&mut image_conn, &targets).await?);
 
