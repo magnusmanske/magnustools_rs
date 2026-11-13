@@ -1518,9 +1518,9 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "isbn"
-version = "0.8.20261112"
+version = "0.8.20261113"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fccd9e483046d464ab8e48876b26da88caad509fcd67f46fef02521a732c726"
+checksum = "401eb91e1f9fb7e5c3fc93f8e9af03a109dc76c37c2bda299c97604fe87ddaa5"
 dependencies = [
  "arrayvec",
  "codegen",
