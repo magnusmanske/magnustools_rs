@@ -197,8 +197,8 @@ struct Results {
     template_links: usize,
     /// Most wanted first.
     wanted: Vec<Wanted>,
-    /// All entries, by title.
-    alphabetical: Vec<Wanted>,
+    /// Indices into `wanted`, by title.
+    alphabetical: Vec<usize>,
 }
 
 impl Wanted {
@@ -212,16 +212,21 @@ impl Results {
         &self.wanted[..self.wanted.len().min(MAX_SHOWN)]
     }
 
+    /// All entries, by title.
+    fn alphabetical_entries(&self) -> impl Iterator<Item = &Wanted> {
+        self.alphabetical.iter().filter_map(|&index| self.wanted.get(index))
+    }
+
     /// As many alphabetically sorted entries as the HTML table shows.
-    fn shown_alphabetical(&self) -> &[Wanted] {
-        &self.alphabetical[..self.alphabetical.len().min(MAX_SHOWN)]
+    fn shown_alphabetical(&self) -> impl Iterator<Item = &Wanted> {
+        self.alphabetical_entries().take(MAX_SHOWN)
     }
 
     /// The entries in the order the output wants them.
-    fn for_output(&self, output: Output) -> &[Wanted] {
+    fn for_output(&self, output: Output) -> Vec<&Wanted> {
         match output {
-            Output::WikiList => &self.alphabetical,
-            _ => &self.wanted,
+            Output::WikiList => self.alphabetical_entries().collect(),
+            _ => self.wanted.iter().collect(),
         }
     }
 }
@@ -336,10 +341,10 @@ fn ranked(counts: HashMap<String, u64>) -> Vec<(String, u64)> {
 }
 
 /// All entries, by title.
-fn alphabetical(wanted: &[Wanted]) -> Vec<Wanted> {
-    let mut alphabetical = wanted.to_vec();
-    alphabetical.sort_by(|a, b| a.title.cmp(&b.title));
-    alphabetical
+fn alphabetical(wanted: &[Wanted]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..wanted.len()).collect();
+    order.sort_by(|&a, &b| wanted[a].title.cmp(&wanted[b].title));
+    order
 }
 
 /// Article page IDs in the category tree, at most [`MAX_PAGES`]; the flag says
@@ -479,7 +484,12 @@ fn query(request: &Request, options: &Options) -> String {
 }
 
 /// The wiki text outputs, with a heading that links back here.
-fn wikitext(output: Output, wanted: &[Wanted], again: &str, date: &str) -> Option<String> {
+fn wikitext<'a>(
+    output: Output,
+    wanted: impl IntoIterator<Item = &'a Wanted>,
+    again: &str,
+    date: &str,
+) -> Option<String> {
     let tool = again.split('?').next().unwrap_or(again);
     let mut text =
         format!("== Created {date} by [{tool} the MissingTopics tool] ([{again} run again with these settings]) ==\n");
@@ -557,14 +567,16 @@ mod tests {
     fn alphabetical_order() {
         let list = [wanted("C", 3), wanted("A", 1), wanted("B", 2)];
         let sorted = alphabetical(&list);
-        let titles: Vec<&str> = sorted.iter().map(|w| w.title.as_str()).collect();
+        let titles: Vec<&str> = sorted.iter().map(|&i| list[i].title.as_str()).collect();
         assert_eq!(titles, ["A", "B", "C"]);
     }
 
     #[test]
     fn alphabetical_keeps_entries_beyond_the_html_limit() {
         let long: Vec<Wanted> = (0..=MAX_SHOWN).map(|i| wanted(&format!("T{i:05}"), 1)).collect();
-        assert_eq!(alphabetical(&long).len(), long.len());
+        let order = alphabetical(&long);
+        assert_eq!(order.len(), long.len());
+        assert_eq!(order.iter().copied().max(), Some(long.len() - 1));
     }
 
     #[test]

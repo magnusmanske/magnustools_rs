@@ -17,10 +17,10 @@ use rand::Rng;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 use std::time::UNIX_EPOCH;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use wikimisc::mysql_async::Conn;
 use wikimisc::mysql_async::prelude::Queryable;
 
@@ -42,7 +42,8 @@ pub struct Request {
     project: String,
     start: Option<String>,
     number: Option<String>,
-    hints: Option<String>,
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    hints: bool,
 }
 
 fn default_project() -> String {
@@ -64,10 +65,6 @@ impl Request {
     fn number(&self) -> usize {
         self.number.as_deref().and_then(|n| n.trim().parse().ok()).unwrap_or(DEFAULT_NUMBER).clamp(1, MAX_NUMBER)
     }
-
-    fn hints(&self) -> bool {
-        self.hints.as_deref().is_some_and(|h| !h.is_empty() && h != "0")
-    }
 }
 
 /// One line of a `.links.red` file.
@@ -77,6 +74,8 @@ struct Entry {
 }
 
 struct Wanted {
+    /// All entries in the file; the slice holds only the requested page.
+    total: usize,
     entries: Vec<Entry>,
     updated: String,
 }
@@ -131,7 +130,7 @@ pub async fn handler(
     let dir = &state.config.most_wanted_dir;
     let projects = projects(dir).await;
     let number = request.number();
-    let hints = request.hints();
+    let hints = request.hints;
     let start = request.start();
     let requested = request.project();
     let wiki = match Wiki::from_dbname(&requested) {
@@ -175,13 +174,12 @@ pub async fn handler(
         return render(&page);
     }
 
-    let Some(wanted) = load(dir, &project).await? else {
+    let Some(wanted) = load(dir, &project, start, number).await? else {
         page.error = Some(format!("The list for “{project}” has gone missing."));
         return render(&page);
     };
-    let entries = wanted.entries.len();
-    let slice: Vec<&Entry> = wanted.entries.iter().skip(start - 1).take(number).collect();
-    let titles: Vec<String> = slice.iter().map(|e| e.title.clone()).collect();
+    let entries = wanted.total;
+    let titles: Vec<String> = wanted.entries.iter().map(|e| e.title.clone()).collect();
     let mut conn =
         state.replicas.conn(&wiki, &["page", "pagelinks", "linktarget", "templatelinks", "categorylinks"]).await?;
     let existing = existing_titles(&mut conn, &titles).await?;
@@ -190,7 +188,8 @@ pub async fn handler(
     let via_templates = template_links(&mut conn, &titles).await?;
     let hints_by_title = if hints { hint_categories(&mut conn, &titles).await? } else { HashMap::new() };
 
-    let rows = slice
+    let rows = wanted
+        .entries
         .iter()
         .zip(&capitalized)
         .enumerate()
@@ -262,10 +261,10 @@ fn number_choices(number: usize) -> Vec<Choice> {
     numbers.into_iter().map(|n| Choice { value: n.to_string(), label: n.to_string(), selected: n == number }).collect()
 }
 
-async fn load(dir: &Path, project: &str) -> Result<Option<Wanted>, AppError> {
+async fn load(dir: &Path, project: &str, start: usize, number: usize) -> Result<Option<Wanted>, AppError> {
     let path = dir.join(format!("{project}_p.links.red"));
-    let text = match tokio::fs::read_to_string(&path).await {
-        Ok(text) => text,
+    let file = match tokio::fs::File::open(&path).await {
+        Ok(file) => file,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(AppError::Internal(format!("cannot read {}: {e}", path.display()))),
     };
@@ -277,17 +276,30 @@ async fn load(dir: &Path, project: &str) -> Result<Option<Wanted>, AppError> {
         .and_then(|d| i64::try_from(d.as_secs()).ok())
         .and_then(|secs| DateTime::<Utc>::from_timestamp(secs, 0))
         .map_or_else(|| "unknown".to_string(), |t| t.format("%B %d, %Y %H:%M:%S").to_string());
-    Ok(Some(Wanted { entries: parse_entries(&text), updated }))
+
+    // Count the whole file for the paging totals, but keep only the requested page.
+    let mut lines = BufReader::new(file).lines();
+    let mut total = 0;
+    let mut entries = Vec::with_capacity(number);
+    while let Some(line) =
+        lines.next_line().await.map_err(|e| AppError::Internal(format!("cannot read {}: {e}", path.display())))?
+    {
+        let Some(entry) = parse_entry(&line) else { continue };
+        total += 1;
+        if total >= start && entries.len() < number {
+            entries.push(entry);
+        }
+    }
+    Ok(Some(Wanted { total, entries, updated }))
 }
 
-fn parse_entries(text: &str) -> Vec<Entry> {
-    text.lines()
-        .filter_map(|line| {
-            let (count, title) = line.split_once('\t')?;
-            Some(Entry { count: count.trim().parse().ok()?, title: title.trim_end().to_string() })
-        })
-        .filter(|entry| !entry.title.is_empty())
-        .collect()
+fn parse_entry(line: &str) -> Option<Entry> {
+    let (count, title) = line.split_once('\t')?;
+    let title = title.trim_end();
+    if title.is_empty() {
+        return None;
+    }
+    Some(Entry { count: count.trim().parse().ok()?, title: title.to_string() })
 }
 
 /// Those of `titles` (namespace 0) that exist.
@@ -435,13 +447,17 @@ pub(crate) async fn update(state: &AppState, wiki: &str) -> Result<()> {
     tokio::fs::create_dir_all(dir).await.with_context(|| format!("cannot create {}", dir.display()))?;
     let path = dir.join(format!("{project}_p.links.red"));
     let temporary = dir.join(format!("{project}_p.links.red.tmp"));
-    let mut text = String::new();
+    let file =
+        tokio::fs::File::create(&temporary).await.with_context(|| format!("cannot write {}", temporary.display()))?;
+    let mut writer = BufWriter::new(file);
     for (count, title) in &rows {
-        writeln!(text, "{count}\t{title}")?;
+        writer
+            .write_all(format!("{count}\t{title}\n").as_bytes())
+            .await
+            .with_context(|| format!("cannot write {}", temporary.display()))?;
     }
-    tokio::fs::write(&temporary, text.as_bytes())
-        .await
-        .with_context(|| format!("cannot write {}", temporary.display()))?;
+    writer.flush().await.with_context(|| format!("cannot write {}", temporary.display()))?;
+    drop(writer);
     tokio::fs::rename(&temporary, &path).await.with_context(|| format!("cannot replace {}", path.display()))?;
     println!("{} entries written to {}", rows.len(), path.display());
     Ok(())
@@ -456,7 +472,7 @@ mod tests {
 
     #[test]
     fn lines_are_count_tab_title() {
-        let entries = parse_entries("42\tFoo_bar\n7\tBaz\n\nbroken\n3\t\n");
+        let entries: Vec<Entry> = "42\tFoo_bar\n7\tBaz\n\nbroken\n3\t".lines().filter_map(parse_entry).collect();
         assert_eq!(entries.len(), 2);
         assert_eq!((entries[0].count, entries[0].title.as_str()), (42, "Foo_bar"));
         assert_eq!((entries[1].count, entries[1].title.as_str()), (7, "Baz"));
@@ -468,10 +484,10 @@ mod tests {
         let plain = request("");
         assert_eq!((plain.project(), 1, 50, false), ("enwiki".to_string(), 1, 50, false));
         let set = request("project=dewiki_p&start=101&number=250&hints=1");
-        assert_eq!((set.project(), set.start(), set.number(), set.hints()), ("dewiki_p".to_string(), 101, 250, true));
+        assert_eq!((set.project(), set.start(), set.number(), set.hints), ("dewiki_p".to_string(), 101, 250, true));
         assert_eq!(request("number=5000&start=0&hints=0").number(), MAX_NUMBER);
         assert_eq!(request("start=0").start(), 1);
-        assert!(!request("hints=0").hints());
+        assert!(!request("hints=0").hints);
     }
 
     #[test]
