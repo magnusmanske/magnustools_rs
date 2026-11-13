@@ -115,7 +115,9 @@ struct Loaded {
 }
 
 async fn load(state: &AppState, wiki: &Wiki, request: &Request, min_group: usize) -> Result<Loaded, AppError> {
-    let category = crate::replicas::db_title(request.category.trim());
+    let raw_category = request.category.trim();
+    let raw_category = crate::mediawiki::strip_namespace(raw_category, &["category"]).unwrap_or(raw_category);
+    let category = crate::replicas::db_title(raw_category);
     let mut conn = state.replicas.conn(wiki, CATEGORY_TABLES).await?;
     let pages: Vec<(u64, String)> = conn
         .exec(

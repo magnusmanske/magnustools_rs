@@ -84,7 +84,10 @@ impl Request {
             .lines()
             .map(str::trim)
             .filter(|line| !line.is_empty())
-            .map(|line| db_title(&upper_first(line)))
+            .map(|line| {
+                let line = crate::mediawiki::strip_namespace(line, &["category"]).unwrap_or(line);
+                db_title(&upper_first(line))
+            })
             .collect()
     }
 }
@@ -559,7 +562,7 @@ mod tests {
             username: String::new(),
             identicalsonly: None,
             showdesc: None,
-            category: "A|B\nC".into(),
+            category: "A|Category:B\nC".into(),
             startat: Some(" X ".into()),
             start: None,
             limit: Some("1000".into()),
