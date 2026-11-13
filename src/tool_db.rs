@@ -134,4 +134,15 @@ mod tests {
         timeouts.record(false, later(61));
         assert!(!timeouts.is_stuck(later(600)));
     }
+
+    #[test]
+    fn config_has_the_tool_database_defaults() {
+        let config: ToolDbConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.database, "{user}__buggregator");
+        assert_eq!(config.url, None);
+        let set: ToolDbConfig = serde_json::from_str(r#"{"database":"x","url":"mysql://host/db"}"#).unwrap();
+        assert_eq!(set.database, "x");
+        assert_eq!(set.url.as_deref(), Some("mysql://host/db"));
+        assert!(serde_json::from_str::<ToolDbConfig>(r#"{"unknown":1}"#).is_err());
+    }
 }

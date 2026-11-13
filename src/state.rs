@@ -136,3 +136,18 @@ fn decode_hex(hex: &str) -> Result<Vec<u8>> {
         .map(|i| hex.get(i..i + 2).and_then(|b| u8::from_str_radix(b, 16).ok()).context("cookie_key is not hex"))
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hex_keys_are_decoded_strictly() {
+        assert_eq!(decode_hex("00ff10").unwrap(), [0, 255, 16]);
+        assert_eq!(decode_hex(" 00FF ").unwrap(), [0, 255]);
+        assert!(decode_hex("").unwrap().is_empty());
+        for bad in ["0", "0g", "not hex"] {
+            assert!(decode_hex(bad).is_err(), "{bad}");
+        }
+    }
+}

@@ -88,3 +88,33 @@ impl Instance {
 pub fn col<T: FromValue>(row: &Row, index: usize) -> Result<T> {
     row.get_opt(index).ok_or_else(|| anyhow!("no column {index}"))?.map_err(|e| anyhow!("column {index}: {e}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_share_needs_a_known_limit() {
+        let mut instance = Instance {
+            id: 1,
+            service_id: 1,
+            component: "web".into(),
+            uid: "u".into(),
+            host: "h".into(),
+            version: "v".into(),
+            started_at: 0,
+            last_seen: 0,
+            ended_at: None,
+            end_reason: None,
+            end_detail: String::new(),
+            rss_bytes: Some(512),
+            mem_limit_bytes: Some(1024),
+        };
+        assert!((instance.memory_share() - 0.5).abs() < f64::EPSILON);
+        instance.mem_limit_bytes = None;
+        assert_eq!(instance.memory_share(), 0.0);
+        instance.mem_limit_bytes = Some(0);
+        assert_eq!(instance.memory_share(), 0.0);
+        assert!(now() > 0);
+    }
+}

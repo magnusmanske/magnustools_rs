@@ -89,3 +89,56 @@ impl IntoResponse for AppError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn parts(error: AppError) -> (StatusCode, String) {
+        let response = error.into_response();
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+        (status, String::from_utf8_lossy(&body).into_owned())
+    }
+
+    #[tokio::test]
+    async fn each_kind_has_its_status_and_message() {
+        let (status, body) = parts(AppError::BadRequest("bad <input>".into())).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body.contains("bad &#60;input&#62;"), "{body}");
+
+        let (status, body) = parts(AppError::NotFound).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(body.contains("nothing at this address"));
+
+        let (status, body) = parts(AppError::Gone).await;
+        assert_eq!(status, StatusCode::GONE);
+        assert!(body.contains("has been retired"));
+    }
+
+    #[tokio::test]
+    async fn internals_are_logged_but_not_shown() {
+        for error in [
+            AppError::Upstream(anyhow::anyhow!("database password in here")),
+            AppError::Internal("secret path /etc/passwd".into()),
+        ] {
+            let (status, body) = parts(error).await;
+            assert!(body.contains("Something went wrong") || body.contains("did not answer as expected"), "{body}");
+            assert!(!body.contains("password") && !body.contains("passwd"), "{body}");
+            assert!(status == StatusCode::BAD_GATEWAY || status == StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[test]
+    fn unknown_wikis_are_bad_requests() {
+        let error = AppError::from(UnknownWiki { language: "xx".into(), project: "evil".into() });
+        assert!(matches!(error, AppError::BadRequest(ref message) if message.contains("xx.evil")));
+    }
+
+    #[test]
+    fn a_missing_page_is_a_bad_request_with_its_title() {
+        let title = crate::mediawiki::Title::new("File:Some file.jpg", 6);
+        let error = AppError::from(crate::mediawiki::MediaWikiError::Missing(title));
+        assert!(matches!(error, AppError::BadRequest(ref message) if message.contains("Some file.jpg")));
+    }
+}

@@ -66,18 +66,25 @@ pub async fn page_contents(
             pages.insert(title_key(title), content);
         }
         // A redirect or a normalised title answers for the title that was asked
-        // for, so callers can look pages up by the names they gave.
-        for (key, field) in [("normalized", "from"), ("redirects", "from")] {
-            let from = |item: &serde_json::Value| item[field].as_str().map(title_key);
-            for item in json["query"][key].as_array().into_iter().flatten() {
-                let (Some(from), Some(to)) = (from(item), item["to"].as_str().map(title_key)) else { continue };
-                if let Some(content) = pages.get(&to).cloned() {
-                    pages.entry(from).or_insert(content);
-                }
+        // for, so callers can look pages up by the names they gave. Redirects
+        // go first, so a normalised name that is also redirected is found too.
+        merge_requested_titles(&mut pages, &json["query"]);
+    }
+    Ok(pages)
+}
+
+/// Adds the names the API was asked for to `pages`: a redirect or a normalised
+/// title gets its target's content.
+fn merge_requested_titles(pages: &mut HashMap<String, PageContent>, query: &serde_json::Value) {
+    for (key, field) in [("redirects", "from"), ("normalized", "from")] {
+        let from = |item: &serde_json::Value| item[field].as_str().map(title_key);
+        for item in query[key].as_array().into_iter().flatten() {
+            let (Some(from), Some(to)) = (from(item), item["to"].as_str().map(title_key)) else { continue };
+            if let Some(content) = pages.get(&to).cloned() {
+                pages.entry(from).or_insert(content);
             }
         }
     }
-    Ok(pages)
 }
 
 /// The wikitext of one page, if it exists.
@@ -87,7 +94,11 @@ pub async fn page_content(http: &reqwest::Client, wiki: &Wiki, title: &str) -> R
 
 /// Namespace names by ID, from the API's cached site info.
 pub fn namespace_names(api: &Api) -> HashMap<i64, String> {
-    api.get_site_info()["query"]["namespaces"]
+    namespaces(api.get_site_info())
+}
+
+fn namespaces(site_info: &serde_json::Value) -> HashMap<i64, String> {
+    site_info["query"]["namespaces"]
         .as_object()
         .into_iter()
         .flatten()
@@ -153,5 +164,34 @@ mod tests {
         assert_eq!(title_key("File:some_name.jpg"), "File:some name.jpg");
         assert_eq!(title_key(" file:Some name.jpg "), "File:Some name.jpg");
         assert_eq!(title_key("some_name"), "Some name");
+    }
+
+    #[test]
+    fn redirects_and_normalised_titles_answer_for_the_requested_name() {
+        let content = |text: &str| PageContent { text: text.to_string(), ..Default::default() };
+        let mut pages = HashMap::from([("Target".to_string(), content("target text"))]);
+        let query = serde_json::json!({
+            "normalized": [{"from": "some__name", "to": "Some name"}],
+            "redirects": [{"from": "Some name", "to": "Target"}],
+        });
+        merge_requested_titles(&mut pages, &query);
+        // The chain input → normalised → redirect must resolve all the way back.
+        assert_eq!(pages[&title_key("some__name")].text, "target text");
+        assert_eq!(pages[&title_key("Some name")].text, "target text");
+    }
+
+    #[test]
+    fn namespaces_fall_back_to_the_canonical_name() {
+        let site_info = serde_json::json!({
+            "query": {"namespaces": {
+                "0": {"id": 0, "*": ""},
+                "6": {"id": 6, "*": "File", "canonical": "File"},
+                "14": {"id": 14, "canonical": "Category"},
+            }}
+        });
+        let names = namespaces(&site_info);
+        assert_eq!(names[&0], "Article");
+        assert_eq!(names[&6], "File");
+        assert_eq!(names[&14], "Category");
     }
 }

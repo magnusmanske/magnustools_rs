@@ -358,3 +358,21 @@ async fn drop_temporary_tables(conn: &mut impl Queryable) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_duplicates_make_a_report_dirty() {
+        let mut counts = Counts::default();
+        assert!(counts.is_clean());
+        counts.empty_site_users = 5;
+        counts.forge_issues_without_mapping = 2;
+        assert!(counts.is_clean(), "loose ends are reported but do not block the unique keys");
+        counts.duplicate_texts = 1;
+        assert!(!counts.is_clean());
+        let report = counts.to_string();
+        assert!(report.lines().any(|line| line.split_whitespace().collect::<Vec<_>>() == ["duplicate", "texts:", "1"]));
+    }
+}

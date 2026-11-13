@@ -31,6 +31,13 @@ pub use wikimisc::format::thousands;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
+
+    async fn body_of(response: axum::response::Response) -> (StatusCode, String) {
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
 
     #[test]
     fn thousands_separators() {
@@ -38,5 +45,28 @@ mod tests {
         assert_eq!(thousands(999), "999");
         assert_eq!(thousands(1000), "1,000");
         assert_eq!(thousands(1234567), "1,234,567");
+    }
+
+    #[tokio::test]
+    async fn jsonp_accepts_dotted_callbacks_and_refuses_code() {
+        let (status, body) =
+            body_of(jsonp(serde_json::json!({"a": 1}), Some("jQuery123_456.cb".into())).into_response()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, "jQuery123_456.cb({\"a\":1});");
+
+        for callback in ["a-b", "a..b", "alert(1)", "1abc"] {
+            let (status, _) = body_of(jsonp(serde_json::json!(1), Some(callback.into())).into_response()).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{callback}");
+        }
+        // An empty callback means plain JSON.
+        let (status, body) = body_of(jsonp(serde_json::json!(1), Some(String::new())).into_response()).await;
+        assert_eq!((status, body.as_str()), (StatusCode::OK, "1"));
+    }
+
+    #[tokio::test]
+    async fn jsonp_callbacks_are_length_limited() {
+        let callback = "a".repeat(129);
+        let (status, _) = body_of(jsonp(serde_json::json!(1), Some(callback)).into_response()).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 }
