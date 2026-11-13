@@ -7,6 +7,7 @@ use axum::body::Bytes;
 use axum::extract::{FromRequest, Request};
 use axum::http::header;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer};
 
 /// Deserializes `T` from query and form parameters; on a repeated name the
 /// last value wins, so the body beats the query string, as in PHP.
@@ -35,6 +36,13 @@ fn merge<T: DeserializeOwned>(query: &str, body: &[u8]) -> Result<T, AppError> {
     wikimisc::web::params::merge(query, body).map_err(|e| AppError::BadRequest(e.to_string()))
 }
 
+/// A PHP checkbox: any value but the empty string or `"0"` is on, and an
+/// absent parameter is off. Use with `#[serde(default, deserialize_with = "php_bool")]`.
+pub fn php_bool<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(value.is_some_and(|value| !value.is_empty() && value != "0"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -59,5 +67,18 @@ mod tests {
         let p: P = merge("", b"").unwrap();
         assert_eq!(p, P { text: String::new(), depth: None, doit: None });
         assert!(merge::<P>("depth=deep", b"").is_err());
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Flags {
+        #[serde(default, deserialize_with = "php_bool")]
+        on: bool,
+    }
+
+    #[test]
+    fn php_checkboxes_are_booleans() {
+        for (query, expected) in [("", false), ("on=", false), ("on=0", false), ("on=1", true), ("on=yes", true)] {
+            assert_eq!(merge::<Flags>(query, b"").unwrap(), Flags { on: expected }, "{query}");
+        }
     }
 }

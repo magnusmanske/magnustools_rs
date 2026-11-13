@@ -12,7 +12,7 @@ mod static_files;
 pub use error::AppError;
 pub use page::{jsonp, render, thousands};
 pub use pager::{Pager, PagerLink};
-pub use params::Params;
+pub use params::{Params, php_bool};
 
 use crate::state::AppState;
 use axum::Router;

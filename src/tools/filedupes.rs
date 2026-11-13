@@ -29,8 +29,10 @@ pub struct Request {
     project: Option<String>,
     #[serde(default)]
     username: String,
-    identicalsonly: Option<String>,
-    showdesc: Option<String>,
+    #[serde(default, rename = "identicalsonly", deserialize_with = "crate::web::php_bool")]
+    identicals_only: bool,
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    showdesc: bool,
     #[serde(default)]
     category: String,
     startat: Option<String>,
@@ -46,36 +48,21 @@ fn default_language() -> String {
 }
 
 impl Request {
-    fn project(&self) -> String {
-        match self.project.as_deref().map(str::trim) {
-            Some(project) if !project.is_empty() => project.to_lowercase(),
-            _ if self.language.trim().eq_ignore_ascii_case("commons") => "wikimedia".to_string(),
-            _ => "wikipedia".to_string(),
-        }
-    }
-
-    fn flag(value: Option<&str>) -> bool {
-        value.is_some_and(|v| !v.is_empty() && v != "0")
-    }
-
-    fn identicals_only(&self) -> bool {
-        Self::flag(self.identicalsonly.as_deref())
-    }
-
-    fn show_description(&self) -> bool {
-        Self::flag(self.showdesc.as_deref())
-    }
-
     fn startat(&self) -> String {
         self.startat.as_deref().or(self.start.as_deref()).unwrap_or_default().trim().to_string()
     }
 
-    fn limit(&self) -> usize {
-        self.limit.as_deref().and_then(|n| n.trim().parse().ok()).unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT)
-    }
-
-    fn offset(&self) -> usize {
-        self.offset.as_deref().and_then(|n| n.trim().parse().ok()).unwrap_or(1).max(1)
+    fn paging(&self) -> Paging {
+        Paging {
+            limit: self
+                .limit
+                .as_deref()
+                .and_then(|n| n.trim().parse().ok())
+                .unwrap_or(DEFAULT_LIMIT)
+                .clamp(1, MAX_LIMIT),
+            offset: self.offset.as_deref().and_then(|n| n.trim().parse().ok()).unwrap_or(1).max(1),
+            startat: self.startat(),
+        }
     }
 
     fn categories(&self) -> Vec<String> {
@@ -90,6 +77,13 @@ impl Request {
             })
             .collect()
     }
+}
+
+#[derive(Debug, Clone)]
+struct Paging {
+    limit: usize,
+    offset: usize,
+    startat: String,
 }
 
 #[derive(Clone, Debug)]
@@ -162,6 +156,7 @@ struct Page<'a> {
     project: String,
     identicals_only: bool,
     show_description: bool,
+    paging: Paging,
     user_rows: Vec<UserRow>,
     user_found: bool,
     categories: Vec<CategoryResult>,
@@ -175,14 +170,16 @@ pub async fn handler(
     Params(request): Params<Request>,
 ) -> Result<Html<String>, AppError> {
     let language = request.language.trim().to_lowercase();
-    let project = request.project();
+    let project = crate::wiki::effective_project(&language, request.project.as_deref());
+    let paging = request.paging();
     let mut page = Page {
         title: "File duplicates",
         request: &request,
         language: language.clone(),
         project: project.clone(),
-        identicals_only: request.identicals_only(),
-        show_description: request.show_description(),
+        identicals_only: request.identicals_only,
+        show_description: request.showdesc,
+        paging: paging.clone(),
         user_rows: vec![],
         user_found: false,
         categories: vec![],
@@ -200,23 +197,30 @@ pub async fn handler(
             return render(&page);
         }
     };
+    let categories = request.categories();
     if !request.username.trim().is_empty() {
-        let (rows, found) = user_mode(&state, &wiki, &request).await?;
+        let (rows, found) = user_mode(&state, &wiki, &request, request.identicals_only, request.showdesc).await?;
         page.user_rows = rows;
         page.user_found = found;
         if page.user_rows.is_empty() {
             page.message = Some("No duplicates found.".to_string());
         }
-    } else if !request.categories().is_empty() {
-        page.categories = category_mode(&state, &wiki, &request).await?;
-        page.next_url = Some(next_url(&request));
+    } else if !categories.is_empty() {
+        page.categories = category_mode(&state, &wiki, &categories, &paging).await?;
+        page.next_url = Some(next_url(&request, &paging));
     } else {
         page.message = Some("Please give a user name or at least one category.".to_string());
     }
     render(&page)
 }
 
-async fn user_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<(Vec<UserRow>, bool), AppError> {
+async fn user_mode(
+    state: &AppState,
+    wiki: &Wiki,
+    request: &Request,
+    identicals_only: bool,
+    show_description: bool,
+) -> Result<(Vec<UserRow>, bool), AppError> {
     let mut conn = state.replicas.conn(wiki, &["image", "actor"]).await?;
     let rows: Vec<(String, u64, u32, u32, Option<u32>)> = conn
         .exec(
@@ -226,6 +230,7 @@ async fn user_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<(
         )
         .await
         .map_err(anyhow::Error::from)?;
+    drop(conn);
     let infos: Vec<ImageInfo> = rows
         .into_iter()
         .map(|(name, size, width, height, bits)| ImageInfo { name, size, width, height, bits })
@@ -241,19 +246,19 @@ async fn user_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<(
 
     let wanted: Vec<String> =
         infos.iter().filter(|info| duplicates.contains(&info.signature())).map(|info| info.name.clone()).collect();
-    let contents = if request.show_description() { descriptions(state, wiki, &wanted).await? } else { HashMap::new() };
+    let contents = if show_description { descriptions(state, wiki, &wanted).await? } else { HashMap::new() };
 
     let mut result = vec![];
     let mut found = false;
     for info in &infos {
         let duplicate = duplicates.contains(&info.signature());
-        if !duplicate && request.identicals_only() {
+        if !duplicate && identicals_only {
             continue;
         }
         if duplicate {
             found = true;
         }
-        let card = file_card(wiki, info, contents.get(&info.name), request.show_description(), None, None)?;
+        let card = file_card(wiki, info, contents.get(&info.name), show_description, None, None)?;
         let others = if duplicate {
             groups[&info.signature()]
                 .iter()
@@ -272,34 +277,36 @@ async fn user_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<(
     Ok((result, found))
 }
 
-async fn category_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Result<Vec<CategoryResult>, AppError> {
-    let mut conn = state.replicas.conn(wiki, &["page", "categorylinks", "linktarget"]).await?;
-    let mut image_conn = state.replicas.conn(wiki, &["image"]).await?;
-    let limit = request.limit();
-    let offset = request.offset().saturating_sub(1);
-    let startat = request.startat();
-    let mut remaining = limit;
+async fn category_mode(
+    state: &AppState,
+    wiki: &Wiki,
+    categories: &[String],
+    paging: &Paging,
+) -> Result<Vec<CategoryResult>, AppError> {
+    let mut remaining = paging.limit;
     let mut results = vec![];
 
-    for category in request.categories().into_iter().take(MAX_CATEGORIES) {
+    for category in categories.iter().take(MAX_CATEGORIES) {
         if remaining == 0 {
             break;
         }
+        let mut conn = state.replicas.conn(wiki, &["page", "categorylinks", "linktarget"]).await?;
         let mut sql = "SELECT p.page_title FROM page p
             JOIN categorylinks cl ON cl.cl_from=p.page_id
             JOIN linktarget lt ON lt.lt_id=cl.cl_target_id
             WHERE p.page_namespace=6 AND lt.lt_namespace=14 AND lt.lt_title=?"
             .to_string();
         let mut params = vec![DbValue::from(category.clone())];
-        if !startat.is_empty() {
+        if !paging.startat.is_empty() {
             sql.push_str(" AND p.page_title>=?");
-            params.push(DbValue::from(startat.replace(' ', "_")));
+            params.push(DbValue::from(paging.startat.replace(' ', "_")));
         }
         sql.push_str(" ORDER BY p.page_title LIMIT ? OFFSET ?");
         params.push(DbValue::from(remaining as u64));
-        params.push(DbValue::from(offset as u64));
+        params.push(DbValue::from(paging.offset.saturating_sub(1) as u64));
         let images: Vec<(String,)> =
             conn.exec(sql, wikimisc::mysql_async::Params::Positional(params)).await.map_err(anyhow::Error::from)?;
+        drop(conn);
         if images.is_empty() {
             continue;
         }
@@ -315,8 +322,10 @@ async fn category_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Resu
             }
         }
         let target_contents = descriptions(state, wiki, &targets).await?;
+        let mut image_conn = state.replicas.conn(wiki, &["image"]).await?;
         let mut all_infos = image_infos(&mut image_conn, &names).await?;
         all_infos.extend(image_infos(&mut image_conn, &targets).await?);
+        drop(image_conn);
 
         let mut pairs = vec![];
         for name in &names {
@@ -334,7 +343,7 @@ async fn category_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Resu
             let same_size = original_info.size == duplicate_info.size;
             let summary_reason = format!(
                 "Was in category \"{}\", {}",
-                display_title(&category),
+                display_title(category),
                 if same_size { "exact duplicate" } else { "although NOT an exact duplicate" }
             );
             let universal =
@@ -353,7 +362,7 @@ async fn category_mode(state: &AppState, wiki: &Wiki, request: &Request) -> Resu
             pairs.push(Pair { original, duplicate, same_size, exact });
             remaining -= 1;
         }
-        results.push(CategoryResult { name: display_title(&category), pairs });
+        results.push(CategoryResult { name: display_title(category), pairs });
     }
     Ok(results)
 }
@@ -523,18 +532,18 @@ fn normalize_file(input: &str) -> String {
     upper_first(&input.trim().replace(' ', "_"))
 }
 
-fn next_url(request: &Request) -> String {
-    let offset = request.offset() + request.limit();
+fn next_url(request: &Request, paging: &Paging) -> String {
+    let offset = paging.offset + paging.limit;
     format!(
         "/filedupes/?language={}&project={}&category={}&startat={}&limit={}&offset={}&doit=1{}{}",
         encode_component(&request.language),
-        encode_component(&request.project()),
+        encode_component(&crate::wiki::effective_project(&request.language, request.project.as_deref())),
         encode_component(&request.category),
-        encode_component(&request.startat()),
-        request.limit(),
+        encode_component(&paging.startat),
+        paging.limit,
         offset,
-        if request.identicals_only() { "&identicalsonly=1" } else { "" },
-        if request.show_description() { "&showdesc=1" } else { "" }
+        if request.identicals_only { "&identicalsonly=1" } else { "" },
+        if request.showdesc { "&showdesc=1" } else { "" }
     )
 }
 
@@ -562,8 +571,8 @@ mod tests {
             language: "commons".into(),
             project: None,
             username: String::new(),
-            identicalsonly: None,
-            showdesc: None,
+            identicals_only: false,
+            showdesc: false,
             category: "A|Category:B\nC".into(),
             startat: Some(" X ".into()),
             start: None,
@@ -571,10 +580,11 @@ mod tests {
             offset: Some("0".into()),
             doit: Some("1".into()),
         };
-        assert_eq!(request.project(), "wikimedia");
-        assert_eq!(request.limit(), MAX_LIMIT);
-        assert_eq!(request.offset(), 1);
-        assert_eq!(request.startat(), "X");
+        let paging = request.paging();
+        assert_eq!(crate::wiki::effective_project(&request.language, request.project.as_deref()), "wikimedia");
+        assert_eq!(paging.limit, MAX_LIMIT);
+        assert_eq!(paging.offset, 1);
+        assert_eq!(paging.startat, "X");
         assert_eq!(request.categories(), vec!["A", "B", "C"]);
     }
 

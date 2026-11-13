@@ -27,17 +27,15 @@ static FRENCH_DATE: LazyLock<Option<Regex>> =
 pub struct Request {
     baseon: Option<String>,
     title: Option<String>,
-    directlinks: Option<String>,
-    onlynew: Option<String>,
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    directlinks: bool,
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    onlynew: bool,
     image: Option<String>,
-    raw: Option<String>,
-    js: Option<String>,
-}
-
-impl Request {
-    fn flag(value: Option<&str>) -> bool {
-        value.is_some_and(|v| !v.is_empty() && v != "0")
-    }
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    raw: bool,
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    js: bool,
 }
 
 struct Missing {
@@ -65,7 +63,7 @@ pub async fn handler(
     let baseon = request.baseon.as_deref().unwrap_or("en").trim().to_lowercase();
     let title = request.title.as_deref().unwrap_or_default().trim();
     let image = request.image.as_deref().unwrap_or_default().trim();
-    let raw = Request::flag(request.raw.as_deref()) || Request::flag(request.js.as_deref());
+    let raw = request.raw || request.js;
     let mut page = Page {
         title: "MultiDesc",
         request: &request,
@@ -79,12 +77,12 @@ pub async fn handler(
     }
 
     if !image.is_empty() {
-        match image_output(&state, image, Request::flag(request.onlynew.as_deref())).await {
+        match image_output(&state, image, request.onlynew).await {
             Ok(output) => page.output = output,
             Err(e) => page.error = Some(e.to_string()),
         }
     } else {
-        match article_output(&state, &baseon, title, Request::flag(request.directlinks.as_deref())).await {
+        match article_output(&state, &baseon, title, request.directlinks).await {
             Ok((output, missing)) => {
                 page.output = output;
                 page.missing = missing;
@@ -94,7 +92,7 @@ pub async fn handler(
     }
 
     if raw {
-        let body = if Request::flag(request.js.as_deref()) {
+        let body = if request.js {
             let escaped = page.output.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
             format!("function whatisthat_get_descriptions () {{\nreturn \"{escaped}\";\n}}")
         } else {

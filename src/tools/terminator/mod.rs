@@ -110,17 +110,14 @@ pub struct Request {
     sparql: String,
     #[serde(default)]
     sort_by: String,
-    sui: Option<String>,
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    sui: bool,
     max_results: Option<String>,
     offset: Option<String>,
     mode: Option<String>,
 }
 
 impl Request {
-    fn flag(value: Option<&str>) -> bool {
-        value.is_some_and(|v| !v.is_empty() && v != "0")
-    }
-
     fn max_results(&self) -> usize {
         self.max_results
             .as_deref()
@@ -160,7 +157,7 @@ impl Request {
             present_languages: self.present_languages(),
             sparql: self.sparql.trim().to_string(),
             sort: self.sort(),
-            show_untranslatables: Self::flag(self.sui.as_deref()),
+            show_untranslatables: self.sui,
             max_results: self.max_results(),
             offset: self.offset(),
             mode: self.mode(),
@@ -360,7 +357,7 @@ fn page_url(request: &Request, offset: usize) -> String {
         encode_component(&request.languages),
         encode_component(&request.present),
         encode_component(request.sort().as_str()),
-        u8::from(Request::flag(request.sui.as_deref())),
+        u8::from(request.sui),
         request.max_results(),
         offset,
         encode_component(request.mode().as_str())
@@ -441,7 +438,7 @@ mod tests {
             present: String::new(),
             sparql: String::new(),
             sort_by: String::new(),
-            sui: None,
+            sui: false,
             max_results: Some("1000".into()),
             offset: Some("-1".into()),
             mode: Some("GAME".into()),

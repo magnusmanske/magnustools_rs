@@ -54,7 +54,8 @@ pub struct Request {
     project: Option<String>,
     #[serde(default)]
     file: String,
-    sort_by_date: Option<String>,
+    #[serde(default, deserialize_with = "crate::web::php_bool")]
+    sort_by_date: bool,
     sib_cat: Option<String>,
     sib_gal: Option<String>,
     mode: Option<String>,
@@ -69,11 +70,7 @@ fn default_language() -> String {
 
 impl Request {
     fn project(&self) -> String {
-        match self.project.as_deref().map(str::trim) {
-            Some(project) if !project.is_empty() => project.to_lowercase(),
-            _ if self.language.trim().eq_ignore_ascii_case("commons") => "wikimedia".to_string(),
-            _ => "wikipedia".to_string(),
-        }
+        crate::wiki::effective_project(&self.language, self.project.as_deref())
     }
 }
 
@@ -120,11 +117,10 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Params(request): Params<Request>,
 ) -> Result<Response, AppError> {
-    let language = request.language.trim().to_lowercase();
     let project = request.project();
     let file = file_title(&request.file);
     let mode = request.mode.as_deref().unwrap_or("html");
-    let uselang = request.uselang.as_deref().filter(|l| is_language(l)).unwrap_or_default();
+    let uselang = request.uselang.as_deref().filter(|l| crate::wiki::is_language_code(l)).unwrap_or_default();
     let mut page = Page {
         title: "File siblings",
         request: &request,
@@ -138,8 +134,8 @@ pub async fn handler(
     if file.is_empty() {
         return Ok(render(&page)?.into_response());
     }
-    let wiki = match Wiki::new(&language, &project) {
-        Ok(wiki) => wiki,
+    let wiki = match crate::wiki::wiki_and_project(&request.language, request.project.as_deref()) {
+        Ok((_, _, wiki)) => wiki,
         Err(e) => {
             page.error = Some(format!("Not a wiki: {e}."));
             return Ok(render(&page)?.into_response());
@@ -179,8 +175,7 @@ async fn load(state: &AppState, wiki: &Wiki, request: &Request, file: &str) -> R
     let mut truncated = false;
     if flag(request.sib_cat.as_deref()) || (request.sib_cat.is_none() && request.sib_gal.is_none()) {
         let ignored = ignored_categories(wiki);
-        let (rows, more) =
-            category_siblings(&mut conn, wiki, file, flag(request.sort_by_date.as_deref()), &ignored).await?;
+        let (rows, more) = category_siblings(&mut conn, wiki, file, request.sort_by_date, &ignored).await?;
         truncated |= more;
         sections.push(Section { kind: "categories", rows });
     }
@@ -238,8 +233,8 @@ async fn category_siblings(
         .exec(
             "SELECT cl_target_id, lt_title, cl_from, cl_sortkey, CAST(cl_timestamp AS CHAR)
              FROM page JOIN categorylinks ON cl_from=page_id JOIN linktarget ON lt_id=cl_target_id
-             WHERE page_namespace=6 AND page_title=? ORDER BY lt_title",
-            (file,),
+             WHERE page_namespace=6 AND page_title=? ORDER BY lt_title LIMIT ?",
+            (file, (MAX_CATEGORIES + 1) as u64),
         )
         .await
         .map_err(anyhow::Error::from)?;
@@ -466,13 +461,6 @@ fn is_ignored_category(category: &str, ignored: &[String]) -> bool {
     })
 }
 
-fn is_language(value: &str) -> bool {
-    let mut chars = value.chars();
-    matches!(chars.next(), Some('a'..='z'))
-        && (1..=20).contains(&chars.clone().count())
-        && chars.all(|c| c.is_ascii_lowercase() || c == '-')
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -503,13 +491,5 @@ mod tests {
         assert!(thumb.src.unwrap().ends_with("?width=100"));
         let gif = thumbnail(&wiki, "B.gif", &HashMap::from([("B.gif".to_string(), (200, 100))]));
         assert!(!gif.src.unwrap().contains("?width"));
-    }
-
-    #[test]
-    fn language_codes() {
-        assert!(is_language("en"));
-        assert!(is_language("zh-yue"));
-        assert!(!is_language("EN"));
-        assert!(!is_language(""));
     }
 }

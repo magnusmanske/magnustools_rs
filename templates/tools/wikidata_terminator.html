@@ -29,7 +29,7 @@
         {%- endfor %}
       </select>
     </label>
-    <label class="check"><input type="checkbox" name="sui" value="1"{% if request.sui.as_deref() == Some("1") %} checked{% endif %}> Show untranslatables</label>
+    <label class="check"><input type="checkbox" name="sui" value="1"{% if request.sui %} checked{% endif %}> Show untranslatables</label>
   </div>
   <fieldset>
     <legend>Mode</legend>

@@ -12,7 +12,7 @@
     <div class="row">
       <label class="check"><input type="checkbox" name="sib_cat" value="1"{% if request.sib_cat.as_deref() != Some("0") %} checked{% endif %}> Categories</label>
       <label class="check"><input type="checkbox" name="sib_gal" value="1"{% if request.sib_gal.as_deref() != Some("0") %} checked{% endif %}> Galleries</label>
-      <label class="check"><input type="checkbox" name="sort_by_date" value="1"{% if request.sort_by_date.as_deref() == Some("1") %} checked{% endif %}> Categories by date added</label>
+      <label class="check"><input type="checkbox" name="sort_by_date" value="1"{% if request.sort_by_date %} checked{% endif %}> Categories by date added</label>
     </div>
   </fieldset>
   <div class="row">
