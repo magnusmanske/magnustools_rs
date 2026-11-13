@@ -176,6 +176,7 @@ async fn enrich(state: &AppState, pool: &[PoolItem]) -> Result<HashMap<u32, Item
         LANGUAGES.iter().map(|language| (builder::wikipedia_site_id(language), (*language).to_string())).collect();
     let site_ids: Vec<String> = site_to_language.keys().cloned().collect();
     let site_placeholders = crate::replicas::placeholders(site_ids.len());
+    let language_placeholders = crate::replicas::placeholders(LANGUAGES.len());
     let sparql = sparql_client().context("creating the WDQS client")?;
 
     for chunk in pool.chunks(ENRICH_BATCH) {
@@ -188,11 +189,12 @@ async fn enrich(state: &AppState, pool: &[PoolItem]) -> Result<HashMap<u32, Item
                 "SELECT wbit_item_id AS q, GROUP_CONCAT(wbxl_language) AS langs
                  FROM wbt_item_terms
                  INNER JOIN wbt_term_in_lang ON wbit_term_in_lang_id=wbtl_id AND wbtl_type_id=?
-                 INNER JOIN wbt_text_in_lang ON wbtl_text_in_lang_id=wbxl_id
+                 INNER JOIN wbt_text_in_lang ON wbtl_text_in_lang_id=wbxl_id AND wbxl_language IN ({language_placeholders})
                  WHERE wbit_item_id IN ({id_placeholders})
                  GROUP BY wbit_item_id"
             );
             let mut values = vec![DbValue::from(type_id)];
+            values.extend(LANGUAGES.iter().map(|language| DbValue::from(*language)));
             values.extend(id_values.iter().cloned());
             let rows: Vec<(u32, String)> = terms.exec(sql, DbParams::Positional(values)).await?;
             for (q, languages) in rows {

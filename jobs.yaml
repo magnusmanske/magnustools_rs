@@ -120,5 +120,5 @@
   image: tool-magnustools/tool-magnustools:latest
   schedule: "17 4 * * *"
   mount: all
-  mem: 1Gi
+  mem: 4Gi
   emails: onfailure
