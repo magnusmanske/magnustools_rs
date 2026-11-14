@@ -19,7 +19,7 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
-use std::time::UNIX_EPOCH;
+use std::time::{Instant, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use wikimisc::mysql_async::Conn;
 use wikimisc::mysql_async::prelude::Queryable;
@@ -416,22 +416,30 @@ pub(crate) async fn update(state: &AppState, wiki: &str) -> Result<()> {
         .collect();
 
     let mut rows: Vec<(u64, String)> = vec![];
+    tracing::info!("{project}: linktarget up to {max_id}, in chunks of {CHUNK} ids");
     let mut from = 1;
     while from <= max_id {
         let to = from.saturating_add(CHUNK - 1);
+        let started = Instant::now();
+        // Group before checking which targets are red links: in the WHERE
+        // clause, MySQL would look up every linked pagelinks row in `page`
+        // instead of only the targets that made the cut.
         let found: Vec<(u64, String)> = conn
             .exec(
-                "SELECT COUNT(*) AS cnt, lt_title FROM linktarget
-                 JOIN pagelinks ON pl_target_id=lt_id AND pl_from_namespace=0
-                 WHERE lt_namespace=0 AND lt_id BETWEEN ? AND ?
-                 AND NOT EXISTS (SELECT 1 FROM page WHERE page_namespace=0 AND page_title=lt_title)
-                 GROUP BY lt_id HAVING cnt >= ?",
+                "SELECT cnt, lt_title FROM (
+                   SELECT lt_id, lt_title, COUNT(*) AS cnt FROM linktarget
+                   JOIN pagelinks ON pl_target_id=lt_id AND pl_from_namespace=0
+                   WHERE lt_namespace=0 AND lt_id BETWEEN ? AND ?
+                   GROUP BY lt_id HAVING cnt >= ?
+                 ) candidates
+                 WHERE NOT EXISTS (SELECT 1 FROM page WHERE page_namespace=0 AND page_title=candidates.lt_title)",
                 (from, to, MIN_LINKS),
             )
             .await
             .with_context(|| format!("{project}: linktarget {from}–{to}"))?;
+        let kept = found.len();
         rows.extend(found.into_iter().filter(|(_, title)| !ignore.iter().any(|re| re.is_match(title))));
-        tracing::info!("{project}: scanned linktarget up to {to}");
+        tracing::info!("{project}: linktarget up to {to}: {kept} red links in {:.1}s", started.elapsed().as_secs_f64());
         from = to.saturating_add(1);
     }
     rows.sort_by(|(left_count, left_title), (right_count, right_title)| {
@@ -459,8 +467,9 @@ pub(crate) async fn update(state: &AppState, wiki: &str) -> Result<()> {
     Ok(())
 }
 
-/// `linktarget` IDs per query; keeps each scan short.
-const CHUNK: u64 = 1_000_000;
+/// `linktarget` IDs per query. Small enough that even the earliest, most
+/// heavily linked targets finish well inside the replica statement limit.
+const CHUNK: u64 = 100_000;
 
 #[cfg(test)]
 mod tests {
