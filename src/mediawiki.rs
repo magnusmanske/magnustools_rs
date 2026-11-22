@@ -50,27 +50,34 @@ pub async fn page_contents(
             ],
         )
         .await?;
-        for page in json["query"]["pages"].as_array().into_iter().flatten() {
-            let Some(title) = page["title"].as_str() else { continue };
-            let revision = &page["revisions"][0];
-            let text = revision["slots"]["main"]["content"]
-                .as_str()
-                .or_else(|| revision["content"].as_str())
-                .unwrap_or_default()
-                .to_string();
-            let content = PageContent {
-                text,
-                timestamp: revision["timestamp"].as_str().unwrap_or_default().to_string(),
-                user: revision["user"].as_str().unwrap_or_default().to_string(),
-            };
-            pages.insert(title_key(title), content);
-        }
-        // A redirect or a normalised title answers for the title that was asked
-        // for, so callers can look pages up by the names they gave. Redirects
-        // go first, so a normalised name that is also redirected is found too.
-        merge_requested_titles(&mut pages, &json["query"]);
+        parse_query_pages(&mut pages, &json["query"]);
     }
     Ok(pages)
+}
+
+fn parse_query_pages(pages: &mut HashMap<String, PageContent>, query: &serde_json::Value) {
+    for page in query["pages"].as_array().into_iter().flatten() {
+        let (Some(title), Some(revision)) =
+            (page["title"].as_str(), page["revisions"].as_array().and_then(|r| r.first()))
+        else {
+            continue;
+        };
+        let text = revision["slots"]["main"]["content"]
+            .as_str()
+            .or_else(|| revision["content"].as_str())
+            .unwrap_or_default()
+            .to_string();
+        let content = PageContent {
+            text,
+            timestamp: revision["timestamp"].as_str().unwrap_or_default().to_string(),
+            user: revision["user"].as_str().unwrap_or_default().to_string(),
+        };
+        pages.insert(title_key(title), content);
+    }
+    // A redirect or a normalised title answers for the title that was asked
+    // for, so callers can look pages up by the names they gave. Redirects
+    // go first, so a normalised name that is also redirected is found too.
+    merge_requested_titles(pages, query);
 }
 
 /// Adds the names the API was asked for to `pages`: a redirect or a normalised
@@ -164,6 +171,30 @@ mod tests {
         assert_eq!(title_key("File:some_name.jpg"), "File:some name.jpg");
         assert_eq!(title_key(" file:Some name.jpg "), "File:Some name.jpg");
         assert_eq!(title_key("some_name"), "Some name");
+    }
+
+    #[test]
+    fn missing_pages_are_omitted() {
+        let mut pages = HashMap::new();
+        let query = serde_json::json!({
+            "pages": [
+                {
+                    "pageid": 0,
+                    "ns": 0,
+                    "title": "NonExistentPage",
+                    "missing": ""
+                },
+                {
+                    "pageid": 123,
+                    "ns": 0,
+                    "title": "ExistingPage",
+                    "revisions": [{"content": "hello world", "timestamp": "2026-01-01T00:00:00Z", "user": "Magnus"}]
+                }
+            ]
+        });
+        parse_query_pages(&mut pages, &query);
+        assert!(!pages.contains_key(&title_key("NonExistentPage")));
+        assert_eq!(pages[&title_key("ExistingPage")].text, "hello world");
     }
 
     #[test]

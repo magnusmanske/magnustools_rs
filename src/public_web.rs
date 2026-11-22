@@ -29,13 +29,22 @@ impl Resolve for PublicOnly {
     }
 }
 
+fn host_is_public(host: Option<url::Host<&str>>) -> bool {
+    match host {
+        Some(url::Host::Ipv4(ip)) => is_public(IpAddr::V4(ip)),
+        Some(url::Host::Ipv6(ip)) => is_public(IpAddr::V6(ip)),
+        Some(url::Host::Domain(_)) => true,
+        None => false,
+    }
+}
+
 static CLIENT: LazyLock<reqwest::Result<reqwest::Client>> = LazyLock::new(|| {
     reqwest::Client::builder()
         .user_agent(crate::state::USER_AGENT)
         .dns_resolver(Arc::new(PublicOnly))
         .timeout(TIMEOUT)
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            let public = attempt.url().host_str().is_some_and(|h| h.parse::<IpAddr>().map_or(true, is_public));
+            let public = host_is_public(attempt.url().host());
             match (attempt.previous().len() >= MAX_REDIRECTS, public) {
                 (false, true) => attempt.follow(),
                 _ => attempt.stop(),
@@ -50,9 +59,9 @@ pub async fn download(url: &str, max_bytes: u64) -> Result<(tempfile::NamedTempF
     if !matches!(parsed.scheme(), "http" | "https") {
         bail!("only http and https URLs can be fetched");
     }
-    let host = parsed.host_str().ok_or_else(|| anyhow!("the URL has no host"))?;
+    let host = parsed.host().ok_or_else(|| anyhow!("the URL has no host"))?;
     // IP addresses in the URL bypass the resolver.
-    if host.trim_matches(['[', ']']).parse::<IpAddr>().is_ok_and(|ip| !is_public(ip)) {
+    if !host_is_public(Some(host)) {
         bail!("that address is not on the public internet");
     }
     let client = CLIENT.as_ref().map_err(|e| anyhow!("HTTP client: {e}"))?;
@@ -110,6 +119,16 @@ fn is_public(ip: IpAddr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_classification() {
+        assert!(host_is_public(reqwest::Url::parse("http://example.com").unwrap().host()));
+        assert!(host_is_public(reqwest::Url::parse("http://8.8.8.8").unwrap().host()));
+        assert!(!host_is_public(reqwest::Url::parse("http://127.0.0.1").unwrap().host()));
+        assert!(!host_is_public(reqwest::Url::parse("http://[::1]").unwrap().host()));
+        assert!(!host_is_public(reqwest::Url::parse("http://[fd00::1]").unwrap().host()));
+        assert!(!host_is_public(None));
+    }
 
     #[test]
     fn public_addresses() {

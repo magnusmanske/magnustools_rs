@@ -1749,7 +1749,6 @@ dependencies = [
  "bookmeta",
  "chrono",
  "clap",
- "hmac",
  "include_dir",
  "lettre",
  "mime_guess",
@@ -1766,12 +1765,12 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
- "time",
  "tokio",
  "tokio-util",
  "tower",
  "tower-http 0.7.1",
  "tracing",
+ "url",
  "wikimisc",
 ]
 
