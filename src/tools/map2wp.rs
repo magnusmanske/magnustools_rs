@@ -481,9 +481,11 @@ fn normalize_years(years: &mut [String]) {
     if first <= second {
         return;
     }
-    if years[1].len() < years[0].len() {
-        let prefix = &years[0][..years[0].len() - years[1].len()];
-        years[1] = format!("{prefix}{}", years[1]);
+    let diff = years[0].len().saturating_sub(years[1].len());
+    if diff > 0 {
+        if let Some(prefix) = years[0].get(..diff) {
+            years[1] = format!("{prefix}{}", years[1]);
+        }
     }
     if first + 20 > years[1].parse().unwrap_or(0) {
         years[1] = (years[1].parse::<i32>().unwrap_or(0) + 100).to_string();

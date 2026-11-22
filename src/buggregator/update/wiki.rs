@@ -1,7 +1,7 @@
 //! Issues from the watched wiki talk pages.
 
 use super::{
-    NewIssue, ToolMatcher, create_issue, db_label, format_time, regex, sections, signature_times, trim_markup, urls,
+    NewIssue, ToolMatcher, create_issue, db_label, format_time, sections, signature_times, trim_markup, urls,
     user_id, wiki_users,
 };
 use crate::buggregator::MAINTAINER;
@@ -145,8 +145,8 @@ async fn reopen_on_reply(
         )
         .await?;
     let closed_by_maintenance = last_close.is_some_and(|(user, text)| user == MAINTAINER && text == "CLOSED");
-    let maintainer = regex(r"\bMagnus[ _]Manske\b");
-    let last_line_is_maintainer = wikitext.trim().lines().last().is_some_and(|line| maintainer.is_match(line));
+    let last_line_is_maintainer =
+        wikitext.trim().lines().last().is_some_and(|line| super::MAINTAINER_SIGNATURE.is_match(line));
     if closed_by_maintenance && !last_line_is_maintainer {
         issues::set_status(conn, issue_id, "OPEN", MAINTAINER).await?;
     }

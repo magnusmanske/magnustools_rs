@@ -26,6 +26,8 @@ use wikimisc::mysql_async::prelude::Queryable;
 /// Tool names too common to recognise a tool by.
 const IGNORE_TOOL_NAMES: &[&str] = &["data"];
 
+pub(super) static MAINTAINER_SIGNATURE: LazyLock<Regex> = LazyLock::new(|| regex(r"\bMagnus[ _]Manske\b"));
+
 pub async fn update(state: &AppState) -> Result<()> {
     let mut conn = state.tool_db.conn().await?;
     let tools = ToolMatcher::load(&mut conn).await?;

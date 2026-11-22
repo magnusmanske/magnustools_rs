@@ -158,11 +158,11 @@ fn group(rows: Vec<WebRow>) -> Vec<WebAlert> {
     }
     by_url
         .into_iter()
-        .map(|(url, mut rows)| {
+        .filter_map(|(url, mut rows)| {
             rows.sort_by(|a, b| (a.name != a.subdomain, &a.name).cmp(&(b.name != b.subdomain, &b.name)));
-            let primary = &rows[0];
+            let primary = rows.first()?;
             let status = u16::try_from(primary.status).unwrap_or(0);
-            WebAlert {
+            Some(WebAlert {
                 label: primary.name.clone(),
                 url,
                 status,
@@ -171,7 +171,7 @@ fn group(rows: Vec<WebRow>) -> Vec<WebAlert> {
                 severity: if status == 0 || status >= 500 { "critical" } else { "warning" },
                 service: rows.iter().find_map(|r| r.service.clone()),
                 tools: rows.len(),
-            }
+            })
         })
         .collect()
 }

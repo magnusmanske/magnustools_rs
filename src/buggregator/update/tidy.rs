@@ -1,7 +1,7 @@
 //! Dates, tools, and closing/reopening issues, where the update could not
 //! settle them.
 
-use super::{ToolMatcher, format_time, regex, signature_times};
+use super::{ToolMatcher, format_time, signature_times};
 use crate::buggregator::MAINTAINER;
 use crate::buggregator::issues;
 use anyhow::Result;
@@ -61,9 +61,8 @@ pub(super) async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
             (cutoff, MAINTAINER),
         )
         .await?;
-    let maintainer = regex(r"\bMagnus[ _]Manske\b");
     for (issue_id, wikitext) in replied {
-        if wikitext.trim().lines().last().is_some_and(|line| maintainer.is_match(line)) {
+        if wikitext.trim().lines().last().is_some_and(|line| super::MAINTAINER_SIGNATURE.is_match(line)) {
             issues::set_status(conn, issue_id, "CLOSED", MAINTAINER).await?;
         }
     }
