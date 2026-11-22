@@ -163,6 +163,8 @@ database and stop the web service and jobs, then run them in order:
 3. `magnustools_rs --config … buggregator-dedupe` (dry run), then `--apply`
 4. `2026-11-10-utf8mb4.sql`, `2026-11-10-null-dates-tools.sql`,
    `2026-11-10-drop-legacy-views.sql`, `2026-11-10-token-hash-ascii.sql`
+5. `2026-11-22-drop-api-issues-url.sql` — only after deploying the code that
+   no longer reads the column
 
 `buggregator-dedupe` reports duplicate issues, users, texts and links;
 `--apply` collapses them and installs the natural keys. Do not run it against a

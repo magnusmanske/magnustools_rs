@@ -33,6 +33,29 @@ impl Forge {
         }
     }
 
+    fn host(self) -> &'static str {
+        match self {
+            Self::GitHub => "github.com",
+            Self::Codeberg => "codeberg.org",
+        }
+    }
+
+    /// `(owner, repository)` from the repository's web URL. A page below the
+    /// repository root (`/issues`, `/src`, a trailing `.git`) names the same
+    /// repository; another host or a path with fewer than two segments does
+    /// not.
+    fn owner_repo(self, html_url: &str) -> Option<(&str, &str)> {
+        let (_, rest) = html_url.split_once("://")?;
+        let (host, path) = rest.split_once('/')?;
+        if !host.eq_ignore_ascii_case(self.host()) {
+            return None;
+        }
+        let mut parts = path.split('/').filter(|part| !part.is_empty());
+        let owner = parts.next()?;
+        let repo = parts.next()?;
+        Some((owner, repo.strip_suffix(".git").unwrap_or(repo)))
+    }
+
     /// The repository metadata endpoint, where the forge says whether the
     /// repository is archived. Only Codeberg: GitHub's unauthenticated rate
     /// limit is too low for one more call per repository.
@@ -40,9 +63,7 @@ impl Forge {
         match self {
             Self::GitHub => None,
             Self::Codeberg => {
-                let path = html_url.split_once("codeberg.org/")?.1;
-                let mut parts = path.split('/').filter(|p| !p.is_empty());
-                let (owner, repo) = (parts.next()?, parts.next()?);
+                let (owner, repo) = self.owner_repo(html_url)?;
                 Some(format!("https://codeberg.org/api/v1/repos/{owner}/{repo}"))
             }
         }
@@ -73,22 +94,22 @@ impl Forge {
         }
     }
 
-    /// The issues endpoint and page size. Codeberg (Forgejo) URLs are built
-    /// from the repository's page, since `api_issues_url` holds that for them.
-    pub(super) fn api(self, html_url: &str, api_issues_url: &str) -> Option<(String, usize)> {
+    /// The issues endpoint and page size, generated from the repository's web
+    /// URL. A URL to the issues page is accepted because it names the same
+    /// repository.
+    pub(super) fn issues_api(self, html_url: &str) -> Option<(String, usize)> {
+        let (owner, repo) = self.owner_repo(html_url)?;
         match self {
-            Self::GitHub => Some((format!("{api_issues_url}?state=open&per_page={GITHUB_PAGE}"), GITHUB_PAGE)),
-            Self::Codeberg => {
-                let path = html_url.split_once("codeberg.org/")?.1;
-                let mut parts = path.split('/').filter(|p| !p.is_empty());
-                let (owner, repo) = (parts.next()?, parts.next()?);
-                Some((
-                    format!(
-                        "https://codeberg.org/api/v1/repos/{owner}/{repo}/issues?type=issues&state=open&limit={CODEBERG_PAGE}"
-                    ),
-                    CODEBERG_PAGE,
-                ))
-            }
+            Self::GitHub => Some((
+                format!("https://api.github.com/repos/{owner}/{repo}/issues?state=open&per_page={GITHUB_PAGE}"),
+                GITHUB_PAGE,
+            )),
+            Self::Codeberg => Some((
+                format!(
+                    "https://codeberg.org/api/v1/repos/{owner}/{repo}/issues?type=issues&state=open&limit={CODEBERG_PAGE}"
+                ),
+                CODEBERG_PAGE,
+            )),
         }
     }
 }
@@ -96,13 +117,9 @@ impl Forge {
 /// Stores new open issues of each repository, and closes those the forge
 /// no longer lists as open (the PHP version never closed any).
 pub(super) async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<()> {
-    let repos: Vec<(u64, String, String, u64)> = conn
-        .exec(
-            "SELECT id, html_url, api_issues_url, tool_id FROM git_repo WHERE repo_type=? ORDER BY id",
-            (forge.site(),),
-        )
-        .await?;
-    for (repo_id, html_url, api_issues_url, tool_id) in repos {
+    let repos: Vec<(u64, String, u64)> =
+        conn.exec("SELECT id, html_url, tool_id FROM git_repo WHERE repo_type=? ORDER BY id", (forge.site(),)).await?;
+    for (repo_id, html_url, tool_id) in repos {
         if RETIRED_REPOS.contains(&html_url.as_str()) {
             continue;
         }
@@ -110,7 +127,10 @@ pub(super) async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) 
             tracing::info!("{html_url}: repository archived; skipping");
             continue;
         }
-        let Some((url, page_size)) = forge.api(&html_url, &api_issues_url) else { continue };
+        let Some((url, page_size)) = forge.issues_api(&html_url) else {
+            tracing::warn!("{html_url}: cannot derive the issues endpoint; skipping");
+            continue;
+        };
         let open = match open_forge_issues(state, &url, page_size).await {
             Ok(open) => open,
             Err(e) => {

@@ -277,12 +277,15 @@ mod tests {
 
     #[test]
     fn forge_urls() {
-        let (url, _) = Forge::Codeberg.api("https://codeberg.org/magnusmanske/petscan_rs", "").unwrap();
+        let (url, _) = Forge::Codeberg.issues_api("https://codeberg.org/magnusmanske/petscan_rs").unwrap();
         assert_eq!(
             url,
             "https://codeberg.org/api/v1/repos/magnusmanske/petscan_rs/issues?type=issues&state=open&limit=50"
         );
-        assert!(Forge::Codeberg.api("https://github.com/x/y", "").is_none());
+        let (url, _) = Forge::GitHub.issues_api("https://github.com/magnusmanske/magpie").unwrap();
+        assert_eq!(url, "https://api.github.com/repos/magnusmanske/magpie/issues?state=open&per_page=100");
+        assert!(Forge::Codeberg.issues_api("https://github.com/x/y").is_none());
+        assert!(Forge::GitHub.issues_api("https://github.com/onlyowner").is_none());
         assert_eq!(
             Forge::Codeberg.repo_api("https://codeberg.org/magnusmanske/petscan_rs"),
             Some("https://codeberg.org/api/v1/repos/magnusmanske/petscan_rs".to_string())
@@ -290,6 +293,18 @@ mod tests {
         assert!(Forge::GitHub.repo_api("https://github.com/x/y").is_none());
         assert_eq!(iso_time(&Value::from("2024-01-02T03:04:05Z")), Some("2024-01-02 03:04:05".to_string()));
         assert_eq!(iso_time(&Value::Null), None);
+    }
+
+    #[test]
+    fn forge_urls_from_pages() {
+        let expected = "https://api.github.com/repos/magnusmanske/magpie/issues?state=open&per_page=100";
+        for url in [
+            "https://github.com/magnusmanske/magpie/issues",
+            "https://github.com/magnusmanske/magpie.git",
+            "https://github.com/magnusmanske/magpie/tree/main/src",
+        ] {
+            assert_eq!(Forge::GitHub.issues_api(url).unwrap().0, expected);
+        }
     }
 
     #[test]

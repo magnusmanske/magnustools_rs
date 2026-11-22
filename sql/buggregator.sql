@@ -111,7 +111,6 @@ CREATE TABLE `git_issue` (
 CREATE TABLE `git_repo` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `html_url` varchar(255) NOT NULL DEFAULT '',
-  `api_issues_url` varchar(255) NOT NULL DEFAULT '',
   `repo_type` enum('GITHUB','BITBUCKET','GITLAB','CODEBERG','GITLAB_WMF') NOT NULL DEFAULT 'GITHUB',
   `tool_id` int(11) unsigned NOT NULL,
   PRIMARY KEY (`id`),
