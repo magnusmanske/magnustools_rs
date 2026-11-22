@@ -89,11 +89,23 @@ pub async fn handler(
         meta: request.meta.is_some(),
         sdc: request.sdc.is_some(),
     };
+    let options = Arc::new(options);
     let license_data = license_data(&state.http).await?;
-    let mut files = vec![];
-    for image in &images {
-        files.push((image, fetch(&state.http, image, &options).await?));
+    let mut fetches = tokio::task::JoinSet::new();
+    for (index, image) in images.iter().enumerate() {
+        let (http, image, options) = (state.http.clone(), image.clone(), options.clone());
+        fetches.spawn(async move {
+            let file = fetch(&http, &image, &options).await;
+            (index, file)
+        });
     }
+    let mut results = Vec::with_capacity(images.len());
+    while let Some(res) = fetches.join_next().await {
+        let (index, file) = res.map_err(|e| anyhow::anyhow!("task join: {e}"))?;
+        results.push((index, file?));
+    }
+    results.sort_by_key(|(index, _)| *index);
+    let files: Vec<(&String, Option<File>)> = images.iter().zip(results.into_iter().map(|(_, f)| f)).collect();
     let language_names = language_names(&state.http, &files).await?;
 
     let mut response = Element::new("response").attribute("version", API_VERSION);

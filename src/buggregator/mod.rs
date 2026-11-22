@@ -22,7 +22,7 @@ use wikimisc::mysql_async::prelude::Queryable;
 
 /// Lower-case SHA-256, as the token and text columns store it.
 pub fn sha256_hex(data: &[u8]) -> String {
-    Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+    format!("{:x}", Sha256::digest(data))
 }
 
 /// Who maintains the tool; also the user a maintenance action logs as.
