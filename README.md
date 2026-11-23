@@ -165,6 +165,8 @@ database and stop the web service and jobs, then run them in order:
    `2026-11-10-drop-legacy-views.sql`, `2026-11-10-token-hash-ascii.sql`
 5. `2026-11-22-drop-api-issues-url.sql` — only after deploying the code that
    no longer reads the column
+6. `2026-11-23-tool-php-versions.sql` — active PHP rows to `php8.4`
+   (applied on the live tool database on 2026-11-23)
 
 `buggregator-dedupe` reports duplicate issues, users, texts and links;
 `--apply` collapses them and installs the natural keys. Do not run it against a

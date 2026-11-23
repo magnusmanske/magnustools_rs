@@ -2,7 +2,7 @@
 
 Triage of the tools on the [main page](https://magnustools.toolforge.org/) that are not Rust yet, by expected gain in efficiency, stability, speed and memory. As of 2026-11-23.
 
-Based on: usage over 30 days to 2026-11-23 (logger uses, dashboard requests), the code (`~/php/<tool>` and `/data/project/<tool>`), live HTTP checks on 2026-11-23, job status on Toolforge, and each tool's live `service.manifest`. The `tool` table now has the magpie rows (`commonshelper`, `geograph2commons`, `url2commons`, `flickr2commons`) as `rust/axum`, but still says `php8.2` for WikiShootMe, Reasonator and WikiFlix, whose live manifests say `php8.4`; the live `service.manifest` remains the source of truth.
+Based on: usage over 30 days to 2026-11-23 (logger uses, dashboard requests), the code (`~/php/<tool>` and `/data/project/<tool>`), live HTTP checks on 2026-11-23, job status on Toolforge, and each tool's live `service.manifest`. The `tool` table now has the magpie rows (`commonshelper`, `geograph2commons`, `url2commons`, `flickr2commons`) as `rust/axum`, and all active PHP rows are `php8.4` (2026-11-23); the live `service.manifest` remains the source of truth.
 
 ## Already Rust
 
@@ -12,7 +12,7 @@ PagePile's service is also Rust (`~/rust/pagepile`, plus the `pagepile` client c
 
 magpie (`~/rust/magpie`) is Rust/axum: commonshelper, url2commons, flickr2commons and geograph2commons moved there on 2026-11-20, with one OAuth login and upload path (the `mediawiki_upload` crate). The four old subdomains are Toolforge redirect containers; the old `.php` addresses redirect to the matching magpie page.
 
-**Status on 2026-11-23:** no new magnustools ports since 2026-11-13. The four upload tools (commonshelper, url2commons, flickr2commons, geograph2commons) moved to the Rust/axum `magpie` service on 2026-11-20; their old subdomains are redirect containers. All PHP tools checked on 2026-11-23 still answer 200: GLAMorous (both `/glamorous/` and `/glamorous.php`), tooltranslate, WikiShootMe, FIST, sourcemd, reasonator, WikiFlix and the low-use tools. WikiShootMe, Reasonator and WikiFlix now run `php8.4` in their live manifest, though their `tool` rows still say `php8.2`. Reasonator's buggregator backlog is still 4 open (WIKI 54, 66, 315; Codeberg #40); commonshelper has 15 open (all Codeberg, down from 24), geograph2commons 13, and sourcemd 0 (down from 32). Post-port fixes since 2026-11-13: the most-wanted scan was chunked to stay inside the replica statement limit (2026-11-14), commonsapi's batch image fetch was parallelized (2026-11-22), and missingtopics was reworked (2026-11-23).
+**Status on 2026-11-23:** no new magnustools ports since 2026-11-13. The four upload tools (commonshelper, url2commons, flickr2commons, geograph2commons) moved to the Rust/axum `magpie` service on 2026-11-20; their old subdomains are redirect containers. All PHP tools checked on 2026-11-23 still answer 200: GLAMorous (both `/glamorous/` and `/glamorous.php`), tooltranslate, WikiShootMe, FIST, sourcemd, reasonator, WikiFlix and the low-use tools. WikiShootMe, Reasonator and WikiFlix now run `php8.4`, and the `tool` table's active PHP rows were updated to match on 2026-11-23. Reasonator's buggregator backlog is still 4 open (WIKI 54, 66, 315; Codeberg #40); commonshelper has 15 open (all Codeberg, down from 24), geograph2commons 13, and sourcemd 0 (down from 32). Post-port fixes since 2026-11-13: the most-wanted scan was chunked to stay inside the replica statement limit (2026-11-14), commonsapi's batch image fetch was parallelized (2026-11-22), and missingtopics was reworked (2026-11-23).
 
 Usage figures below are from the 30 days ending 2026-11-23. They are logger uses unless noted; the Rust tools' dashboard uses are counted separately.
 
@@ -118,6 +118,6 @@ Other:
 - [x] Tool table: erwin85 and joanjoc redirect rows are now `rust/axum` (2026-11-13).
 - [x] Tool table: `baglama2`, `WD-FIST` and `distributed game` notes reflect their Rust parts (2026-11-13).
 - [x] Tool table: the magpie rows (commonshelper, geograph2commons, url2commons, flickr2commons) are `rust/axum` with magpie URLs (2026-11-20).
-- [ ] Tool table: WikiShootMe, Reasonator and WikiFlix still say `php8.2`; their live manifests say `php8.4` (2026-11-23).
+- [x] Tool table: all active PHP rows updated to `php8.4` (2026-11-23): `reasonator`/`geneawiki*`/`widee`, `toolflow`, `wikiflix`, `wikishootme`, and `upload-stats-bot` (`has_webservice` stays 0); see `sql/2026-11-23-tool-php-versions.sql`.
 - [x] Reasonator: not a port target; V2 is JS and the PHP shell is OAuth/OpenGraph. The 503 is fixed and the backlog is still down to 4 (2026-11-23).
 - [x] The leftover `/tmp/wdt_tail.*` is gone (checked 2026-11-23).
