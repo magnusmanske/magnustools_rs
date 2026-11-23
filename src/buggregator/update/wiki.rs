@@ -1,8 +1,8 @@
 //! Issues from the watched wiki talk pages.
 
 use super::{
-    NewIssue, ToolMatcher, create_issue, db_label, format_time, sections, signature_times, trim_markup, urls,
-    user_id, wiki_users,
+    NewIssue, ToolMatcher, create_issue, db_label, format_time, sections, signature_times, trim_markup, urls, user_id,
+    wiki_users,
 };
 use crate::buggregator::MAINTAINER;
 use crate::buggregator::issues::{self, text_id};

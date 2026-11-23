@@ -11,7 +11,7 @@
     <input type="text" name="article" value="{{ request.article }}">
   </label>
   <fieldset class="row">
-    <legend>… or a category tree <span class="hint">counts links from the articles in the tree</span></legend>
+    <legend>… or a category tree <span class="hint">counts links from the articles in the tree; deep trees take longer</span></legend>
     <label>Category <input type="text" name="category" value="{{ request.category }}"></label>
     <label>Subcategory depth <input type="number" name="depth" min="0" max="30" value="{{ options.depth }}"></label>
   </fieldset>
@@ -36,10 +36,12 @@
 <h2>{{ results.wanted.len() }} missing articles</h2>
 <p class="muted">
   {% if request.article.trim().is_empty() %}From the links of {{ results.pages }} articles in the tree.{% else %}From the links in the article.{% endif %}
+  {% if results.timed_out %}The query ran out of time; these results are partial. Use a smaller depth or category.{% endif %}
   {% if results.pages_truncated %}Only the first {{ results.pages }} articles in the tree were counted.{% endif %}
-  {% if results.results_truncated %}More missing articles were found; narrow the category for a complete list.{% endif %}
+  {% if results.counts_capped && !results.timed_out %}Not every linked title could be counted; some rarely linked missing articles may be absent.{% endif %}
+  {% if results.results_truncated %}More missing articles were found than can be listed; narrow the category.{% endif %}
   {% if results.template_links > 0 %}{{ results.template_links }} links from templates were left out.{% endif %}
-  {% if results.shown().len() < results.wanted.len() %}The {{ results.shown().len() }} most wanted are shown.{% endif %}
+  {% if results.shown().len() < results.wanted.len() %}The first table shows the {{ results.shown().len() }} most wanted.{% endif %}
 </p>
 {% if let Some(wikitext) = wikitext %}
 <p><button type="button" data-copy="#wikitext">Copy to clipboard</button></p>
@@ -56,6 +58,7 @@
 </table>
 </div>
 <h2>Alphabetically</h2>
+{% if let Some(limit) = results.shown_alphabetical_limit() %}<p class="hint">The first {{ limit }} entries alphabetically are shown; use a wiki list output for the complete list.</p>{% endif %}
 <p><button type="button" data-copy="#alphabetical">Copy alphabetical list</button></p>
 <div class="table-wrap">
 <table id="alphabetical">

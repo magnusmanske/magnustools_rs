@@ -33,6 +33,8 @@ const MAX_RESULTS: usize = 50_000;
 /// Time for the replica work before returning what is done. The request
 /// timeout is 300 s, so leave room for the existence and template checks.
 const QUERY_BUDGET: Duration = Duration::from_secs(200);
+/// Pages per counting query; larger batches save round trips on huge trees.
+const COUNT_BATCH: usize = 10_000;
 /// Missing articles in the HTML tables.
 const MAX_SHOWN: usize = 5_000;
 const LINKS_FROM: &str = "SELECT DISTINCT lt_title FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
@@ -187,11 +189,24 @@ struct Wanted {
     links: u64,
 }
 
+/// Link counts for the missing articles of a category tree.
+struct Counts {
+    counts: HashMap<String, u64>,
+    /// Some titles were left out by the per-batch limit or the global trim.
+    capped: bool,
+    /// The query budget ran out while counting.
+    timed_out: bool,
+}
+
 struct Results {
     /// Articles whose links were looked at.
     pages: usize,
     /// The category tree had more articles than [`MAX_PAGES`].
     pages_truncated: bool,
+    /// Some linked titles were left out before they could be counted.
+    counts_capped: bool,
+    /// The query budget ran out; the results are partial.
+    timed_out: bool,
     /// More than [`MAX_RESULTS`] missing articles were found.
     results_truncated: bool,
     template_links: usize,
@@ -220,6 +235,11 @@ impl Results {
     /// As many alphabetically sorted entries as the HTML table shows.
     fn shown_alphabetical(&self) -> impl Iterator<Item = &Wanted> {
         self.alphabetical_entries().take(MAX_SHOWN)
+    }
+
+    /// How many alphabetically sorted entries the HTML table shows, if not all.
+    fn shown_alphabetical_limit(&self) -> Option<usize> {
+        (self.alphabetical.len() > MAX_SHOWN).then_some(MAX_SHOWN)
     }
 
     /// The entries in the order the output wants them.
@@ -280,24 +300,19 @@ pub async fn handler(
 async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Options) -> Result<Results, AppError> {
     let min_links = options.min_links();
     let deadline = Instant::now() + QUERY_BUDGET;
-    let (linking, mut counts, pages_truncated, mut results_truncated) = match source {
+    let (linking, mut counts, pages_truncated, counts_capped, timed_out) = match source {
         Source::Article(id) => {
             let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget"]).await?;
             let links: Vec<String> = select_in(&mut conn, LINKS_FROM, "", &[], std::slice::from_ref(id)).await?;
             let red = without_existing(state, wiki, links).await?;
-            (vec![*id], state.replicas.link_counts(wiki, &red, true).await?, false, false)
+            (vec![*id], state.replicas.link_counts(wiki, &red, true).await?, false, false, false)
         }
         Source::Category { name, depth } => {
             let (ids, truncated) = page_ids_in_tree(state, wiki, name, *depth, deadline).await?;
-            let (counts, results_truncated) = counts_from(state, wiki, &ids, MAX_RESULTS, deadline).await?;
-            (ids, counts, truncated, results_truncated)
+            let Counts { counts, capped, timed_out } = counts_from(state, wiki, &ids, MAX_RESULTS, deadline).await?;
+            (ids, counts, truncated, capped, timed_out)
         }
     };
-    // Fewer titles to check for existence.
-    counts.retain(|_, n| *n >= min_links);
-    let red: HashSet<String> =
-        without_existing(state, wiki, counts.keys().cloned().collect()).await?.into_iter().collect();
-    counts.retain(|title, _| red.contains(title));
     counts.retain(|_, n| *n >= min_links);
     let mut template_links = 0;
     if options.skip_template_links {
@@ -316,21 +331,30 @@ async fn results(state: &AppState, wiki: &Wiki, source: &Source, options: &Optio
             links,
         })
         .collect();
-    if wanted.len() > MAX_RESULTS {
+    let results_truncated = wanted.len() > MAX_RESULTS;
+    if results_truncated {
         wanted.truncate(MAX_RESULTS);
-        results_truncated = true;
     }
     let alphabetical = alphabetical(&wanted);
-    if (pages_truncated || results_truncated)
+    if (pages_truncated || counts_capped || timed_out)
         && let Source::Category { name, depth } = source
     {
         tracing::info!(
-            "missingtopics: {name} (depth {depth}): {} pages, {} results (truncated)",
+            "missingtopics: {name} (depth {depth}): {} pages, {} results (partial)",
             linking.len(),
             wanted.len()
         );
     }
-    Ok(Results { pages: linking.len(), pages_truncated, results_truncated, template_links, wanted, alphabetical })
+    Ok(Results {
+        pages: linking.len(),
+        pages_truncated,
+        counts_capped,
+        timed_out,
+        results_truncated,
+        template_links,
+        wanted,
+        alphabetical,
+    })
 }
 
 /// Most links first, then by title.
@@ -394,47 +418,58 @@ async fn without_existing(state: &AppState, wiki: &Wiki, titles: Vec<String>) ->
     Ok(titles.into_iter().filter(|t| !existing.contains(t)).collect())
 }
 
-/// How many of the pages link to each article title, keeping the `limit` most
-/// wanted titles; the flag says more were found. The limit is applied per
-/// chunk of pages, and the query budget stops very large trees.
+/// Count links to missing articles only, so the cap is not spent on existing ones.
+fn missing_link_counts_sql(placeholders: &str, limit: usize) -> String {
+    format!(
+        "SELECT c.lt_title, c.n FROM (
+            SELECT lt_title, COUNT(*) AS n FROM pagelinks
+            JOIN linktarget ON pl_target_id=lt_id
+            WHERE lt_namespace=0 AND pl_from IN ({placeholders})
+            GROUP BY lt_title
+        ) c
+        WHERE NOT EXISTS (SELECT 1 FROM page p WHERE p.page_namespace=0 AND p.page_title=c.lt_title)
+        ORDER BY c.n DESC LIMIT {limit}"
+    )
+}
+
+/// How many of the pages link to each missing article title, keeping the
+/// `limit` most wanted titles. The flags say whether the counting was cut short.
+/// The limit is applied per chunk of pages, and the query budget stops very
+/// large trees.
 async fn counts_from(
     state: &AppState,
     wiki: &Wiki,
     page_ids: &[u64],
     limit: usize,
     deadline: Instant,
-) -> anyhow::Result<(HashMap<String, u64>, bool)> {
-    let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget"]).await?;
+) -> anyhow::Result<Counts> {
+    let mut conn = state.replicas.conn(wiki, &["pagelinks", "linktarget", "page"]).await?;
     let mut counts = HashMap::new();
-    let mut truncated = false;
-    for chunk in page_ids.chunks(5000) {
+    let mut capped = false;
+    let mut timed_out = false;
+    for chunk in page_ids.chunks(COUNT_BATCH) {
         if Instant::now() >= deadline {
-            truncated = true;
+            timed_out = true;
             break;
         }
-        let sql = format!(
-            "SELECT lt_title, COUNT(*) FROM pagelinks JOIN linktarget ON pl_target_id=lt_id
-             WHERE lt_namespace=0 AND pl_from IN ({}) GROUP BY lt_title
-             ORDER BY COUNT(*) DESC LIMIT {limit}",
-            placeholders(chunk.len())
-        );
+        let sql = missing_link_counts_sql(&placeholders(chunk.len()), limit);
         let params: Vec<DbValue> = chunk.iter().map(|id| DbValue::from(*id)).collect();
         let rows: Vec<(String, u64)> = conn.exec(sql, DbParams::Positional(params)).await?;
         if rows.len() >= limit {
-            truncated = true;
+            capped = true;
         }
         for (title, n) in rows {
             *counts.entry(title).or_default() += n;
         }
         if counts.len() > limit {
             trim_top(&mut counts, limit);
-            truncated = true;
+            capped = true;
         }
     }
     if counts.len() >= limit {
-        truncated = true;
+        capped = true;
     }
-    Ok((counts, truncated))
+    Ok(Counts { counts, capped, timed_out })
 }
 
 /// Keep the `limit` titles with the most links.
@@ -532,6 +567,20 @@ mod tests {
         }
     }
 
+    fn results_for(wanted: Vec<Wanted>) -> Results {
+        let alphabetical = alphabetical(&wanted);
+        Results {
+            pages: 0,
+            pages_truncated: false,
+            counts_capped: false,
+            timed_out: false,
+            results_truncated: false,
+            template_links: 0,
+            wanted,
+            alphabetical,
+        }
+    }
+
     #[test]
     fn options_as_the_old_tool_read_them() {
         let empty = Options::new(&request(""));
@@ -610,17 +659,23 @@ mod tests {
     }
 
     #[test]
+    fn counts_only_missing_articles() {
+        let sql = missing_link_counts_sql("?,?", 5);
+        assert!(sql.contains("pl_from IN (?,?)"));
+        assert!(sql.contains("page_title=c.lt_title"));
+        assert!(sql.ends_with("LIMIT 5"));
+    }
+
+    #[test]
+    fn notes_the_alphabetical_table_limit() {
+        assert_eq!(results_for(vec![wanted("A", 1)]).shown_alphabetical_limit(), None);
+        let long: Vec<Wanted> = (0..=MAX_SHOWN).map(|i| wanted(&format!("T{i:05}"), 1)).collect();
+        assert_eq!(results_for(long).shown_alphabetical_limit(), Some(MAX_SHOWN));
+    }
+
+    #[test]
     fn wiki_lists_use_their_order() {
-        let wanted = vec![wanted("B", 2), wanted("A", 1)];
-        let alphabetical = alphabetical(&wanted);
-        let results = Results {
-            pages: 0,
-            pages_truncated: false,
-            results_truncated: false,
-            template_links: 0,
-            wanted,
-            alphabetical,
-        };
+        let results = results_for(vec![wanted("B", 2), wanted("A", 1)]);
         let titles = |output| results.for_output(output).iter().map(|w| w.title.clone()).collect::<Vec<_>>();
         assert_eq!(titles(Output::WikiList), ["A", "B"]);
         assert_eq!(titles(Output::WikiListByDemand), ["B", "A"]);
