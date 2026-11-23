@@ -7,7 +7,7 @@ use crate::mediawiki;
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::Wiki;
+use crate::wiki::{DEFAULT_LANGUAGE, Wiki};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -33,7 +33,7 @@ pub struct Request {
 
 impl Default for Request {
     fn default() -> Self {
-        Self { language: "en".to_string(), category: String::new(), depth: None }
+        Self { language: DEFAULT_LANGUAGE.to_string(), category: String::new(), depth: None }
     }
 }
 

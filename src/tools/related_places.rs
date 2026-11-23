@@ -5,7 +5,7 @@
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::Wiki;
+use crate::wiki::{DEFAULT_LANGUAGE, DEFAULT_PROJECT, Wiki};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -36,8 +36,8 @@ pub struct Request {
 impl Default for Request {
     fn default() -> Self {
         Self {
-            language: "en".to_string(),
-            project: "wikipedia".to_string(),
+            language: DEFAULT_LANGUAGE.to_string(),
+            project: DEFAULT_PROJECT.to_string(),
             namespace: 0,
             title: String::new(),
             format: String::new(),

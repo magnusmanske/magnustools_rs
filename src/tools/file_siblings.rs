@@ -4,7 +4,7 @@
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, percent_encode, ucfirst, wiki_urlencode};
+use crate::wiki::{Wiki, default_commons_language, percent_encode, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -21,7 +21,6 @@ const THUMB_SIZE: u32 = 100;
 const MAX_GALLERIES: usize = 50;
 /// A file can be in very many categories; keep the page responsive.
 const MAX_CATEGORIES: usize = 200;
-const DEFAULT_LANGUAGE: &str = "commons";
 
 const IGNORED_CATEGORIES: &[(&str, &[&str])] = &[
     ("de.wikipedia", &["GFDL", "PD", "CC", "In SVG konvertieren", "Public-Domain", "Frei-Bild", "Bild-", "Wikipedia:"]),
@@ -49,7 +48,7 @@ const IGNORED_CATEGORIES: &[(&str, &[&str])] = &[
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
-    #[serde(default = "default_language")]
+    #[serde(default = "default_commons_language")]
     language: String,
     project: Option<String>,
     #[serde(default)]
@@ -62,10 +61,6 @@ pub struct Request {
     #[serde(default)]
     message: String,
     uselang: Option<String>,
-}
-
-fn default_language() -> String {
-    DEFAULT_LANGUAGE.to_string()
 }
 
 impl Request {

@@ -6,7 +6,7 @@ use crate::mediawiki::{PageContent, page_contents, title_key};
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, percent_encode, ucfirst, wiki_urlencode};
+use crate::wiki::{Wiki, default_commons_language, percent_encode, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -24,7 +24,7 @@ const DEFAULT_LIMIT: usize = 25;
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
-    #[serde(default = "default_language")]
+    #[serde(default = "default_commons_language")]
     language: String,
     project: Option<String>,
     #[serde(default)]
@@ -41,10 +41,6 @@ pub struct Request {
     limit: Option<String>,
     offset: Option<String>,
     doit: Option<String>,
-}
-
-fn default_language() -> String {
-    "commons".to_string()
 }
 
 impl Request {

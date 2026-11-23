@@ -4,7 +4,7 @@
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Pager, Params, render};
-use crate::wiki::{Wiki, ucfirst};
+use crate::wiki::{DEFAULT_LANGUAGE, DEFAULT_LANGUAGE_DE, WIKIPEDIA_PROJECT, Wiki, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{IntoResponse, Redirect, Response};
@@ -15,9 +15,6 @@ use std::sync::Arc;
 use wikimisc::mysql_async::prelude::Queryable;
 use wikimisc::mysql_async::{Params as DbParams, Value};
 
-const DEFAULT_LANGUAGE1: &str = "de";
-const DEFAULT_LANGUAGE2: &str = "en";
-const DEFAULT_PROJECT: &str = "wiki";
 const DEFAULT_DEPTH: u32 = 9;
 const MAX_DEPTH: u32 = 20;
 const DEFAULT_LIMIT: usize = 100;
@@ -29,8 +26,12 @@ const MAX_PILE_PAGES: usize = 100_000;
 /// Results kept in memory, and in a PagePile we create.
 const MAX_OUTPUT: usize = 100_000;
 
-const PROJECTS: &[(&str, &str)] =
-    &[("wiki", "Wikipedia"), ("wikisource", "Wikisource"), ("wikivoyage", "Wikivoyage"), ("wiktionary", "Wiktionary")];
+const PROJECTS: &[(&str, &str)] = &[
+    (WIKIPEDIA_PROJECT, "Wikipedia"),
+    ("wikisource", "Wikisource"),
+    ("wikivoyage", "Wikivoyage"),
+    ("wiktionary", "Wiktionary"),
+];
 
 /// Content language for Wikidata labels; these wikis' codes differ.
 fn content_language(language: &str) -> &str {
@@ -61,7 +62,7 @@ fn text_or(value: &str, default: &str) -> String {
 
 fn project_family(project: &str) -> Result<&'static str, AppError> {
     match project {
-        "" | "wiki" => Ok("wikipedia"),
+        "" | WIKIPEDIA_PROJECT => Ok("wikipedia"),
         "wikisource" => Ok("wikisource"),
         "wikivoyage" => Ok("wikivoyage"),
         "wiktionary" => Ok("wiktionary"),
@@ -176,14 +177,14 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Params(request): Params<Request>,
 ) -> Result<Response, AppError> {
-    let lang1 = text_or(&request.lang1, DEFAULT_LANGUAGE1);
-    let lang2 = text_or(&request.lang2, DEFAULT_LANGUAGE2);
+    let lang1 = text_or(&request.lang1, DEFAULT_LANGUAGE_DE);
+    let lang2 = text_or(&request.lang2, DEFAULT_LANGUAGE);
     let proj1 = match request.proj1.trim() {
-        "" => DEFAULT_PROJECT.to_string(),
+        "" => WIKIPEDIA_PROJECT.to_string(),
         proj => proj.to_lowercase(),
     };
     let proj2 = match request.proj2.trim() {
-        "" => DEFAULT_PROJECT.to_string(),
+        "" => WIKIPEDIA_PROJECT.to_string(),
         proj => proj.to_lowercase(),
     };
     let category = category_title(&request.cat);

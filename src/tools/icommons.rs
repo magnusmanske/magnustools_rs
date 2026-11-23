@@ -7,7 +7,7 @@ use crate::mediawiki::{self, WikiApiError, strip_namespace};
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params};
-use crate::wiki::{Wiki, is_language_code, percent_encode, ucfirst, wiki_urlencode};
+use crate::wiki::{DEFAULT_LANGUAGE, Wiki, is_language_code, percent_encode, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::HeaderName;
@@ -55,7 +55,7 @@ impl Default for Request {
             search: String::new(),
             image: String::new(),
             category: String::new(),
-            language: "en".to_string(),
+            language: DEFAULT_LANGUAGE.to_string(),
         }
     }
 }

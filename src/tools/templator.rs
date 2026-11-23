@@ -6,7 +6,7 @@ use crate::mediawiki;
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, is_language_code, percent_encode, ucfirst};
+use crate::wiki::{DEFAULT_LANGUAGE_DE, Wiki, is_language_code, percent_encode, ucfirst};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 const CONFIG_PREFIX: &str = "Templator/";
-const DEFAULT_LANGUAGE: &str = "de";
 /// Between descriptions, to render them all in one go.
 const SPLIT: &str = "TEMPLATORSPLIT";
 
@@ -174,7 +173,7 @@ pub async fn handler(
     Params(request): Params<Request>,
 ) -> Result<Html<String>, AppError> {
     let language = match request.get("language").to_lowercase() {
-        l if l.is_empty() => DEFAULT_LANGUAGE.to_string(),
+        l if l.is_empty() => DEFAULT_LANGUAGE_DE.to_string(),
         l if is_language_code(&l) => l,
         l => return Err(AppError::BadRequest(format!("“{l}” is not a language code."))),
     };

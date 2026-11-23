@@ -5,7 +5,7 @@ use crate::mediawiki;
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, jsonp, render};
-use crate::wiki::Wiki;
+use crate::wiki::{Wiki, default_language, default_project};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
@@ -22,14 +22,6 @@ pub struct Request {
     #[serde(default)]
     title: String,
     callback: Option<String>,
-}
-
-fn default_language() -> String {
-    "en".to_string()
-}
-
-fn default_project() -> String {
-    "wikipedia".to_string()
 }
 
 #[derive(Template)]

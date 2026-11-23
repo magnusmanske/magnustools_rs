@@ -9,8 +9,6 @@ use wikimisc::escape;
 use wikimisc::mysql_async::prelude::{FromRow, Queryable};
 use wikimisc::mysql_async::{Conn, Params as DbParams, Value as DbValue};
 
-pub(super) const DEFAULT_LANGUAGE: &str = "de";
-pub(super) const DEFAULT_PROJECT: &str = "wikipedia";
 pub(super) const NS_ARTICLE: i64 = 0;
 pub(super) const MAX_DEPTH: u32 = 20;
 /// Pages rendered for one request; a huge category tree must not use unbounded memory.
@@ -19,14 +17,6 @@ pub(super) const MAX_PAGES: usize = 10_000;
 pub(super) const TOOL_BASE: &str = "https://magnustools.toolforge.org";
 /// Values per `IN (…)` list, as the replica queries use.
 const CHUNK: usize = 5_000;
-
-pub(super) fn default_language() -> String {
-    DEFAULT_LANGUAGE.to_string()
-}
-
-pub(super) fn default_project() -> String {
-    DEFAULT_PROJECT.to_string()
-}
 
 /// The category depth, with the old tools' default; invalid input falls back.
 pub(super) fn depth(value: Option<&str>, default: u32) -> u32 {

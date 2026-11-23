@@ -8,7 +8,7 @@
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Pager, Params, render};
-use crate::wiki::{Wiki, percent_encode};
+use crate::wiki::{COMMONS_LANGUAGE, COMMONS_PROJECT, Wiki, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -59,8 +59,8 @@ pub struct Request {
 impl Default for Request {
     fn default() -> Self {
         Self {
-            language: "commons".to_string(),
-            project: "wikimedia".to_string(),
+            language: COMMONS_LANGUAGE.to_string(),
+            project: COMMONS_PROJECT.to_string(),
             startswith: String::new(),
             after: None,
             user: String::new(),

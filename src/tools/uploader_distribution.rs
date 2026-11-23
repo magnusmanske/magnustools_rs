@@ -5,7 +5,7 @@
 use crate::replicas::{CATEGORY_TABLES, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::Wiki;
+use crate::wiki::{Wiki, default_commons_language, default_commons_project};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -23,19 +23,11 @@ pub struct Request {
     cat1: String,
     #[serde(default)]
     cat2: String,
-    #[serde(default = "default_language")]
+    #[serde(default = "default_commons_language")]
     lang: String,
-    #[serde(default = "default_project")]
+    #[serde(default = "default_commons_project")]
     project: String,
     doit: Option<String>,
-}
-
-fn default_language() -> String {
-    "commons".to_string()
-}
-
-fn default_project() -> String {
-    "wikimedia".to_string()
 }
 
 struct Uploader {

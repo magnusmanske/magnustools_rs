@@ -4,7 +4,7 @@
 use crate::replicas::{CATEGORY_TABLES, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, percent_encode};
+use crate::wiki::{Wiki, default_language, default_project, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -28,14 +28,6 @@ pub struct Request {
     ignore: String,
     min_group: Option<String>,
     menu: Option<String>,
-}
-
-fn default_language() -> String {
-    "en".to_string()
-}
-
-fn default_project() -> String {
-    "wikipedia".to_string()
 }
 
 impl Request {

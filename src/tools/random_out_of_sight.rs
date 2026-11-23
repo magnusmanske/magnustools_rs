@@ -5,7 +5,7 @@
 use super::sighting;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::Wiki;
+use crate::wiki::{Wiki, default_de, default_project};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -31,13 +31,7 @@ pub struct Request {
 
 impl Default for Request {
     fn default() -> Self {
-        Self {
-            language: sighting::default_language(),
-            project: sighting::default_project(),
-            out: None,
-            limit: None,
-            doit: None,
-        }
+        Self { language: default_de(), project: default_project(), out: None, limit: None, doit: None }
     }
 }
 

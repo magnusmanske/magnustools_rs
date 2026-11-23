@@ -5,7 +5,7 @@ use crate::cache::TimedMap;
 use crate::mediawiki;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, percent_encode};
+use crate::wiki::{Wiki, default_de, default_project, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -22,7 +22,7 @@ static TEMPLATES: TimedMap<String, Option<String>> = TimedMap::new(Duration::fro
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
-    #[serde(default = "default_language")]
+    #[serde(default = "default_de")]
     language: String,
     #[serde(default = "default_project")]
     project: String,
@@ -30,14 +30,6 @@ pub struct Request {
     cas: String,
     #[serde(default)]
     title: String,
-}
-
-fn default_language() -> String {
-    "de".to_string()
-}
-
-fn default_project() -> String {
-    "wikipedia".to_string()
 }
 
 /// A CAS registry number: 2-7 digits, 2 digits, a check digit.

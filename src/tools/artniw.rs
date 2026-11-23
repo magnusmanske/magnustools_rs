@@ -7,7 +7,7 @@ use crate::replicas::select_in;
 use crate::state::AppState;
 use crate::tools::interwiki::{self, MAX_RESULTS};
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, percent_encode};
+use crate::wiki::{Wiki, default_wikipedia_project, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -20,7 +20,7 @@ use wikimisc::mysql_async::prelude::Queryable;
 pub struct Request {
     #[serde(default)]
     l1: String,
-    #[serde(default = "default_project")]
+    #[serde(default = "default_wikipedia_project")]
     pr: String,
     #[serde(default = "default_namespace")]
     ns: String,
@@ -34,10 +34,6 @@ pub struct Request {
     sub: Option<String>,
     #[serde(default)]
     go: Option<String>,
-}
-
-fn default_project() -> String {
-    "wiki".to_string()
 }
 
 fn default_namespace() -> String {

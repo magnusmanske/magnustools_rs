@@ -7,7 +7,7 @@ use crate::regex;
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, ucfirst, wiki_urlencode};
+use crate::wiki::{COMMONS_PROJECT, DEFAULT_LANGUAGE_DE, DEFAULT_PROJECT, Wiki, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -25,8 +25,6 @@ const MAX_UPLOADER_FILES: usize = 10_000;
 const MAX_OLD_FILES: usize = 1_000;
 /// Files per API request; each also needs its talk page, so this is 50 titles.
 const API_BATCH: usize = 25;
-const DEFAULT_LANGUAGE: &str = "de";
-const DEFAULT_PROJECT: &str = "wikipedia";
 const DEFAULT_MIN_DAYS: u32 = 14;
 const DELETE_REASONS: [&str; 5] =
     ["not edited for %d days", "no source", "no license", "no permission", "replaceable fair use"];
@@ -140,9 +138,9 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     Params(request): Params<Request>,
 ) -> Result<Html<String>, AppError> {
-    let language = text_or(&request.language, DEFAULT_LANGUAGE);
+    let language = text_or(&request.language, DEFAULT_LANGUAGE_DE);
     let project = match language.eq_ignore_ascii_case("commons") {
-        true => "wikimedia".to_string(),
+        true => COMMONS_PROJECT.to_string(),
         false => text_or(&request.project, DEFAULT_PROJECT),
     };
     let category = category_title(&request.category);

@@ -12,7 +12,7 @@ use crate::mediawiki::{self, Api};
 use crate::replicas::{db_title, display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, percent_encode, wiki_urlencode};
+use crate::wiki::{DEFAULT_LANGUAGE, DEFAULT_PROJECT, Wiki, percent_encode, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -106,8 +106,8 @@ pub async fn handler(
     Params(request): Params<Request>,
 ) -> Result<Response, AppError> {
     let title = request.title.trim().to_string();
-    let language = normalized(request.language.as_deref(), "en");
-    let project = normalized(request.project.as_deref(), "wikipedia");
+    let language = normalized(request.language.as_deref(), DEFAULT_LANGUAGE);
+    let project = normalized(request.project.as_deref(), DEFAULT_PROJECT);
     let mut page = Page {
         title: "Wiki ToDo",
         labels: Labels::default(),

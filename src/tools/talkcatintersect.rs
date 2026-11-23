@@ -5,7 +5,7 @@ use crate::mediawiki;
 use crate::replicas::{display_title, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::Wiki;
+use crate::wiki::{Wiki, default_language, default_project};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -33,14 +33,6 @@ pub struct Request {
     #[serde(default)]
     d: Option<String>,
     limit: Option<String>,
-}
-
-fn default_language() -> String {
-    "en".to_string()
-}
-
-fn default_project() -> String {
-    "wikipedia".to_string()
 }
 
 struct Entry {

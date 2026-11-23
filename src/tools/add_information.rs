@@ -8,7 +8,7 @@ use crate::mediawiki::{self, strip_namespace};
 use crate::regex;
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, ucfirst, wiki_urlencode};
+use crate::wiki::{COMMONS_LANGUAGE, DEFAULT_PROJECT, Wiki, ucfirst, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -84,8 +84,8 @@ pub struct Request {
 impl Default for Request {
     fn default() -> Self {
         Self {
-            language: "commons".to_string(),
-            project: "wikipedia".to_string(),
+            language: COMMONS_LANGUAGE.to_string(),
+            project: DEFAULT_PROJECT.to_string(),
             image: String::new(),
             user: String::new(),
             debug: None,

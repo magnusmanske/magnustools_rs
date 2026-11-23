@@ -7,7 +7,7 @@ use crate::mediawiki;
 use crate::replicas::{db_title, display_title, placeholders, select_in};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render, thousands};
-use crate::wiki::Wiki;
+use crate::wiki::{DEFAULT_LANGUAGE_DE, DEFAULT_PROJECT, Wiki};
 use askama::Template;
 use axum::Json;
 use axum::extract::State;
@@ -101,8 +101,8 @@ impl Request {
 impl Default for Request {
     fn default() -> Self {
         Self {
-            language: "de".to_string(),
-            project: "wikipedia".to_string(),
+            language: DEFAULT_LANGUAGE_DE.to_string(),
+            project: DEFAULT_PROJECT.to_string(),
             article: String::new(),
             category: String::new(),
             depth: None,

@@ -4,7 +4,7 @@
 use crate::mediawiki::{self, strip_namespace};
 use crate::state::AppState;
 use crate::web::{AppError, Params, render};
-use crate::wiki::{Wiki, wiki_urlencode};
+use crate::wiki::{Wiki, default_commons_language, default_commons_project, wiki_urlencode};
 use askama::Template;
 use axum::extract::State;
 use axum::http::header;
@@ -22,9 +22,9 @@ const FILE_NAMESPACES: &[&str] = &["file", "image", "datei", "bild"];
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
-    #[serde(default = "default_language")]
+    #[serde(default = "default_commons_language")]
     language: String,
-    #[serde(default = "default_project")]
+    #[serde(default = "default_commons_project")]
     project: String,
     #[serde(default)]
     page: String,
@@ -33,14 +33,6 @@ pub struct Request {
     #[serde(default)]
     depth: String,
     doit: Option<String>,
-}
-
-fn default_language() -> String {
-    "commons".to_string()
-}
-
-fn default_project() -> String {
-    "wikimedia".to_string()
 }
 
 #[derive(Template)]

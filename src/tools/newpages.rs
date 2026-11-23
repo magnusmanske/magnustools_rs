@@ -4,7 +4,7 @@ use crate::mediawiki;
 use crate::replicas::format_timestamp;
 use crate::state::AppState;
 use crate::web::{AppError, Pager, Params, render};
-use crate::wiki::{Wiki, percent_encode};
+use crate::wiki::{Wiki, default_language, default_project, percent_encode};
 use askama::Template;
 use axum::extract::State;
 use axum::response::Html;
@@ -35,14 +35,6 @@ pub struct Request {
     invert: Option<String>,
     limit: Option<String>,
     offset: Option<String>,
-}
-
-fn default_language() -> String {
-    "en".to_string()
-}
-
-fn default_project() -> String {
-    "wikipedia".to_string()
 }
 
 struct Entry {
