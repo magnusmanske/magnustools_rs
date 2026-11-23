@@ -84,7 +84,7 @@ Security:
 
 - [x] wikidata-terminator: ported on 2026-11-13; the SQL-injection note was already stale, and the new query builder validates language/type and uses bound SQL parameters. `main_p31` is seeded by the refresh job.
 - [ ] Wikidata Game: `distributed/api.php` `update_game`/`update_all_games` are unauthenticated and call every registered game's `desc` endpoint. Require auth or run only from cron. The shared game API is Rust, but the classic game's candidate logic is still PHP; both scheduled jobs still fail.
-- [ ] tooltranslate: `store_translation`/`add_tool` do require OAuth, but `update_json` is unauthenticated and builds the output path from the tool name. A logged-in user can add a name with `../`; writes are limited to `toolinfo.json`/`<language>.json` but can overwrite static JSON. Responses also include SQL strings. Fix in PHP now (typed names, no SQL in output, CSRF) whether or not it is ported; 10 open issues (9 Codeberg + 1 WIKI) and 5 OAuth token errors/30d.
+- [x] tooltranslate: `store_translation`/`add_tool` do require OAuth, but `update_json` is unauthenticated and builds the output path from the tool name. A logged-in user can add a name with `../`; writes are limited to `toolinfo.json`/`<language>.json` but can overwrite static JSON. Responses also include SQL strings. Fix in PHP now (typed names, no SQL in output, CSRF) whether or not it is ported; 10 open issues (9 Codeberg + 1 WIKI) and 5 OAuth token errors/30d.
 
 Failing jobs:
 
