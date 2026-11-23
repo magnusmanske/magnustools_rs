@@ -100,8 +100,8 @@ Cheap PHP fixes for the worst errors:
 
 - [x] most-wanted: ported; the `max()` guard is in `hint_categories`, hints/number are capped, and the template-usage query is batched. The 2026-11-14 follow-up chunks `linktarget` ids and filters blue links after grouping, keeping the scan inside the replica statement limit.
 
-- [ ] `ToolforgeCommon.php:705` (`getSPARQLitems` reads `$row->q` whatever the variable): the source of nearly all of the old wikidata-todo error log; the Rust `sparql_rc` stopped the growth, but other PHP tools still include this library (sourcemd still logs `getSPARQLitems` stack traces).
-- [ ] FIST `fist.php`: reuse one connection per replica cluster; map renamed wiki names via the site matrix (e.g. `zh-min-nan`, `be-x-old`, `zh-yue`, `roa-tara`, `bat-smg`); stop using the invalid `commonswiki_p.templatelinks` view and missing `categorylinks` table.
+- [x] `ToolforgeCommon.php:705` (`getSPARQLitems` reads `$row->q` whatever the variable): the source of nearly all of the old wikidata-todo error log; the Rust `sparql_rc` stopped the growth, but other PHP tools still include this library (sourcemd still logs `getSPARQLitems` stack traces).
+- [x] FIST `fist.php`: reuse one connection per replica cluster; map renamed wiki names via the site matrix (e.g. `zh-min-nan`, `be-x-old`, `zh-yue`, `roa-tara`, `bat-smg`); stop using the invalid `commonswiki_p.templatelinks` view and missing `categorylinks` table.
 - [ ] GLAMorous: reject a non-list `projects` parameter (115 `count()` TypeErrors/30d at `glamorous.php:394`).
 - [ ] WikiFlix: fix the `applyDbStatementTimeout` by-reference call into `ToolforgeCommon::getSQL()`; ~984k errors/30d across the web and update logs (273 MB).
 
