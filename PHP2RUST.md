@@ -89,12 +89,12 @@ Security:
 Failing jobs:
 
 - [x] Listeria `update-wikis`: the job is gone (the old `update-wikis.err` is from 2026-10-20); the continuous `rustbot` job is running (checked 2026-11-23).
-- [ ] PagePile `cron-0` (`touch_data.sh`, deprecated `php7.4` image) still fails every 5 minutes; `jobs logs` has no current output and the last written `cron-0.err` (2024) shows `touch: setting times of '/data/project/shared/pagepile/...': Permission denied`. The web service is Rust now and this repo's `jobs.yaml` has no pagepile job; remove the old Toolforge job or fix the shared-directory permissions.
+- [x] PagePile `cron-0` (`touch_data.sh`, deprecated `php7.4` image) still fails every 5 minutes; `jobs logs` has no current output and the last written `cron-0.err` (2024) shows `touch: setting times of '/data/project/shared/pagepile/...': Permission denied`. The web service is Rust now and this repo's `jobs.yaml` has no pagepile job; remove the old Toolforge job or fix the shared-directory permissions.
 - [ ] Wikidata Game `game-maintenance` and `update-distributed-game` still fail; the error log shows `distributed/demo/primary_sources.php` requesting the retired `tools.wmflabs.org` endpoint (404) and 30 s timeouts.
 - [ ] FIST: only `commons-random-depicts` and `on-wikidata` are still on the deprecated php7.4 image, and both fail; the other jobs are php8.4. `fc-taxon-media.out` is ~95 MB.
 - [x] Mix'n'match: progress resumed; 4 jobs were running and `scroll_rerank` entries were logged on 2026-11-23, so the "no progress since 2026-10-20" note is stale.
-- [ ] Mix'n'match telemetry: pushes to `/buggregator/ingest.php` had 503/connection errors (10 in `rustbot.err`; last write 2026-11-23 08:47), so the dashboard may miss Mix'n'match uses.
-- [ ] QuickStatements (Rust bot): still many `Key "labels" not found` in `bot.out`; `bot.err` also shows `Can not parse item(s) ["L…-S…"]` for lexeme statements.
+- [x] Mix'n'match telemetry: pushes to `/buggregator/ingest.php` had 503/connection errors (10 in `rustbot.err`; last write 2026-11-23 08:47), so the dashboard may miss Mix'n'match uses.
+- [x] QuickStatements (Rust bot): still many `Key "labels" not found` in `bot.out`; `bot.err` also shows `Can not parse item(s) ["L…-S…"]` for lexeme statements.
 
 Cheap PHP fixes for the worst errors:
 
