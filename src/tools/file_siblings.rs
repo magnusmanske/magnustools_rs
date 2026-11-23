@@ -486,5 +486,50 @@ mod tests {
         assert!(thumb.src.unwrap().ends_with("?width=100"));
         let gif = thumbnail(&wiki, "B.gif", &HashMap::from([("B.gif".to_string(), (200, 100))]));
         assert!(!gif.src.unwrap().contains("?width"));
+        let unknown = thumbnail(&wiki, "Missing.jpg", &HashMap::new());
+        assert_eq!(unknown.label, "???Missing.jpg");
+        assert!(unknown.src.is_none());
+    }
+
+    #[test]
+    fn thumbnail_markup_escapes_and_keeps_the_language() {
+        let wiki = Wiki::commons();
+        let thumb = Thumb {
+            url: "https://commons.wikimedia.org/wiki/File:A.jpg".into(),
+            src: Some("//upload.example/A.jpg?width=100".into()),
+            width: 100,
+            height: 50,
+            label: "A & B.jpg".into(),
+        };
+        assert_eq!(
+            thumb_html(&wiki, &thumb, "de"),
+            "<a href='https://commons.wikimedia.org/wiki/File:A_%26_B.jpg?uselang=de'>\
+             <img border='0' src='//upload.example/A.jpg?width=100' width='100px' height='50px' \
+             alt='A &amp; B.jpg' title='A &amp; B.jpg' /></a>"
+        );
+        assert!(!thumb_html(&wiki, &thumb, "").contains("uselang="));
+        let no_image = Thumb { src: None, ..thumb };
+        assert_eq!(thumb_html(&wiki, &no_image, ""), "???<br/>A &amp; B.jpg");
+    }
+
+    #[test]
+    fn fragments_render_sections_and_escape_data() {
+        let wiki = Wiki::commons();
+        assert_eq!(fragment(&wiki, &[], "", ""), "");
+        let row = Row {
+            heading: "A & B".into(),
+            heading_url: "https://example.org/?a=1&b=2".into(),
+            note: " [2]".into(),
+            prev: None,
+            next: Some(Thumb { url: String::new(), src: None, width: 100, height: 100, label: "Next.jpg".into() }),
+        };
+        let section = Section { kind: "categories", rows: vec![row] };
+        let html = fragment(&wiki, &[section], "Note <here>", "");
+        assert!(html.contains("background:#99E0FF"));
+        assert!(html.contains("A &amp; B"));
+        assert!(html.contains("https://example.org/?a=1&amp;b=2"));
+        assert!(html.contains("Note &lt;here&gt;"));
+        assert!(html.contains("???<br/>Next.jpg"));
+        assert!(html.contains("background:#EEEEEE"));
     }
 }

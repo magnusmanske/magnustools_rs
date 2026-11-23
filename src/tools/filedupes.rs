@@ -594,4 +594,80 @@ mod tests {
         assert_eq!(info.signature(), "10x2x3x0");
         assert_eq!(info.extension().as_deref(), Some("jpg"));
     }
+
+    #[test]
+    fn file_names_are_normalized() {
+        assert_eq!(normalize_file(" File:some file.jpg "), "Some_file.jpg");
+        assert_eq!(normalize_file("image:some_file.jpg"), "Some_file.jpg");
+        assert_eq!(normalize_file("Template:some file.jpg"), "Template:some_file.jpg");
+        assert_eq!(normalize_file("a.MP3"), "A.MP3", "only the first letter changes case");
+        assert_eq!(normalize_file(""), "");
+    }
+
+    #[test]
+    fn ages_are_counted_in_days() {
+        let three_days = (Utc::now() - Duration::days(3) - Duration::hours(6)).to_rfc3339();
+        assert_eq!(age_days(&three_days), Some(3), "a partial day does not round up");
+        assert_eq!(age_days("2024-01-02"), None);
+    }
+
+    #[test]
+    fn next_page_keeps_the_filters() {
+        let request = Request {
+            language: "commons".into(),
+            project: None,
+            username: String::new(),
+            identicals_only: true,
+            showdesc: true,
+            category: "A B".into(),
+            startat: None,
+            start: None,
+            limit: None,
+            offset: None,
+            doit: Some("1".into()),
+        };
+        let paging = Paging { limit: 25, offset: 1, startat: "X".into() };
+        assert_eq!(
+            next_url(&request, &paging),
+            "/filedupes/?language=commons&project=wikimedia&category=A%20B&startat=X&limit=25&offset=26&doit=1\
+             &identicalsonly=1&showdesc=1"
+        );
+    }
+
+    #[test]
+    fn edit_forms_name_the_file_and_the_duplicate() {
+        let wiki = Wiki::commons();
+        let info = ImageInfo { name: "A.jpg".into(), size: 10, width: 2, height: 3, bits: None };
+        let content = PageContent {
+            text: "Intro {{duplicate|File:B.jpg}} outro".into(),
+            timestamp: "20240102030405".into(),
+            user: "X".into(),
+        };
+        let form = superseded_form(&wiki, &info, &content, "").unwrap();
+        assert_eq!(form.text, "Intro {{superseded|File:B.jpg}} outro");
+        assert_eq!(form.edittime, "20240102030405");
+        assert!(form.action.starts_with("https://commons.wikimedia.org/w/index.php?title=File:A.jpg&action=edit"));
+        assert!(form.summary.contains("only for exactly identical images"));
+        let without_template = PageContent { text: "No duplicate here".into(), ..content };
+        assert!(superseded_form(&wiki, &info, &without_template, "").is_none());
+
+        let universal = universal_form(&wiki, "dupe", "A file.jpg", "B file.jpg", " (note)");
+        assert_eq!(
+            universal.action,
+            "https://commons.wikimedia.org/w/index.php?title=User:CommonsDelinker/commands&action=edit&section=new"
+        );
+        assert_eq!(universal.text, "{{universal replace|A file.jpg|B file.jpg|reason=dupe}}");
+        assert_eq!(universal.summary, "Dummy section, heading can be deleted (note)");
+        assert!(universal.edittime.is_empty());
+        assert_eq!(universal.starttime.len(), 14);
+    }
+
+    #[test]
+    fn deletion_reasons_link_the_duplicate() {
+        let url = delete_url(&Wiki::commons(), "A file.jpg", "B file.jpg");
+        assert!(url.starts_with("https://commons.wikimedia.org/w/index.php?title=File:A_file.jpg&image=A_file.jpg"));
+        assert!(url.contains("action=delete&wpReason=Duplicate%20of%20%5B%5B%3AFile%3AB%20file.jpg%5D%5D"));
+        let without_duplicate = delete_url(&Wiki::commons(), "A file.jpg", "");
+        assert!(without_duplicate.ends_with("wpReason=Duplicate"));
+    }
 }

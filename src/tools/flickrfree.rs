@@ -126,3 +126,35 @@ async fn latest_photos(state: &AppState) -> Result<Vec<Photo>, AppError> {
         .filter(|p| !p.license_name().is_empty() && seen.insert(p.id.clone()))
         .collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(license: &str, dateupload: &str) -> Photo {
+        Photo {
+            id: "123".into(),
+            owner: "42@N00".into(),
+            title: "A photo".into(),
+            license: license.into(),
+            dateupload: dateupload.into(),
+            ownername: String::new(),
+            url_t: String::new(),
+            tags: String::new(),
+        }
+    }
+
+    #[test]
+    fn links_licences_and_upload_dates() {
+        let cc0 = sample("9", "1700000000");
+        assert_eq!(cc0.page_url(), "https://www.flickr.com/photos/42@N00/123");
+        assert_eq!(cc0.owner_url(), "https://www.flickr.com/photos/42@N00");
+        assert_eq!(cc0.upload_url(), "https://flickr2commons.toolforge.org/?photoid=123");
+        assert_eq!(cc0.license_name(), "CC0");
+        assert_eq!(cc0.uploaded(), "2023-11-14 22:13 UTC");
+
+        let unknown = sample("99", "not a time");
+        assert_eq!(unknown.license_name(), "", "an unlisted licence is not offered");
+        assert_eq!(unknown.uploaded(), "");
+    }
+}

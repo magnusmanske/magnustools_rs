@@ -559,4 +559,32 @@ mod tests {
         let clean = clean_paragraph("A [[link]] and {{a template}}.", "en", false, None);
         assert_eq!(clean, "A [[en:link|]] and .");
     }
+
+    #[test]
+    fn image_syntax_is_recognised() {
+        for option in ["thumb", " 300px", "200X150", "alt=Green", "link=", "upright=1.2", "left", "page=2"] {
+            assert!(is_image_option(option), "{option}");
+        }
+        for caption in ["A cat", "300px cat", "alt text", "thumbs"] {
+            assert!(!is_image_option(caption), "{caption}");
+        }
+        assert_eq!(normalize_image("File:A b.jpg"), "A_b.jpg");
+        assert_eq!(normalize_image("image:A_b.jpg"), "A_b.jpg");
+        assert_eq!(normalize_image("Template:A b.jpg"), "Template:A_b.jpg", "other namespaces are kept");
+        assert_eq!(normalized_file(":File:A_b.jpg"), "file:a b.jpg");
+    }
+
+    #[test]
+    fn links_end_after_nested_links() {
+        assert_eq!(find_link_end("A [[linked]] caption]] tail"), Some(20));
+        assert_eq!(find_link_end("ä]] x"), Some(2), "offsets count bytes");
+        assert_eq!(find_link_end("no end"), None);
+    }
+
+    #[test]
+    fn descriptions_are_tidied() {
+        assert_eq!(clean_description("a | b  c"), "a / b c.");
+        assert_eq!(clean_description("Already."), "Already.");
+        assert_eq!(clean_description("  "), "");
+    }
 }

@@ -331,3 +331,95 @@ pub(super) fn iso_time(value: &Value) -> Option<String> {
         .and_then(|t| DateTime::parse_from_rfc3339(t).ok())
         .map(|t| format_time(&t.with_timezone(&Utc).naive_utc()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn repository_urls_name_their_repository() {
+        let github = Forge::GitHub;
+        assert_eq!(
+            github.owner_repo("https://github.com/magnusmanske/quickstatements"),
+            Some(("magnusmanske", "quickstatements"))
+        );
+        assert_eq!(
+            github.owner_repo("https://github.com/magnusmanske/quickstatements/issues"),
+            Some(("magnusmanske", "quickstatements")),
+            "a page below the repository root names the same repository"
+        );
+        assert_eq!(github.owner_repo("https://github.com/o/r.git"), Some(("o", "r")));
+        assert_eq!(github.owner_repo("https://GitHub.com/o/r"), Some(("o", "r")));
+        assert_eq!(github.owner_repo("https://codeberg.org/o/r"), None, "another forge");
+        assert_eq!(github.owner_repo("https://github.com/o"), None);
+        assert_eq!(github.owner_repo("not a URL"), None);
+    }
+
+    #[test]
+    fn api_urls_follow_the_forge() {
+        let github = "https://github.com/o/r/issues";
+        assert_eq!(
+            Forge::GitHub.issues_api(github),
+            Some((format!("https://api.github.com/repos/o/r/issues?state=open&per_page={GITHUB_PAGE}"), GITHUB_PAGE))
+        );
+        assert_eq!(Forge::GitHub.repo_api(github), None, "GitHub's rate limit is too low for an extra call");
+
+        let codeberg = "https://codeberg.org/o/r/src/branch/main";
+        assert_eq!(Forge::Codeberg.repo_api(codeberg).as_deref(), Some("https://codeberg.org/api/v1/repos/o/r"));
+        assert_eq!(
+            Forge::Codeberg.issues_api(codeberg).map(|(url, _)| url).as_deref(),
+            Some("https://codeberg.org/api/v1/repos/o/r/issues?type=issues&state=open&limit=50")
+        );
+    }
+
+    #[test]
+    fn pull_requests_and_times_are_recognised() {
+        assert!(is_issue(&json!({"number": 1})), "GitHub omits `pull_request` for issues");
+        assert!(is_issue(&json!({"pull_request": null})), "Forgejo sets it to null");
+        assert!(!is_issue(&json!({"pull_request": {"url": "https://example.org"}})));
+
+        assert_eq!(iso_time(&json!("2024-01-02T03:04:05Z")).as_deref(), Some("2024-01-02 03:04:05"));
+        assert_eq!(
+            iso_time(&json!("2024-01-02T05:04:05+02:00")).as_deref(),
+            Some("2024-01-02 03:04:05"),
+            "times are stored in UTC"
+        );
+        assert_eq!(iso_time(&json!(null)), None);
+        assert_eq!(iso_time(&json!("yesterday")), None);
+    }
+
+    #[test]
+    fn forge_issues_become_new_issues() {
+        let json = json!({
+            "number": 7,
+            "title": "Broken export",
+            "body": "See https://example.org/a and https://example.org/a, or https://example.org/b",
+            "created_at": "2024-01-02T03:04:05Z",
+            "updated_at": "2024-01-03T04:05:06Z",
+            "user": {"login": "Magnus"}
+        });
+        let issue = new_forge_issue(Forge::Codeberg, &json, 42, "https://codeberg.org/o/r/issues/7");
+        assert_eq!(issue.label, "Broken export");
+        assert_eq!(issue.status, "OPEN");
+        assert_eq!(issue.site, "CODEBERG");
+        assert_eq!(issue.url, "https://codeberg.org/o/r/issues/7");
+        assert_eq!(issue.tool, Some(42));
+        assert_eq!(issue.users, vec!["Magnus"]);
+        assert_eq!(issue.urls, vec!["https://example.org/a", "https://example.org/b"], "URLs are deduplicated");
+        assert_eq!(issue.date_created.as_deref(), Some("2024-01-02 03:04:05"));
+        assert_eq!(issue.date_last.as_deref(), Some("2024-01-03 04:05:06"));
+
+        let minimal = new_forge_issue(Forge::GitHub, &json!({}), 1, "https://github.com/o/r/issues/1");
+        assert_eq!(minimal.label, "");
+        assert_eq!(minimal.description, "");
+        assert!(minimal.users.is_empty());
+        assert_eq!(minimal.date_created, None);
+    }
+
+    #[test]
+    fn excerpts_stop_at_the_limit() {
+        assert_eq!(excerpt("short"), "short");
+        assert_eq!(excerpt(&"ä".repeat(400)).chars().count(), 300, "counted in characters, not bytes");
+    }
+}

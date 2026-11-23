@@ -593,4 +593,42 @@ mod tests {
         assert!(html.contains("Article (2)"));
         assert!(html.contains("Remove “no” tags"));
     }
+
+    #[test]
+    fn global_usage_groups_by_wiki_and_namespace() {
+        let mut by_wiki: BTreeMap<String, BTreeMap<String, u64>> = BTreeMap::new();
+        by_wiki.insert("enwiki".to_string(), BTreeMap::from([(String::new(), 3u64), ("Category".to_string(), 1)]));
+        by_wiki.insert("dewiki".to_string(), BTreeMap::from([(String::new(), 2u64)]));
+        by_wiki.insert("unknown-db".to_string(), BTreeMap::from([(String::new(), 1u64)]));
+        let usages: Usages = HashMap::from([("A file.jpg".to_string(), by_wiki)]);
+        let global = usage("A file.jpg", usages.get("A file.jpg"));
+        assert!(!global.none);
+        assert_eq!(global.detail_url, "https://commons.wikimedia.org/wiki/Special:GlobalUsage/A_file.jpg");
+        assert_eq!(global.lines.len(), 3);
+        assert_eq!(global.lines[0].wiki, "de.wikipedia.org", "lines are sorted by wiki");
+        assert_eq!(global.lines[0].namespaces, "Article (2)");
+        assert_eq!(global.lines[1].wiki, "en.wikipedia.org");
+        assert_eq!(global.lines[1].namespaces, "Article (3), Category (1)");
+        assert_eq!(global.lines[2].wiki, "unknown-db", "unknown database names are kept as they are");
+        assert_eq!(global.lines[2].namespaces, "Article (1)");
+
+        let unused = usage("A file.jpg", None);
+        assert!(unused.none);
+        assert!(unused.lines.is_empty());
+    }
+
+    #[test]
+    fn edit_and_delete_links_carry_the_revision_time() {
+        let wiki = Wiki::commons();
+        let button = edit_button(&wiki, "A file.jpg", "new text", 1_700_000_000);
+        assert!(button.action_url.contains("title=File%3AA+file.jpg&action=edit"));
+        assert_eq!(button.edit_time, "20231114221320");
+        assert_eq!(button.text, "new text");
+        assert_eq!(button.summary, REMOVE_TAGS_SUMMARY);
+        assert_eq!(button.start_time.len(), 14);
+
+        let url = delete_url(&wiki, "Foo Bar", "A file.jpg", "not edited for 14 days");
+        assert!(url.contains("In+category+%5B%5B%3ACategory%3AFoo+Bar%7CFoo+Bar%5D%5D"));
+        assert!(url.contains("not+edited+for+14+days"));
+    }
 }

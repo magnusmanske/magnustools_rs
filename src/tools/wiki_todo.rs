@@ -1108,6 +1108,26 @@ mod tests {
         assert_eq!(entry_titles(&page, "links", 0, false), vec!["Star Trek: Voyager"]);
     }
 
+    #[test]
+    fn categories_and_outgoing_links_are_counted() {
+        let config = Config::parse(concat!(
+            "; disamb_key : Disambiguation\n",
+            "; linksout_sg : link\n",
+            "; linksout_pl : links\n",
+            "; ofwhich_exists_sg : , $1 exists\n",
+            "; ofwhich_exists_pl : , $1 exist\n",
+        ));
+        assert!(category_matches(&config, &["disambiguation pages".to_string()]));
+        assert!(!category_matches(&config, &["Stubs".to_string()]));
+        assert!(!category_matches(&Config::parse(""), &["Anything".to_string()]), "no key means no match");
+
+        let links = vec!["A".to_string(), "B".to_string(), "C".to_string()];
+        let existing = HashSet::from(["A".to_string()]);
+        assert_eq!(outgoing_item(&config, &links, &existing), "3 links, 1 exists");
+        assert_eq!(outgoing_item(&config, &links[..1], &existing), "1 link, 1 exists");
+        assert_eq!(outgoing_item(&config, &links, &HashSet::new()), "3 links");
+    }
+
     #[tokio::test]
     async fn form_renders_without_a_config_fetch() {
         let dir = tempfile::tempdir().unwrap();

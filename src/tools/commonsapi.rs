@@ -878,4 +878,51 @@ mod tests {
         assert_eq!(element_name("1 bad<name>"), "_1_bad_name_");
         assert_eq!(attribute("a\"<b>&"), "a&quot;&lt;b&gt;&amp;");
     }
+
+    #[test]
+    fn license_terms_follow_their_heading() {
+        let text = "== License data ==\n=== CC-BY-2.5 ===\n;full_name:First\n;full_name:Second\n\
+                    === GFDL ===\n;full_name:GNU\n== Ignore categories ==\n* Media_with locations\n";
+        let data = LicenseData::parse(text);
+        assert_eq!(data.terms["CC-BY-2.5"], pairs(&[("full_name", "Second")]), "a repeated key is overwritten");
+        assert_eq!(data.terms["GFDL"], pairs(&[("full_name", "GNU")]), "terms start fresh per heading");
+        assert_eq!(data.ignore, vec!["Media with locations"], "underscores in names are spaces");
+    }
+
+    #[test]
+    fn categories_flags_are_deduplicated() {
+        let categories: Vec<String> = [
+            "Featured pictures on Wikimedia Commons",
+            "Featured pictures on Wikimedia Commons",
+            "Pictures of the day (2008)",
+            "Pictures of the day (2009)",
+            "Unknown category",
+        ]
+        .iter()
+        .map(|c| c.to_string())
+        .collect();
+        let sorted = Categories::new(&categories, &LicenseData::default());
+        assert_eq!(
+            sorted.flags,
+            vec![("featuredpicture", "1".to_string()), ("pictureoftheday", "2008-00-00".to_string())],
+            "the first picture of the day wins"
+        );
+        assert_eq!(sorted.other, vec!["Unknown category"]);
+    }
+
+    #[test]
+    fn json_attributes_keep_the_text_as_value() {
+        let mut root = Element::new("root");
+        root.push(Element::text("name", "A").attribute("code", "en"));
+        root.push(Element::text("name", "B").attribute("code", "de"));
+        root.push(Element::text("plain", "x"));
+        root.push(Element::text("plain", "y"));
+        assert_eq!(
+            root.to_json(),
+            json!({
+                "name": [{"code": "en", "value": "A"}, {"code": "de", "value": "B"}],
+                "plain": ["x", "y"]
+            })
+        );
+    }
 }
