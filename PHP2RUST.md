@@ -1,8 +1,8 @@
 # PHP to Rust: which tools to convert
 
-Triage of the tools on the [main page](https://magnustools.toolforge.org/) that are not Rust yet, by expected gain in efficiency, stability, speed and memory. As of 2026-11-11; status updated 2026-11-13.
+Triage of the tools on the [main page](https://magnustools.toolforge.org/) that are not Rust yet, by expected gain in efficiency, stability, speed and memory. As of 2026-11-23.
 
-Based on: usage over 30 days to 2026-11-11 (logger uses, dashboard requests), the code (`~/php/<tool>` and `/data/project/<tool>`), live HTTP checks on 2026-11-11, job status on Toolforge, and each tool's live `service.manifest`. The `tool` table's `webserver_type` was stale in a few tombstone rows (the old `catfood` `commons_image_feed` row, the erwin85/joanjoc redirect rows, and `referee`); those are updated as of 2026-11-13, and the live `service.manifest` remains the source of truth.
+Based on: usage over 30 days to 2026-11-23 (logger uses, dashboard requests), the code (`~/php/<tool>` and `/data/project/<tool>`), live HTTP checks on 2026-11-23, job status on Toolforge, and each tool's live `service.manifest`. The `tool` table now has the magpie rows (`commonshelper`, `geograph2commons`, `url2commons`, `flickr2commons`) as `rust/axum`, but still says `php8.2` for WikiShootMe, Reasonator and WikiFlix, whose live manifests say `php8.4`; the live `service.manifest` remains the source of truth.
 
 ## Already Rust
 
@@ -10,9 +10,11 @@ PetScan, Mix'n'match, QuickStatements (web and bot, since ~2026-10-21), Listeria
 
 PagePile's service is also Rust (`~/rust/pagepile`, plus the `pagepile` client crate); the PHP class and entry points remain for tools that include them. isbn2wiki is part of magnustools since 2026-11-12, with its ISBN lookups in the published `bookmeta` crate; its old subdomain is a Toolforge redirect container. WD-FIST's core logic is Rust in `petscan_rs` (`src/wdfist.rs`, PetScan's `wdf_main` mode); only the standalone `fist.toolforge.org/wdfist` UI/API is still PHP. Catfood's service is Rust; its stale `commons_image_feed` row is now marked retired.
 
-**Status on 2026-11-13:** the 503 incident is over. isbn2wiki moved to magnustools on 2026-11-12; its old subdomain is a redirect container. The other PHP tools checked on 2026-11-11 (GLAMorous, tooltranslate, WikiShootMe, commonshelper, FIST, sourcemd, geograph2commons, reasonator) answered 200 then. The recent ports are `usualsuspects` and `not-in-the-other-language` (2026-11-08), sighting's three pages (2026-11-10), dnbtools' four pages (2026-11-10), most-wanted (2026-11-11, with 11 daily wiki jobs), isbn2wiki (2026-11-12), referee (now in wd-infernal, 2026-11-13), and the six low-use tools catnap, file-siblings, filedupes, multidesc, new-page-linker and wikidata-terminator (2026-11-13, the last with a daily candidate-refresh job). PagePile's tool row is now `rust/axum`. Reasonator is not a PHP port target: V2 is client-side JS and the PHP shell is OAuth/OpenGraph metadata; its buggregator backlog is down to 4 open (WIKI 54, 66, 315; Codeberg #40).
+magpie (`~/rust/magpie`) is Rust/axum: commonshelper, url2commons, flickr2commons and geograph2commons moved there on 2026-11-20, with one OAuth login and upload path (the `mediawiki_upload` crate). The four old subdomains are Toolforge redirect containers; the old `.php` addresses redirect to the matching magpie page.
 
-Usage figures below are from the 30 days ending 2026-11-11. Those tools are no longer counted as down.
+**Status on 2026-11-23:** no new magnustools ports since 2026-11-13. The four upload tools (commonshelper, url2commons, flickr2commons, geograph2commons) moved to the Rust/axum `magpie` service on 2026-11-20; their old subdomains are redirect containers. All PHP tools checked on 2026-11-23 still answer 200: GLAMorous (both `/glamorous/` and `/glamorous.php`), tooltranslate, WikiShootMe, FIST, sourcemd, reasonator, WikiFlix and the low-use tools. WikiShootMe, Reasonator and WikiFlix now run `php8.4` in their live manifest, though their `tool` rows still say `php8.2`. Reasonator's buggregator backlog is still 4 open (WIKI 54, 66, 315; Codeberg #40); commonshelper has 15 open (all Codeberg, down from 24), geograph2commons 13, and sourcemd 0 (down from 32). Post-port fixes since 2026-11-13: the most-wanted scan was chunked to stay inside the replica statement limit (2026-11-14), commonsapi's batch image fetch was parallelized (2026-11-22), and missingtopics was reworked (2026-11-23).
+
+Usage figures below are from the 30 days ending 2026-11-23. They are logger uses unless noted; the Rust tools' dashboard uses are counted separately.
 
 ## Redirecting an old tool
 
@@ -32,7 +34,7 @@ buildservice-image: tool-containers/redirect:latest
 health-check-path: /healthz
 mount: none
 cpu: 125m
-mem: 128Mi
+memory: 128Mi
 EOF
 toolforge webservice stop
 toolforge webservice start
@@ -40,70 +42,72 @@ toolforge webservice start
 
 `REDIRECT_PATH` without `%s` sends every old path to the same new page; use
 `/<new-tool>%s` to keep the old path suffix. `REDIRECT_PROTO` defaults to
-`https`. Example: `isbn2wiki.toolforge.org` →
-`https://magnustools.toolforge.org/isbn2wiki/` (2026-11-12).
+`https`. Examples: `isbn2wiki.toolforge.org` →
+`https://magnustools.toolforge.org/isbn2wiki/` (2026-11-12), and
+`commonshelper.toolforge.org` → `https://magpie.toolforge.org/commonshelper/`
+(2026-11-20).
 
 ## Finish, don't rewrite
 
-- **PagePile**: done; the `tool` table row is now `rust/axum` (checked 2026-11-11). The PHP class stays for tools that include it.
-- **WD-FIST**: the core is already Rust. Decide whether to retire/redirect the standalone PHP UI or expose the existing `petscan_rs` module; do not port the algorithm again. Legacy FIST is still best retired or pointed at FIST2; it still had ~207k uses in the 30 days to 2026-11-11, so redirect deliberately rather than removing the address.
-- **WikiShootMe**: the map and search work is in the browser; PHP is OAuth, upload and API pass-through. It is still on php8.2 and had ~12k uses/30d. Fix the PHP in place (php8.2→8.4, timeouts on `file_get_contents`, OAuth token handling) instead of porting.
-- **Reasonator**: do not port. V2 (`public_html/v2/`) is client-side JS; the PHP layer only handles OAuth and OpenGraph/Twitter metadata. The service answers 200, and the 2026-11-11 triage left 4 open rows (WIKI 54, 66, 315; Codeberg #40). Fix V2/autodesc, not the PHP shell.
-- **wikidata-terminator**: ported on 2026-11-13; the old `/api.php` read API is kept, the Vue app is now a server-rendered page, and the daily `terminator-refresh` job rebuilds the candidate index (`src/tools/terminator/`). The index moved to `s51079__terminator_p`; the old subdomain redirects with its path (`REDIRECT_PATH=/wikidata-terminator%s`).
+- **PagePile**: done; the `tool` table row is `rust/axum` (checked 2026-11-11). The PHP class stays for tools that include it; the old `cron-0` job still fails and should be removed (see below).
+- **WD-FIST**: the core is already Rust. Decide whether to retire/redirect the standalone PHP UI or expose the existing `petscan_rs` module; do not port the algorithm again. Legacy FIST still answers 200 and logged ~175k uses in the 30 days to 2026-11-23 (the logger's `run` count fell sharply on 2026-11-12, while access logs still show 10–50k requests/day), so point its JSON at FIST2 rather than removing the address.
+- **WikiShootMe**: the map and search work is in the browser; PHP is OAuth, upload and API pass-through. It now runs php8.4 and had ~14.3k uses/30d; 37 buggregator rows are open (25 Codeberg + 12 WIKI). Fix the PHP in place (timeouts on `file_get_contents`, OAuth token handling) instead of porting.
+- **Reasonator**: do not port. V2 (`public_html/v2/`) is client-side JS; the PHP layer only handles OAuth and OpenGraph/Twitter metadata. It now runs php8.4, answers 200, and the buggregator backlog is still 4 open rows (WIKI 54, 66, 315; Codeberg #40). Fix V2/autodesc, not the PHP shell.
+- **wikidata-terminator**: ported on 2026-11-13; the old `/api.php` read API is kept, the Vue app is now a server-rendered page, and the daily `terminator-refresh` job rebuilds the candidate index (`src/tools/terminator/`) with 4 GiB. The index moved to `s51079__terminator_p`; the old subdomain redirects with its path (`REDIRECT_PATH=/wikidata-terminator%s`). 7 Codeberg issues remain open.
+- **magpie**: the four upload tools are ported; do not port their PHP again. Triage the 51 open Codeberg issues (commonshelper 15, geograph2commons 13, url2commons 1, flickr2commons 22) against the new service.
 
 ## Ranking (new PHP ports)
 
-| # | Tool | Use (30 days to 2026-11-11) | Why Rust helps | Effort | Status |
+| # | Tool | Use (30 days to 2026-11-23) | Why Rust helps | Effort | Status |
 |---|---|---|---|---|---|
-| 1 | most-wanted (`most-wanted/public_html/index.php`) | 19.3k | Live `max()` empty-array and 128 MB memory fatals; hints mode does per-article serial DB queries and unbounded template-user queries. Rust: read the `.links.red` file, batch the `IN` queries, cap hints. No exact Rust equivalent; `missingtopics` ranks red links for an article/category, not the global per-wiki list. | S–M | Rust port `src/tools/most_wanted.rs` (2026-11-11), with 11 daily `most-wanted-<wiki>` jobs in `jobs.yaml`. |
-| 2 | isbn2wiki (`isbn2wiki/public_html/index.php`) | 176k | High traffic but currently healthy: already parallel with `curl_multi`; the 38k "assign property on string" fatals stopped 2026-10-28. Cheap consolidation: no PHP, native timeouts/retries, no internal HTTP logger call. Reuse the `wd-infernal` ISBN parsers; add DNB/LoC and wiki markup. | S–M | Rust port `src/tools/isbn2wiki.rs` (2026-11-12), using the published `bookmeta` crate (`~/rust/bookmeta`, https://github.com/magnusmanske/bookmeta). Sources: Google Books, DNB, K10plus, Library of Congress, Open Library, BnF, Crossref and Wikidata; plain line, `{{cite book}}`, `{{Literatur}}` and `{{Ouvrage}}`. The old `isbn2wiki.toolforge.org` subdomain now redirects here via Toolforge's redirect container (2026-11-12). |
-| 3 | GLAMorous (`glamtools/public_html/glamorous.php`) | 7.5k | Loads every file name of a category tree (depth up to 20) to count them. Rust: stream and aggregate; reuse `baglama2_rs`'s `global_image_links` and category-tree code. Mostly a memory gain. | M | Still PHP 8.4. |
-| 4 | tooltranslate API (`tooltranslate/public_html/api.php`) | 434 | Security, not performance: `update_json` writes under a path built from the request tool name; `add_tool` lets any logged-in user create a name with `../`; SQL strings are returned in responses; write modes lack an explicit CSRF token. Port only the write API (or fix in PHP). | S–M | Still PHP 8.4; 10 open issues (9 Codeberg + 1 WIKI). |
+| 1 | GLAMorous (`glamtools/public_html/glamorous.php`) | 8.4k | Loads every file name of a category tree (depth up to 20) to count them. Rust: stream and aggregate; reuse `baglama2_rs`'s `global_image_links` and category-tree code. Mostly a memory gain. | M | Still PHP 8.4; 1 open WIKI row; 115 `count()` TypeErrors/30d at `glamorous.php:394`. |
+| 2 | tooltranslate API (`tooltranslate/public_html/api.php`) | 463 | Security, not performance: `update_json` writes under a path built from the request tool name; `add_tool` lets any logged-in user create a name with `../`; SQL strings are returned in responses; write modes lack an explicit CSRF token. Port only the write API (or fix in PHP). | S–M | Still PHP 8.4; 10 open issues (9 Codeberg + 1 WIKI); 5 OAuth token errors/30d. |
 
-Ranked by expected gain, not raw traffic: isbn2wiki had more requests but was healthy and already parallel, and is now ported; most-wanted was the live bug fix and is now ported.
+Ranked by expected gain, not raw traffic. GLAMorous still spends the most memory per use; tooltranslate is a security fix more than a performance port. most-wanted and isbn2wiki were ported on 2026-11-11 and 2026-11-12, so they are no longer ranked; their 30-day logger totals are mostly pre-port traffic. WikiFlix (94k uses/30d) is the largest remaining PHP tool, but it has not been analysed; its error log suggests a cheap fix first (see below).
 
 ## Not worth porting
 
-- **Legacy FIST `fist.php`**: the least stable code (~13.4k "max_user_connections" fatals/30d from opening a replica connection per language link, ~4.4k from unmapped wiki names), but many of its scrapers target dead sites. It still had ~207k uses in the 30 days to 2026-11-11, so point its JSON at FIST2 rather than removing it. Do not port 3.7k lines.
-- **WikiShootMe**: the map work runs in the browser; PHP is OAuth and upload pass-through. A PHP cleanup (old `.user.ini`, php8.2) beats a port.
-- **Wikidata Game**: the shared game API (`desc`/`tiles`/`log_action`) is already in `wikidata_todo_rs`, but the PHP `get_candidate` logic and batch jobs remain. With broken batch jobs and stale tickets, retire or fix the PHP tool rather than porting it whole; secure `update_game`/`update_all_games` meanwhile.
-- **commonshelper**: 32 uses/30d, 24 open issues (17 Codeberg + 7 WIKI; 2026-11-11), ~45 KB of PHP. Triage, retire, or redirect.
-- **sourcemd** (0 logged uses, ongoing SPARQL failures; 32 open rows), **geograph2commons** (0 logged uses; 18 open rows): don't port. Reasonator is in "Finish, don't rewrite": V2 is JS, not a PHP port.
+- **Legacy FIST `fist.php`**: still the least stable code: in the 30 days to 2026-11-23 it logged ~27k "max_user_connections" fatals from opening a replica connection per language link, ~40k `commonswiki_p.templatelinks` invalid-view fatals (and some missing `categorylinks`), and ~12k invalid replica names (`zh-min-nan`, `be-x-old`, `zh-yue`, …). It still logged ~175k uses/30d, so point its JSON at FIST2 rather than removing the address. Do not port 3.7k lines.
+- **WikiShootMe**: the map work runs in the browser; PHP is OAuth and upload pass-through. It now runs php8.4; fix the remaining PHP (timeouts, OAuth) rather than port.
+- **Wikidata Game**: the shared game API (`desc`/`tiles`/`log_action`) is already in `wikidata_todo_rs`, but the PHP `get_candidate` logic and batch jobs remain. Both jobs still fail, and the error log is full of `distributed/demo/primary_sources.php` fetching the retired `tools.wmflabs.org` endpoint (404, then a 30 s timeout). Retire or fix the PHP tool rather than porting it whole; secure `update_game`/`update_all_games` meanwhile.
+- **sourcemd** (0 logged uses, ongoing SPARQL failures; 0 open buggregator rows, down from 32): don't port.
 - **tooltranslate consumers**: consumers load static JSON from tools-static; only the editor is PHP. The fragile part for other tools is `tt.php` (`file_get_contents` without timeout). The editor API is a small security fix (see above); the rest is not worth porting.
 - **GLAMorgan/TreeViews pageview proxy, BaGLAMa2 API**: thin or I/O-bound.
-- **url2commons, flickr2commons**: only once an OAuth upload crate is shared (e.g. pulled out of `quickstatements_rs` into `wikimisc`). Both are on php8.4 now; the blocker is the shared upload code.
+- **url2commons, flickr2commons, commonshelper, geograph2commons**: now in `magpie` (Rust); no longer port targets. See "Already Rust".
 - **Other wikidata-todo endpoints** (`dupe_finder`, `beacon`, `true_duplicates`, `user_edits`, `add_name_labels`, `sexer`, `firstnamebasis`, `new_items`, …): several use removed tables or scan everything; retire rather than port. Several of these are already Rust in `wikidata_todo_rs`.
-- **WikiFlix**: not analysed (no local checkout); redirects to its own tool now.
-- **Zero/low-use PHP tools** (cradle, drawshield, pauken, picturesque, projector, quest, tabernacle, toolflow, topicmatcher, wlmuk, book2scroll, …): don't port unless they have a maintainer and real users. catnap, file-siblings, filedupes, multidesc and new-page-linker moved to magnustools on 2026-11-13.
+- **WikiFlix**: now php8.4 and ~94k uses/30d, but not analysed (no local checkout); its web and job logs have ~984k `applyDbStatementTimeout: ... getSQL(): Argument #2 ($sql) could not be passed by reference` errors in 30 days (273 MB). Fix that call or triage for a port; do not port blind.
+- **Low-use or unmaintained PHP tools** (cradle, drawshield, pauken, picturesque, projector, quest, tabernacle, toolflow, topicmatcher, wlmuk, book2scroll, …): don't port unless they have a maintainer and real users. book2scroll had ~7.8k uses/30d but was not analysed; the logged ones are at or below a few hundred. catnap, file-siblings, filedupes, multidesc and new-page-linker moved to magnustools on 2026-11-13.
 
 ## Fix now, Rust or not
 
 Security:
 
 - [x] wikidata-terminator: ported on 2026-11-13; the SQL-injection note was already stale, and the new query builder validates language/type and uses bound SQL parameters. `main_p31` is seeded by the refresh job.
-- [ ] Wikidata Game: `distributed/api.php` `update_game`/`update_all_games` are unauthenticated and call every registered game's `desc` endpoint. Require auth or run only from cron. The shared game API is Rust, but the classic game's candidate logic is still PHP.
-- [ ] tooltranslate: `store_translation`/`add_tool` do require OAuth, but `update_json` is unauthenticated and builds the output path from the tool name. A logged-in user can add a name with `../`; writes are limited to `toolinfo.json`/`<language>.json` but can overwrite static JSON. Responses also include SQL strings. Fix in PHP now (typed names, no SQL in output, CSRF) whether or not it is ported.
+- [ ] Wikidata Game: `distributed/api.php` `update_game`/`update_all_games` are unauthenticated and call every registered game's `desc` endpoint. Require auth or run only from cron. The shared game API is Rust, but the classic game's candidate logic is still PHP; both scheduled jobs still fail.
+- [ ] tooltranslate: `store_translation`/`add_tool` do require OAuth, but `update_json` is unauthenticated and builds the output path from the tool name. A logged-in user can add a name with `../`; writes are limited to `toolinfo.json`/`<language>.json` but can overwrite static JSON. Responses also include SQL strings. Fix in PHP now (typed names, no SQL in output, CSRF) whether or not it is ported; 10 open issues (9 Codeberg + 1 WIKI) and 5 OAuth token errors/30d.
 
 Failing jobs:
 
-- [ ] Listeria `update-wikis`: `./target/release/main: No such file or directory` since 2026-10-20.
-- [ ] PagePile `cron-0` (`touch_data.sh`, old `tf-php74` image) failed; matches "Pile storage missing". The web service is Rust now and this repo's `jobs.yaml` has no pagepile job; confirm whether the old Toolforge job still exists and remove it if so.
-- [ ] Wikidata Game `game-maintenance` and `update-distributed-game` failed.
-- [ ] FIST: 13 jobs still on the PHP 7.4 image; the taxon media job has a 90 MB error log.
-- [ ] Mix'n'match: no job progress since 2026-10-20 (last flagged by the monitor before its check moved to the dashboard).
-- [ ] QuickStatements (Rust bot): many `Key "labels" not found` in `bot.out`.
+- [x] Listeria `update-wikis`: the job is gone (the old `update-wikis.err` is from 2026-10-20); the continuous `rustbot` job is running (checked 2026-11-23).
+- [ ] PagePile `cron-0` (`touch_data.sh`, deprecated `php7.4` image) still fails every 5 minutes; `jobs logs` has no current output and the last written `cron-0.err` (2024) shows `touch: setting times of '/data/project/shared/pagepile/...': Permission denied`. The web service is Rust now and this repo's `jobs.yaml` has no pagepile job; remove the old Toolforge job or fix the shared-directory permissions.
+- [ ] Wikidata Game `game-maintenance` and `update-distributed-game` still fail; the error log shows `distributed/demo/primary_sources.php` requesting the retired `tools.wmflabs.org` endpoint (404) and 30 s timeouts.
+- [ ] FIST: only `commons-random-depicts` and `on-wikidata` are still on the deprecated php7.4 image, and both fail; the other jobs are php8.4. `fc-taxon-media.out` is ~95 MB.
+- [x] Mix'n'match: progress resumed; 4 jobs were running and `scroll_rerank` entries were logged on 2026-11-23, so the "no progress since 2026-10-20" note is stale.
+- [ ] Mix'n'match telemetry: pushes to `/buggregator/ingest.php` had 503/connection errors (10 in `rustbot.err`; last write 2026-11-23 08:47), so the dashboard may miss Mix'n'match uses.
+- [ ] QuickStatements (Rust bot): still many `Key "labels" not found` in `bot.out`; `bot.err` also shows `Can not parse item(s) ["L…-S…"]` for lexeme statements.
 
 Cheap PHP fixes for the worst errors:
 
-- [x] most-wanted: ported; the `max()` guard is in `hint_categories`, hints/number are capped, and the template-usage query is batched.
+- [x] most-wanted: ported; the `max()` guard is in `hint_categories`, hints/number are capped, and the template-usage query is batched. The 2026-11-14 follow-up chunks `linktarget` ids and filters blue links after grouping, keeping the scan inside the replica statement limit.
 
-- [ ] `ToolforgeCommon.php:705` (`getSPARQLitems` reads `$row->q` whatever the variable): the source of nearly all of the old wikidata-todo error log; the Rust `sparql_rc` should stop the growth, but other PHP tools still include this library.
-- [ ] FIST `fist.php`: reuse one connection per replica cluster; map wiki names via the site matrix (`zh-min-nan`, `be-x-old`, `zh-yue`).
-- [ ] GLAMorous: reject a non-list `projects` parameter (180 TypeErrors).
+- [ ] `ToolforgeCommon.php:705` (`getSPARQLitems` reads `$row->q` whatever the variable): the source of nearly all of the old wikidata-todo error log; the Rust `sparql_rc` stopped the growth, but other PHP tools still include this library (sourcemd still logs `getSPARQLitems` stack traces).
+- [ ] FIST `fist.php`: reuse one connection per replica cluster; map renamed wiki names via the site matrix (e.g. `zh-min-nan`, `be-x-old`, `zh-yue`, `roa-tara`, `bat-smg`); stop using the invalid `commonswiki_p.templatelinks` view and missing `categorylinks` table.
+- [ ] GLAMorous: reject a non-list `projects` parameter (115 `count()` TypeErrors/30d at `glamorous.php:394`).
+- [ ] WikiFlix: fix the `applyDbStatementTimeout` by-reference call into `ToolforgeCommon::getSQL()`; ~984k errors/30d across the web and update logs (273 MB).
 
 Other:
 
-- [ ] Listeria: `query_list.php` has no Rust route; port or drop.
+- [x] Listeria: `query_list.php` now answers 404; no Rust route is needed.
 - [x] Tool table: `webserver_type` set from the live `service.manifest` for the 18 subdomains checked on 2026-10-23.
 - [x] Tool table: usualsuspects and not-in-the-other-language rows updated on 2026-11-08 to `magnustools` / `rust/axum` with the new URLs.
 - [x] Tool table: sighting rows updated on 2026-11-10 to `magnustools` / `rust/axum` with the new URLs; outofsight marked as deactivated.
@@ -113,5 +117,7 @@ Other:
 - [x] Tool table: `referee` moved to `wd-infernal` / `rust/axum` (2026-11-13); the old subdomain redirects there.
 - [x] Tool table: erwin85 and joanjoc redirect rows are now `rust/axum` (2026-11-13).
 - [x] Tool table: `baglama2`, `WD-FIST` and `distributed game` notes reflect their Rust parts (2026-11-13).
-- [x] Reasonator: not a port target; V2 is JS and the PHP shell is OAuth/OpenGraph. The 503 is fixed and the backlog is down to 4 (2026-11-11).
-- [ ] Remove the leftover `/tmp/wdt_tail.*` on `login.toolforge.org` (a copy of the wikidata-todo error log from this analysis; the host was unreachable).
+- [x] Tool table: the magpie rows (commonshelper, geograph2commons, url2commons, flickr2commons) are `rust/axum` with magpie URLs (2026-11-20).
+- [ ] Tool table: WikiShootMe, Reasonator and WikiFlix still say `php8.2`; their live manifests say `php8.4` (2026-11-23).
+- [x] Reasonator: not a port target; V2 is JS and the PHP shell is OAuth/OpenGraph. The 503 is fixed and the backlog is still down to 4 (2026-11-23).
+- [x] The leftover `/tmp/wdt_tail.*` is gone (checked 2026-11-23).
