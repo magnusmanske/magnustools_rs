@@ -166,18 +166,21 @@ pub(super) async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) 
                 (forge.site(), forge.site(), &html_url),
             )
             .await?;
-        // A forge that suddenly returns no issues (a proxy error with HTTP 200,
-        // an access change) must not close the whole repository's history.
-        if open_numbers.is_empty() && !stored.is_empty() {
-            tracing::warn!("{html_url}: no open issues returned; not closing {} stored issues", stored.len());
-            continue;
-        }
-        for (issue_id, _) in stored.iter().filter(|(_, number)| !open_numbers.contains(number)) {
+        // `open_forge_issues` fails on HTTP errors and on anything but a JSON
+        // array, and the repository is skipped then. So an empty list really
+        // means no open issues, and every stored issue is closed.
+        for issue_id in issues_to_close(&stored, &open_numbers) {
             conn.exec_drop("UPDATE issue SET status='CLOSED' WHERE id=?", (issue_id,)).await?;
         }
         tracing::debug!("{html_url}: {} open, {} stored", open_numbers.len(), stored.len());
     }
     Ok(())
+}
+
+/// Stored open issues whose number the forge no longer lists as open. An empty
+/// `open` set closes all of them: the forge answered successfully.
+fn issues_to_close<'a>(stored: &'a [(u64, u64)], open: &'a HashSet<u64>) -> impl Iterator<Item = u64> + 'a {
+    stored.iter().filter(move |(_, number)| !open.contains(number)).map(|(issue_id, _)| *issue_id)
 }
 
 /// The issue a forge report belongs to: the natural `(site, url)` first, then
@@ -415,6 +418,19 @@ mod tests {
         assert_eq!(minimal.description, "");
         assert!(minimal.users.is_empty());
         assert_eq!(minimal.date_created, None);
+    }
+
+    #[test]
+    fn issues_gone_upstream_are_closed() {
+        let stored = vec![(1, 10), (2, 11), (3, 12)];
+        let open = HashSet::from([11]);
+        assert_eq!(issues_to_close(&stored, &open).collect::<Vec<_>>(), vec![1, 3]);
+        assert_eq!(
+            issues_to_close(&stored, &HashSet::new()).collect::<Vec<_>>(),
+            vec![1, 2, 3],
+            "all upstream issues closed: every stored issue is closed"
+        );
+        assert_eq!(issues_to_close(&stored, &HashSet::from([10, 11, 12])).count(), 0);
     }
 
     #[test]
