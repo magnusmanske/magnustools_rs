@@ -7,7 +7,8 @@ set -euo pipefail
 
 JOB=buggregator-update
 IMAGE=tool-magnustools/tool-magnustools:latest
-NAME="buggregator-update-manual-$(date -u +%Y%m%dT%H%M%SZ)"
+# Toolforge job names: 1-52 characters, lower-case letters, digits, `.` and `-`.
+NAME="buggregator-update-manual-$(date -u +%Y%m%dt%H%M%Sz)"
 WAIT="${WAIT:-1800}"
 
 echo "Running $JOB as $NAME (timeout ${WAIT}s)"
