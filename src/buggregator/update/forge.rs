@@ -1,6 +1,6 @@
 //! Issues from GitHub and Codeberg.
 
-use super::{NewIssue, create_issue, db_label, format_time, urls, user_id};
+use super::{NewIssue, create_issue, db_label, db_url, format_time, urls, user_id};
 use crate::buggregator::issues::text_id;
 use crate::buggregator::safe_url;
 use crate::state::AppState;
@@ -114,66 +114,93 @@ impl Forge {
     }
 }
 
+/// A repository from `git_repo`, with the tool its issues belong to.
+struct ForgeRepo<'a> {
+    id: u64,
+    html_url: &'a str,
+    tool_id: u64,
+}
+
 /// Stores new open issues of each repository, and closes those the forge
-/// no longer lists as open (the PHP version never closed any).
+/// no longer lists as open (the PHP version never closed any). A repository
+/// that fails is skipped, so it cannot keep the others from syncing.
 pub(super) async fn from_forge(state: &AppState, conn: &mut Conn, forge: Forge) -> Result<()> {
     let repos: Vec<(u64, String, u64)> =
         conn.exec("SELECT id, html_url, tool_id FROM git_repo WHERE repo_type=? ORDER BY id", (forge.site(),)).await?;
-    for (repo_id, html_url, tool_id) in repos {
-        if RETIRED_REPOS.contains(&html_url.as_str()) {
+    for (id, html_url, tool_id) in repos {
+        let repo = ForgeRepo { id, html_url: &html_url, tool_id };
+        if RETIRED_REPOS.contains(&repo.html_url) {
             continue;
         }
-        if forge.is_archived(state, &html_url).await {
-            tracing::info!("{html_url}: repository archived; skipping");
-            continue;
+        if let Err(e) = sync_repo(state, conn, forge, &repo).await {
+            tracing::warn!("{}: {e:#}", repo.html_url);
         }
-        let Some((url, page_size)) = forge.issues_api(&html_url) else {
-            tracing::warn!("{html_url}: cannot derive the issues endpoint; skipping");
-            continue;
-        };
-        let open = match open_forge_issues(state, &url, page_size).await {
-            Ok(open) => open,
-            Err(e) => {
-                tracing::warn!("{html_url}: {e:#}");
-                continue;
-            }
-        };
-        let mut open_numbers = HashSet::new();
-        for json in &open {
-            let Some(number) = json["number"].as_u64() else { continue };
-            open_numbers.insert(number);
-            let Some(issue_url) = safe_url(json["html_url"].as_str().unwrap_or_default()) else {
-                tracing::warn!("{html_url}: issue without a usable URL; skipping");
-                continue;
-            };
-            if let Some(issue_id) = known_forge_issue(conn, forge, number, repo_id, &html_url, &issue_url).await? {
-                update_forge_issue(conn, issue_id, forge, json, &issue_url).await?;
-                continue;
-            }
-            let issue = new_forge_issue(forge, json, tool_id, &issue_url);
-            let mut tx = conn.start_transaction(Default::default()).await?;
-            let issue_id = create_issue(&mut tx, &issue).await?;
-            ensure_mapping(&mut tx, issue_id, forge.site(), number, repo_id).await?;
-            tx.commit().await?;
-        }
-        let stored: Vec<(u64, u64)> = conn
-            .exec(
-                "SELECT issue.id, git_issue.git_id FROM issue
-                 JOIN git_issue ON git_issue.issue_id=issue.id
-                 JOIN git_repo ON git_repo.id=git_issue.git_repo_id
-                 WHERE git_issue.site=? AND git_repo.repo_type=? AND git_repo.html_url=?
-                   AND issue.status='OPEN'",
-                (forge.site(), forge.site(), &html_url),
-            )
-            .await?;
-        // `open_forge_issues` fails on HTTP errors and on anything but a JSON
-        // array, and the repository is skipped then. So an empty list really
-        // means no open issues, and every stored issue is closed.
-        for issue_id in issues_to_close(&stored, &open_numbers) {
-            conn.exec_drop("UPDATE issue SET status='CLOSED' WHERE id=?", (issue_id,)).await?;
-        }
-        tracing::debug!("{html_url}: {} open, {} stored", open_numbers.len(), stored.len());
     }
+    Ok(())
+}
+
+/// One repository: its open issues, then closing the stored ones it no longer
+/// lists. A single broken issue does not keep the rest, and the closures, from
+/// syncing.
+async fn sync_repo(state: &AppState, conn: &mut Conn, forge: Forge, repo: &ForgeRepo<'_>) -> Result<()> {
+    if forge.is_archived(state, repo.html_url).await {
+        tracing::info!("{}: repository archived; skipping", repo.html_url);
+        return Ok(());
+    }
+    let Some((url, page_size)) = forge.issues_api(repo.html_url) else {
+        tracing::warn!("{}: cannot derive the issues endpoint; skipping", repo.html_url);
+        return Ok(());
+    };
+    let open = open_forge_issues(state, &url, page_size).await?;
+    let mut open_numbers = HashSet::new();
+    for json in &open {
+        let Some(number) = json["number"].as_u64() else { continue };
+        open_numbers.insert(number);
+        let Some(issue_url) = safe_url(json["html_url"].as_str().unwrap_or_default()) else {
+            tracing::warn!("{}: issue without a usable URL; skipping", repo.html_url);
+            continue;
+        };
+        if let Err(e) = store_forge_issue(conn, forge, repo, &issue_url, number, json).await {
+            tracing::warn!("{issue_url}: {e:#}");
+        }
+    }
+    let stored: Vec<(u64, u64)> = conn
+        .exec(
+            "SELECT issue.id, git_issue.git_id FROM issue
+             JOIN git_issue ON git_issue.issue_id=issue.id
+             JOIN git_repo ON git_repo.id=git_issue.git_repo_id
+             WHERE git_issue.site=? AND git_repo.repo_type=? AND git_repo.html_url=?
+               AND issue.status='OPEN'",
+            (forge.site(), forge.site(), repo.html_url),
+        )
+        .await?;
+    // `open_forge_issues` fails on HTTP errors and on anything but a JSON
+    // array, and the repository is skipped then. So an empty list really
+    // means no open issues, and every stored issue is closed.
+    for issue_id in issues_to_close(&stored, &open_numbers) {
+        conn.exec_drop("UPDATE issue SET status='CLOSED' WHERE id=?", (issue_id,)).await?;
+    }
+    tracing::debug!("{}: {} open, {} stored", repo.html_url, open_numbers.len(), stored.len());
+    Ok(())
+}
+
+/// Creates or updates one issue from its forge report.
+async fn store_forge_issue(
+    conn: &mut Conn,
+    forge: Forge,
+    repo: &ForgeRepo<'_>,
+    issue_url: &str,
+    number: u64,
+    json: &Value,
+) -> Result<()> {
+    if let Some(issue_id) = known_forge_issue(conn, forge, number, repo.id, repo.html_url, issue_url).await? {
+        return update_forge_issue(conn, issue_id, forge, json, issue_url).await;
+    }
+    let issue = new_forge_issue(forge, json, repo.tool_id, issue_url);
+    let mut tx = conn.start_transaction(Default::default()).await?;
+    let issue_id = create_issue(&mut tx, &issue).await?;
+    ensure_mapping(&mut tx, issue_id, forge.site(), number, repo.id).await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -225,7 +252,7 @@ fn new_forge_issue(forge: Forge, json: &Value, tool_id: u64, url: &str) -> NewIs
         date_created: iso_time(&json["created_at"]),
         date_last: iso_time(&json["updated_at"]),
         site: forge.site(),
-        url: url.to_string(),
+        url: db_url(url),
         urls: urls(&description),
         description,
         tool: Some(tool_id),

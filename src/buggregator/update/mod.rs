@@ -55,6 +55,7 @@ struct NewIssue {
     date_created: Option<String>,
     date_last: Option<String>,
     site: &'static str,
+    /// Fits the `varchar(255)` url column (see `db_url`).
     url: String,
     description: String,
     tool: Option<u64>,
@@ -106,10 +107,20 @@ async fn create_issue(conn: &mut impl Queryable, issue: &NewIssue) -> Result<u64
     Ok(issue_id)
 }
 
+/// The `varchar(255)` columns hold this many characters at most.
+const MAX_TEXT_CHARS: usize = 255;
+
 /// Text for the `varchar(255)` label column; truncated the same way when
 /// looking an issue up, so a long heading does not create a new row each run.
 fn db_label(text: &str) -> String {
-    text.chars().take(255).collect()
+    text.chars().take(MAX_TEXT_CHARS).collect()
+}
+
+/// A URL for the `varchar(255)` url columns. A canonical issue URL that is
+/// longer (a wiki section with a huge heading) still opens its page, at worst
+/// without the full section anchor.
+fn db_url(url: &str) -> String {
+    url.chars().take(MAX_TEXT_CHARS).collect()
 }
 
 async fn user_id(conn: &mut impl Queryable, name: &str, site: &str) -> Result<u64> {
@@ -201,9 +212,16 @@ fn trim_markup(wikitext: &str) -> String {
     TAG.replace_all(&text, "").into_owned()
 }
 
+/// URLs in a text that fit the `varchar(255)` column. A longer URL cannot be
+/// stored; truncating it would make a misleading link, so it is dropped (it is
+/// still part of the description).
 fn urls(text: &str) -> Vec<String> {
     let mut seen = HashSet::new();
-    URL.find_iter(text).map(|m| m.as_str().to_string()).filter(|url| seen.insert(url.clone())).collect()
+    URL.find_iter(text)
+        .map(|m| m.as_str().to_string())
+        .filter(|url| url.chars().count() <= MAX_TEXT_CHARS)
+        .filter(|url| seen.insert(url.clone()))
+        .collect()
 }
 
 /// Users linked in the text, in order; the first one opened the section.
@@ -275,6 +293,8 @@ mod tests {
             urls("see https://x.org/a?b=1. and (http://y.org/z) and https://x.org/a?b=1"),
             vec!["https://x.org/a?b=1", "http://y.org/z"]
         );
+        let long = format!("https://x.org/{}", "a".repeat(300));
+        assert!(urls(&long).is_empty(), "a URL longer than the column is dropped");
     }
 
     #[test]
@@ -323,6 +343,12 @@ mod tests {
     fn labels_and_unicode() {
         assert_eq!(db_label("Bug 🐛 in Grüße"), "Bug 🐛 in Grüße");
         assert_eq!(db_label(&"x".repeat(300)).chars().count(), 255);
+    }
+
+    #[test]
+    fn urls_fit_the_column() {
+        assert_eq!(db_url("https://x.org/a"), "https://x.org/a");
+        assert_eq!(db_url(&format!("https://x.org/{}", "ä".repeat(300))).chars().count(), 255);
     }
 
     #[test]

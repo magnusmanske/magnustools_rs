@@ -1,8 +1,8 @@
 //! Issues from the watched wiki talk pages.
 
 use super::{
-    NewIssue, ToolMatcher, create_issue, db_label, format_time, sections, signature_times, trim_markup, urls, user_id,
-    wiki_users,
+    NewIssue, ToolMatcher, create_issue, db_label, db_url, format_time, sections, signature_times, trim_markup, urls,
+    user_id, wiki_users,
 };
 use crate::buggregator::MAINTAINER;
 use crate::buggregator::issues::{self, text_id};
@@ -36,7 +36,12 @@ pub(super) async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &T
                 .await?;
             let times = signature_times(&wikitext);
             let issue = NewIssue {
-                url: format!("https://{}/wiki/{}#{}", wiki.host(), wiki_urlencode(&page), wiki_urlencode(&label)),
+                url: db_url(&format!(
+                    "https://{}/wiki/{}#{}",
+                    wiki.host(),
+                    wiki_urlencode(&page),
+                    wiki_urlencode(&label)
+                )),
                 tool: tools.find(&label).or_else(|| tools.find(&wikitext)).or(tool_hint),
                 status: "OPEN".to_string(),
                 date_created: times.iter().min().map(format_time),
