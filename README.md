@@ -171,6 +171,8 @@ database and stop the web service and jobs, then run them in order:
    (applied on the live tool database on 2026-11-25)
 8. `2026-11-25-tool-repos.sql` — `tool` rows for code-only projects and
    their `git_repo` rows (applied on the live tool database on 2026-11-25)
+9. `2026-11-25-dead-repos.sql` — removes gone/archived `git_repo` rows
+   (applied on the live tool database on 2026-11-25)
 
 `buggregator-dedupe` reports duplicate issues, users, texts and links;
 `--apply` collapses them and installs the natural keys. Do not run it against a
