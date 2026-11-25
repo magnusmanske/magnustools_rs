@@ -167,6 +167,8 @@ database and stop the web service and jobs, then run them in order:
    no longer reads the column
 6. `2026-11-23-tool-php-versions.sql` — active PHP rows to `php8.4`
    (applied on the live tool database on 2026-11-23)
+7. `2026-11-25-git-repos.sql` — moved and missing `git_repo` rows
+   (applied on the live tool database on 2026-11-25)
 
 `buggregator-dedupe` reports duplicate issues, users, texts and links;
 `--apply` collapses them and installs the natural keys. Do not run it against a
