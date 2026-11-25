@@ -183,6 +183,8 @@ and `jobs.yaml` schedules them on Toolforge. Service dashboard administration
 is `magnustools_rs dashboard add|rotate|enable|disable|list|reinfer`; the
 one-off duplicate cleanup is `magnustools_rs buggregator-dedupe`. The daily
 `terminator-refresh` job rebuilds the Wikidata Terminator's candidate index.
+To run the Buggregator update now, instead of waiting for its 03:37 schedule,
+use `./buggregator_update.sh`.
 
 Alerts go to `monitor.mail_to`. The `monitor` job covers tools without a
 dashboard service (a blocked bot, a web address that does not answer with
