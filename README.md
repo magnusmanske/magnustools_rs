@@ -50,6 +50,7 @@ old tool's subdomain, use Toolforge's redirect container; see `PHP2RUST.md`.
 | `/html2wiki/`, `/tab2wiki/` | HTML or spreadsheet tables to wiki markup |
 | `/icommons/` | Commons for small screens: picture of the day, search, files, categories (formerly icommons.toolforge.org) |
 | `/isbn2wiki/` | Book metadata by ISBN from several catalogues, as wiki-markup references (formerly isbn2wiki.toolforge.org) |
+| `/isin/` | Links to financial databases for an ISIN (formerly isin.toolforge.org) |
 | `/logger/` | Counts tool uses (JSON/JSONP) |
 | `/makeref/` | A citation template filled in from a form; types and fields from `MakeRef/<Language>` on Meta (formerly makeref.toolforge.org) |
 | `/map2wp/` | Candidate English Wikipedia articles for Wikisource DNB biographies without a Wikipedia link (formerly dnbtools.toolforge.org) |

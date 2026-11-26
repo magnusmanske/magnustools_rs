@@ -30,6 +30,7 @@ mod icommons;
 mod index;
 mod interwiki;
 mod isbn2wiki;
+mod isin;
 pub(crate) mod logger;
 mod makeref;
 mod map2wp;
@@ -107,6 +108,7 @@ pub const MENU: &[(&str, &str)] = &[
     ("html2wiki", "HTML to wiki"),
     ("icommons", "iCommons"),
     ("isbn2wiki", "ISBN to wiki"),
+    ("isin", "ISIN links"),
     ("makeref", "MakeRef"),
     ("map2wp", "Map DNB to Wikipedia"),
     ("metronom", "Metronom"),
@@ -208,6 +210,7 @@ fn tools() -> Vec<(&'static str, MethodRouter<State>)> {
         ("html2wiki", get(html2wiki::handler).post(html2wiki::handler)),
         ("icommons", get(icommons::handler).post(icommons::handler)),
         ("isbn2wiki", get(isbn2wiki::handler).post(isbn2wiki::handler)),
+        ("isin", get(isin::handler)),
         ("logger", get(logger::handler).post(logger::handler)),
         ("makeref", get(makeref::handler).post(makeref::handler)),
         ("map2wp", get(map2wp::handler).post(map2wp::handler)),
@@ -283,6 +286,7 @@ mod tests {
             "/file-siblings.php",
             "/filedupes.php",
             "/multidesc.php",
+            "/isin.php",
             "/new-page-linker.php",
             "/wikidata-terminator.php",
         ] {
@@ -300,6 +304,7 @@ mod tests {
             ("/file-siblings/", "File siblings"),
             ("/filedupes/", "File duplicates"),
             ("/multidesc/", "MultiDesc"),
+            ("/isin/", "ISIN links"),
             ("/new-page-linker/", "New page linker"),
             ("/wikidata-terminator/", "Wikidata Terminator"),
         ] {
@@ -380,6 +385,14 @@ mod tests {
         let page = get(dir.path(), "/isbn2wiki/?isbn=9780140328722").await;
         assert_eq!(page.status.as_u16(), 200);
         assert!(page.body.contains("Not an ISBN"));
+    }
+
+    #[tokio::test]
+    async fn isin_rejects_a_bad_isin() {
+        let dir = tempfile::tempdir().unwrap();
+        let page = get(dir.path(), "/isin/?isin=US0378331004").await;
+        assert_eq!(page.status.as_u16(), 200);
+        assert!(page.body.contains("is not an ISIN"), "{}", page.body);
     }
 
     #[tokio::test]

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="lead">Links to financial databases for an ISIN (International Securities Identification Number), as listed on a wiki page.</p>
+<form method="get" action="/isin/">
+  <label>ISIN <span class="hint">e.g. US0378331005</span>
+    <input type="text" name="isin" value="{{ isin }}" required>
+  </label>
+  <label>Title <span class="hint">optional</span>
+    <input type="text" name="title" value="{{ name }}">
+  </label>
+  <label>Language <span class="hint">e.g. en</span>
+    <input type="text" name="language" value="{{ language }}" required>
+  </label>
+  <label>Project <span class="hint">e.g. wikipedia</span>
+    <input type="text" name="project" value="{{ project }}" required>
+  </label>
+  <button>Get links</button>
+</form>
+{% if let Some(error) = error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+{% if let Some(links_html) = links_html %}
+<h2>{{ isin }}{% if !name.is_empty() %} ({{ name }}){% endif %}</h2>
+<div class="wiki-content">{{ links_html|safe }}</div>
+{% endif %}
+{% if let Some(config_url) = config_url %}
+<p class="hint">The list of databases is on <a href="{{ config_url }}">a wiki page</a>.</p>
+{% endif %}
+{% endblock %}
