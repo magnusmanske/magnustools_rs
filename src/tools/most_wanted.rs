@@ -407,7 +407,10 @@ pub(crate) async fn update(state: &AppState, wiki: &str) -> Result<()> {
     let wiki = Wiki::from_dbname(wiki).map_err(|e| anyhow::anyhow!("{e}"))?;
     let project = wiki.dbname();
     let mut conn = state.replicas.conn(&wiki, &["linktarget", "pagelinks", "page"]).await?;
-    let max_id: Option<u64> = conn.exec_first("SELECT MAX(lt_id) FROM linktarget", ()).await?;
+    // On the replicas `linktarget` is a view that checks all five link tables
+    // for each row, so `MAX(lt_id)` over it scans the whole view. The highest
+    // id that can matter is the last `pagelinks` target, an index lookup.
+    let max_id: Option<u64> = conn.exec_first("SELECT MAX(pl_target_id) FROM pagelinks", ()).await?;
     let max_id = max_id.unwrap_or(0);
     let ignore: Vec<Regex> = IGNORE
         .iter()
@@ -416,7 +419,7 @@ pub(crate) async fn update(state: &AppState, wiki: &str) -> Result<()> {
         .collect();
 
     let mut rows: Vec<(u64, String)> = vec![];
-    tracing::info!("{project}: linktarget up to {max_id}, in chunks of {CHUNK} ids");
+    tracing::info!("{project}: target ids up to {max_id}, in chunks of {CHUNK} ids");
     let mut from = 1;
     while from <= max_id {
         let to = from.saturating_add(CHUNK - 1);
