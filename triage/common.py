@@ -45,7 +45,8 @@ def mysql():
     database = os.environ.get("BUGGREGATOR_DB", DEFAULT_DB)
     cnf = os.environ.get("BUGGREGATOR_CNF", "replica.my.cnf")
     user, password = _parse_cnf(cnf)
-    command = ["mysql", "--protocol=TCP", "--batch", "--raw", "-h", host, "-P", port, "-u", user, database]
+    command = ["mysql", "--protocol=TCP", "--batch", "--raw", "--skip-column-names",
+               "-h", host, "-P", port, "-u", user, database]
     return command, {**os.environ, "MYSQL_PWD": password}
 
 

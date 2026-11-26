@@ -1,6 +1,7 @@
 /target
 /config.json
 /backups
+__pycache__/
 
 # Credentials: never commit
 *.ini

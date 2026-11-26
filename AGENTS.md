@@ -15,3 +15,6 @@
 - **Write tests** where it makes sense. Aim to keep test coverage high and tests simple.
 - **Warn me if you think what I ask of you is a bad idea.** Or just window dressing, with no improvement of functionality, UX, or code readability. Be honest.
 - **Fix clippy warnings**, even pre-existing ones.
+
+# Buggregator triage
+- Closing issues, syncing git trackers and setting priorities is a repeatable process; see `triage/README.md`. Keep it current if the schema or APIs change.

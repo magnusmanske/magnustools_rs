@@ -30,7 +30,7 @@ TOKEN = os.environ.get("FORGEJO_API_TOKEN")
 SLEEP = 0.15
 
 OPEN_SQL = """
-SELECT CONCAT_WS(' \\u00a7 ', i.id, i.site, COALESCE(gi.site,''), COALESCE(gi.git_id,0),
+SELECT CONCAT_WS(' § ', i.id, i.site, COALESCE(gi.site,''), COALESCE(gi.git_id,0),
        COALESCE(r.html_url,''),
        REPLACE(REPLACE(REPLACE(i.url,'\\t',' '),'\\n',' '),'\\r',' '),
        REPLACE(REPLACE(REPLACE(i.label,'\\t',' '),'\\n',' '),'\\r',' '),
