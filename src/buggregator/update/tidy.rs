@@ -34,17 +34,17 @@ pub(super) async fn tidy(conn: &mut Conn, tools: &ToolMatcher) -> Result<()> {
         }
     }
 
-    // Issues without a tool: by name in the label or text, else the wiki page's hint.
-    let untooled: Vec<(u64, String, String, Option<u64>)> = conn
+    // Issues without a tool: from the section's heading and text, else the page hint.
+    let untooled: Vec<(u64, String, String, Option<u64>, String)> = conn
         .query(
             "SELECT issue.id, label, COALESCE(wikitext, (SELECT text FROM text WHERE text.id=description_text_id), ''),
-             tool_hint
+             tool_hint, COALESCE(wiki_page.page, '')
              FROM issue LEFT JOIN wiki_issue ON issue_id=issue.id LEFT JOIN wiki_page ON wiki_page.id=wiki_page_id
              WHERE tool IS NULL AND status='OPEN'",
         )
         .await?;
-    for (issue_id, label, text, hint) in untooled {
-        let tool = tools.find(&label).or_else(|| tools.find(&text)).or(hint);
+    for (issue_id, label, text, hint, page) in untooled {
+        let tool = tools.section_tool(&page, &label, &text, hint);
         if let Some(tool) = tool {
             conn.exec_drop("UPDATE issue SET tool=? WHERE id=? AND tool IS NULL", (tool, issue_id)).await?;
         }

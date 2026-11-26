@@ -192,8 +192,9 @@ SQL cannot do that.
 - 17 open issues on `User_talk:Reinheitsgebot` were reassigned from the bot
   tool (375): 13 to Mix'n'match (195), 4 to SourceMD (220). The edit summaries
   of the linked diffs name the invoking tool (`invoked by mixnmatch:…`,
-  `SourceMD author name string resolver script`). `wiki_page.tool_hint` still
-  points new sections at Reinheitsgebot, so future issues need the same check.
+  `SourceMD author name string resolver script`). The page's `tool_hint` was
+  cleared; the importer recognises Mix'n'match and SourceMD invocations, but
+  other bot-page sections stay untooled and need the same edit-summary check.
 - The property check for `6377` initially used `P1362`; SIKART is `P781`, and
   the wrong SIKART ID was still on the item, so the close was reverted.
 - Priority split after the pass: 21 HIGH, 108 NORMAL, 89 LOW.

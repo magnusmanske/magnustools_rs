@@ -42,7 +42,7 @@ pub(super) async fn from_wiki_pages(state: &AppState, conn: &mut Conn, tools: &T
                     wiki_urlencode(&page),
                     wiki_urlencode(&label)
                 )),
-                tool: tools.find(&label).or_else(|| tools.find(&wikitext)).or(tool_hint),
+                tool: tools.section_tool(&page, &label, &wikitext, tool_hint),
                 status: "OPEN".to_string(),
                 date_created: times.iter().min().map(format_time),
                 date_last: times.iter().max().map(format_time),

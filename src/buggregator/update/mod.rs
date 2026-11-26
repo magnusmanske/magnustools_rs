@@ -24,7 +24,15 @@ use wikimisc::mysql_async::Conn;
 use wikimisc::mysql_async::prelude::Queryable;
 
 /// Tool names too common to recognise a tool by.
-const IGNORE_TOOL_NAMES: &[&str] = &["data"];
+const IGNORE_TOOL_NAMES: &[&str] = &["data", "toolforge"];
+
+/// Tools that edit through a shared bot account. On a page without a tool
+/// hint, a section often names the invoking tool instead of the account, so
+/// these aliases are checked before the generic tool-name matcher.
+const BOT_INVOKERS: &[(&str, &[&str])] = &[
+    ("Mix-n-Match", &["mix'n'match", "mix-n-match", "mix-and-match", "mixnmatch", "mix and match"]),
+    ("sourcemd", &["sourcemd", "source md", "orcidator"]),
+];
 
 pub(super) static MAINTAINER_SIGNATURE: LazyLock<Regex> = LazyLock::new(|| regex(r"\bMagnus[ _]Manske\b"));
 
@@ -233,8 +241,16 @@ fn wiki_users(wikitext: &str) -> Vec<String> {
         .collect()
 }
 
+/// The page title without its namespace and subpage.
+fn page_subject(page: &str) -> &str {
+    page.split_once(':').map_or(page, |(_, subject)| subject).split('/').next().unwrap_or_default().trim()
+}
+
 /// Recognises tools by name in a text: when exactly one (unambiguous) tool name occurs.
-struct ToolMatcher(Vec<(Regex, u64)>);
+struct ToolMatcher {
+    matchers: Vec<(Regex, u64)>,
+    ids: BTreeMap<String, u64>,
+}
 
 impl ToolMatcher {
     async fn load(conn: &mut Conn) -> Result<Self> {
@@ -243,19 +259,59 @@ impl ToolMatcher {
         for (id, name) in tools {
             by_name.entry(name.replace('_', " ").to_lowercase().trim().to_string()).or_default().push(id);
         }
-        let matchers = by_name
-            .into_iter()
-            .filter(|(name, ids)| ids.len() == 1 && !name.is_empty() && !IGNORE_TOOL_NAMES.contains(&name.as_str()))
-            .filter_map(|(name, ids)| {
-                Some((Regex::new(&format!(r"(?i)\b{}\b", regex::escape(&name))).ok()?, *ids.first()?))
-            })
-            .collect();
-        Ok(Self(matchers))
+        let mut matchers = vec![];
+        let mut ids = BTreeMap::new();
+        for (name, tool_ids) in by_name {
+            if tool_ids.len() != 1 || name.is_empty() || IGNORE_TOOL_NAMES.contains(&name.as_str()) {
+                continue;
+            }
+            let Some(id) = tool_ids.first().copied() else { continue };
+            let Ok(re) = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(&name))) else { continue };
+            matchers.push((re, id));
+            ids.insert(name, id);
+        }
+        Ok(Self { matchers, ids })
     }
 
     fn find(&self, text: &str) -> Option<u64> {
-        let found: HashSet<u64> = self.0.iter().filter(|(re, _)| re.is_match(text)).map(|(_, id)| *id).collect();
+        self.find_excluding(text, None)
+    }
+
+    fn find_excluding(&self, text: &str, exclude: Option<u64>) -> Option<u64> {
+        let found: HashSet<u64> = self
+            .matchers
+            .iter()
+            .filter(|(re, id)| Some(*id) != exclude && re.is_match(text))
+            .map(|(_, id)| *id)
+            .collect();
         (found.len() == 1).then(|| found.into_iter().next()).flatten()
+    }
+
+    fn by_name(&self, name: &str) -> Option<u64> {
+        self.ids.get(name.replace('_', " ").to_lowercase().trim()).copied()
+    }
+
+    /// The tool that invoked a bot, when a talk-page section names one.
+    fn invoking_tool(&self, text: &str) -> Option<u64> {
+        let text = text.to_lowercase();
+        let found: HashSet<u64> = BOT_INVOKERS
+            .iter()
+            .filter(|(_, aliases)| aliases.iter().any(|alias| text.contains(alias)))
+            .filter_map(|(name, _)| self.by_name(name))
+            .collect();
+        (found.len() == 1).then(|| found.into_iter().next()).flatten()
+    }
+
+    /// A section's tool. A page owned by a tool uses its hint as the default;
+    /// otherwise the section is matched by name, ignoring the page subject's
+    /// own tool, with names of bot-invoking tools taking precedence.
+    fn section_tool(&self, page: &str, label: &str, text: &str, hint: Option<u64>) -> Option<u64> {
+        if let Some(hint) = hint {
+            return self.find(label).or_else(|| self.find(text)).or(Some(hint));
+        }
+        let own = self.by_name(page_subject(page));
+        let find = |text: &str| self.find_excluding(text, own);
+        self.invoking_tool(label).or_else(|| find(label)).or_else(|| self.invoking_tool(text)).or_else(|| find(text))
     }
 }
 
@@ -264,6 +320,14 @@ mod tests {
     use super::forge::{Forge, is_issue, iso_time};
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn page_subjects() {
+        assert_eq!(page_subject("User talk:Reinheitsgebot"), "Reinheitsgebot");
+        assert_eq!(page_subject("Talk:Mix'n'match"), "Mix'n'match");
+        assert_eq!(page_subject("User talk:Magnus Manske/tools"), "Magnus Manske");
+        assert_eq!(page_subject("no namespace"), "no namespace");
+    }
 
     #[test]
     fn talk_page_sections() {
@@ -353,9 +417,48 @@ mod tests {
 
     #[test]
     fn tool_names() {
-        let matcher = ToolMatcher(vec![(regex(r"(?i)\bpetscan\b"), 1), (regex(r"(?i)\breasonator\b"), 2)]);
-        assert_eq!(matcher.find("PetScan is slow"), Some(1));
-        assert_eq!(matcher.find("PetScan and Reasonator"), None);
-        assert_eq!(matcher.find("petscanning"), None);
+        let matcher = ToolMatcher {
+            matchers: vec![(regex(r"(?i)\bpetscan\b"), 1), (regex(r"(?i)\breasonator\b"), 2)],
+            ids: BTreeMap::new(),
+        };
+        assert_eq!(matcher.find_excluding("PetScan is slow", None), Some(1));
+        assert_eq!(matcher.find_excluding("PetScan and Reasonator", None), None);
+        assert_eq!(matcher.find_excluding("petscanning", None), None);
+    }
+
+    fn invoker_matcher() -> ToolMatcher {
+        ToolMatcher {
+            matchers: vec![(regex(r"(?i)\bpetscan\b"), 1)],
+            ids: BTreeMap::from([("mix-n-match".to_string(), 195), ("sourcemd".to_string(), 220)]),
+        }
+    }
+
+    #[test]
+    fn bot_invokers() {
+        let matcher = invoker_matcher();
+        assert_eq!(matcher.invoking_tool("via Mix'n'match"), Some(195));
+        assert_eq!(matcher.invoking_tool("mixnmatch:6287"), Some(195));
+        assert_eq!(matcher.invoking_tool("the SourceMD resolver"), Some(220));
+        assert_eq!(matcher.invoking_tool("Mix'n'match and SourceMD"), None);
+        assert_eq!(matcher.invoking_tool("PetScan"), None);
+    }
+
+    #[test]
+    fn section_tool_prefers_heading_and_invokers() {
+        let matcher = invoker_matcher();
+        assert_eq!(matcher.section_tool("Talk:Other", "PetScan", "mentions Mix'n'match", None), Some(1));
+        assert_eq!(matcher.section_tool("Talk:Other", "Some bug", "via Mix'n'match", None), Some(195));
+        assert_eq!(matcher.section_tool("Talk:Other", "Some bug", "nothing", Some(375)), Some(375));
+        assert_eq!(matcher.section_tool("Talk:Other", "Some bug", "nothing", None), None);
+    }
+
+    #[test]
+    fn section_tool_ignores_the_page_tool() {
+        let matcher = ToolMatcher {
+            matchers: vec![(regex(r"(?i)\breinheitsgebot\b"), 375)],
+            ids: BTreeMap::from([("reinheitsgebot".to_string(), 375)]),
+        };
+        assert_eq!(matcher.section_tool("User talk:Reinheitsgebot", "Reinheitsgebot bug", "nothing", None), None);
+        assert_eq!(matcher.section_tool("Talk:Reinheitsgebot", "Reinheitsgebot bug", "nothing", Some(375)), Some(375));
     }
 }
