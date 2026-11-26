@@ -103,6 +103,10 @@ Duplicates: close the duplicate and keep a canonical issue open.
   "priorities": {
     "6798": "HIGH",
     "6947": "LOW"
+  },
+  "tools": {
+    "2211": 195,
+    "6359": 220
   }
 }
 ```
@@ -114,6 +118,12 @@ Duplicates: close the duplicate and keep a canonical issue open.
   `"not planned"`; Codeberg only gets `state=closed`. The default is
   `"completed"`.
 - Priorities are `HIGH`, `NORMAL`, `LOW`.
+- `tools` maps an issue id to the id of the tool that actually caused it
+  (`tool.id`). Use it when the linked account is only an editing bot, e.g.
+  Reinheitsgebot issues that belong to Mix'n'match (195) or SourceMD (220).
+  The id is validated against `tool`; the change is logged as `TOOL_ID` and
+  does not bump `date_last`. The rollback restores the previous tool (or
+  `NULL`).
 
 ## 4. Apply
 
@@ -124,12 +134,12 @@ python3 triage/apply.py /tmp/bt/plan.json --data /tmp/bt --apply  # for real
 
 The script:
 
-1. validates the ids against the open set and the priorities;
+1. validates the ids against the open set, the priorities, and the tool ids;
 2. closes git issues upstream first (skipping ones already closed);
-3. closes the issues in Buggregator in one transaction, logging `STATUS` →
-   `CLOSED` as `Magnus Manske` (the same as the web UI);
+3. writes the Buggregator changes (close, priority, tool) in one transaction,
+   logging `STATUS` → `CLOSED` and `TOOL_ID` as `Magnus Manske`;
 4. writes `/tmp/bt/rollback.sql` (reopen the ids, delete the new log rows,
-   restore changed priorities);
+   restore changed priorities and tools);
 5. prints the final status and priority counts.
 
 It is idempotent: issues no longer open, or already closed upstream, are
@@ -179,6 +189,11 @@ SQL cannot do that.
   their old Codeberg issue URLs still resolve; query the URL's repository.
 - WIKI closes do not stick if a new reply appears: `reopen_on_reply` reopens a
   thread closed by the maintainer when a newer signature arrives.
+- 17 open issues on `User_talk:Reinheitsgebot` were reassigned from the bot
+  tool (375): 13 to Mix'n'match (195), 4 to SourceMD (220). The edit summaries
+  of the linked diffs name the invoking tool (`invoked by mixnmatch:…`,
+  `SourceMD author name string resolver script`). `wiki_page.tool_hint` still
+  points new sections at Reinheitsgebot, so future issues need the same check.
 - The property check for `6377` initially used `P1362`; SIKART is `P781`, and
   the wrong SIKART ID was still on the item, so the close was reverted.
 - Priority split after the pass: 21 HIGH, 108 NORMAL, 89 LOW.

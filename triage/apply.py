@@ -59,21 +59,43 @@ def close_upstream(issue, reason):
     return f"Codeberg {repo}#{number}"
 
 
+def triage_user_sql():
+    """Make `@triage_user` the log user for the other statements."""
+    return """
+INSERT INTO user (name, site) VALUES ('Magnus Manske', 'WIKI')
+  ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id);
+SET @triage_user = LAST_INSERT_ID();
+"""
+
+
 def close_sql(close_ids):
     joined = sql_ids(close_ids)
     return f"""
 INSERT INTO text (hash, text) VALUES (SHA2('CLOSED', 256), 'CLOSED')
   ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id);
 SET @closed_text = LAST_INSERT_ID();
-INSERT INTO user (name, site) VALUES ('Magnus Manske', 'WIKI')
-  ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id);
-SET @triage_user = LAST_INSERT_ID();
 INSERT INTO log (issue_id, event, text_id, user_id)
   SELECT id, 'STATUS', @closed_text, @triage_user
   FROM issue WHERE status='OPEN' AND id IN ({joined});
 UPDATE issue SET status='CLOSED', date_last=CURRENT_TIMESTAMP
   WHERE status='OPEN' AND id IN ({joined});
 """
+
+
+def tool_sql(by_tool):
+    statements = []
+    for tool_id, tool_ids in sorted(by_tool.items()):
+        joined = sql_ids(tool_ids)
+        statements.append(f"""
+INSERT INTO text (hash, text) VALUES (SHA2('{tool_id}', 256), '{tool_id}')
+  ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id);
+SET @tool_text = LAST_INSERT_ID();
+INSERT INTO log (issue_id, event, text_id, user_id)
+  SELECT id, 'TOOL_ID', @tool_text, @triage_user
+  FROM issue WHERE id IN ({joined});
+UPDATE issue SET tool={tool_id} WHERE id IN ({joined});
+""")
+    return "".join(statements)
 
 
 def priority_sql(by_level):
@@ -92,20 +114,28 @@ def main():
     args = parser.parse_args()
 
     plan = load(args.plan)
-    issues = {i["id"]: i for i in load(os.path.join(args.data, "open.json"))}
-    states = load(os.path.join(args.data, "states.json"))
     close_plan = plan.get("close", {})
     priority_plan = plan.get("priorities", {})
+    tool_plan = {int(i): int(t) for i, t in plan.get("tools", {}).items()}
 
-    open_rows = rows("SELECT id, priority FROM issue WHERE status='OPEN'")
-    open_now = {int(i): priority for i, priority in open_rows}
+    issues = {i["id"]: i for i in load(os.path.join(args.data, "open.json"))} if close_plan else {}
+    states = load(os.path.join(args.data, "states.json")) if close_plan else {}
 
-    unknown = (set(map(int, close_plan)) | set(map(int, priority_plan))) - set(open_now)
+    open_rows = rows("SELECT id, priority, COALESCE(tool,0) FROM issue WHERE status='OPEN'")
+    open_now = {int(i): priority for i, priority, _ in open_rows}
+    current_tools = {int(i): int(tool) for i, _, tool in open_rows}
+
+    unknown = (set(map(int, close_plan)) | set(map(int, priority_plan)) | set(tool_plan)) - set(open_now)
     if unknown:
         raise SystemExit(f"not open: {sorted(unknown)}")
     bad = {p for p in priority_plan.values() if p not in VALID_PRIORITIES}
     if bad:
         raise SystemExit(f"bad priorities: {sorted(bad)}")
+    if tool_plan:
+        known_tools = {int(i) for (i,) in rows("SELECT id FROM tool")}
+        bad_tools = set(tool_plan.values()) - known_tools
+        if bad_tools:
+            raise SystemExit(f"bad tools: {sorted(bad_tools)}")
 
     close_ids = set(map(int, close_plan))
     for issue_id, entry in close_plan.items():
@@ -148,20 +178,31 @@ def main():
     for issue_id, level in changed.items():
         by_level.setdefault(level, set()).add(issue_id)
 
+    changed_tools = {i: t for i, t in tool_plan.items() if current_tools[i] != t}
+    by_tool = {}
+    for issue_id, tool_id in changed_tools.items():
+        by_tool.setdefault(tool_id, set()).add(issue_id)
+
     close_ids = {i for i in close_ids if i in open_now}
     max_log = int(rows("SELECT COALESCE(MAX(id),0) FROM log")[0][0])
 
     changes = []
+    if close_ids or by_tool:
+        changes.append(triage_user_sql())
     if close_ids:
         changes.append(close_sql(close_ids))
+    if by_tool:
+        changes.append(tool_sql(by_tool))
     if by_level:
         changes.append(priority_sql(by_level))
 
     if args.apply and changes:
         sql("START TRANSACTION;\n" + "\n".join(changes) + "\nCOMMIT;\n")
-        print(f"closed {len(close_ids)} in Buggregator; changed {len(changed)} priorities")
+        print(f"closed {len(close_ids)} in Buggregator; changed {len(changed)} priorities; "
+              f"changed {len(changed_tools)} tools")
     elif not args.apply:
-        print(f"dry run: would close {len(close_ids)} and change {len(changed)} priorities")
+        print(f"dry run: would close {len(close_ids)}, change {len(changed)} priorities, "
+              f"change {len(changed_tools)} tools")
 
     rollback = ["-- Rollback for this triage. Run after the apply step.", "",
                 "START TRANSACTION;"]
@@ -172,6 +213,12 @@ def main():
     for issue_id, level in sorted(old_priorities.items()):
         if issue_id in changed:
             rollback.append(f"UPDATE issue SET priority='{level}' WHERE id={issue_id};")
+    if changed_tools:
+        rollback.append(f"DELETE FROM log WHERE id > {max_log} AND event='TOOL_ID'\n"
+                        f"  AND issue_id IN ({sql_ids(changed_tools)});")
+    for issue_id in sorted(changed_tools):
+        old = current_tools[issue_id]
+        rollback.append(f"UPDATE issue SET tool={old or 'NULL'} WHERE id={issue_id};")
     rollback += ["COMMIT;", ""]
     path = os.path.join(args.data, "rollback.sql")
     with open(path, "w", encoding="utf-8") as f:
