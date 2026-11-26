@@ -1,113 +1,119 @@
 <template id='issue-list-template'>
-<div class='container'>
+<div class='container-fluid dash'>
 	<tool-navbar>
 		<div slot='right'>
 			<widar></widar>
 		</div>
 	</tool-navbar>
 
-	<div class='row'>
-		<h2 tt='issues'></h2>
-		<router-link to='/dashboard' class='ml-auto align-self-center'>Service dashboard</router-link>
-		<router-link to='/usage' class='ml-2 align-self-center'>Usage</router-link>
+	<div class='dash-filters'>
+		<h2 class='h4 mb-0 mr-3' tt='issues'></h2>
+		<span class='filter-label'>Status</span>
+		<div class='btn-group btn-group-sm' role='group' aria-label='Status'>
+			<button v-for='value in config.status' type='button'
+				:class='"btn btn-outline-secondary"+(filters.status[value]?" active":"")'
+				:aria-pressed='filters.status[value]?true:false'
+				@click='toggle("status",value)'>{{capitalize(value)}}</button>
+		</div>
+		<span class='filter-label ml-2'>Priority</span>
+		<div class='btn-group btn-group-sm' role='group' aria-label='Priority'>
+			<button v-for='value in config.priority' type='button'
+				:class='"btn btn-outline-secondary"+(filters.priority[value]?" active":"")'
+				:aria-pressed='filters.priority[value]?true:false'
+				@click='toggle("priority",value)'>{{capitalize(value)}}</button>
+		</div>
+		<select v-model='filters.tool' class='custom-select custom-select-sm issue-select' @change='load_results' aria-label='Tool'>
+			<option value='' tt='any_tool'></option>
+			<option value='0' tt='tool_not_assigned'></option>
+			<option v-for='tool,tool_id in config.tools' :value='tool_id'>{{tool.nice_name}}</option>
+		</select>
+		<router-link to='/dashboard' class='ml-auto'>Service dashboard</router-link>
+		<router-link to='/usage'>Usage</router-link>
 	</div>
 
-	<div class='row mb-1'>
-		<div class="btn-group btn-group-toggle mr-1" data-toggle="buttons" v-for='group in button_groups'>
-			<label v-for='value in config[group]' :class='"btn btn-outline-secondary"+(filters[group][value]?" active":"")'>
-				<input type="checkbox" v-model='filters[group][value]' @change='load_results' /> {{capitalize(value)}}
-  			</label>
+	<div class='dash-filters'>
+		<span class='filter-label'>Site</span>
+		<div class='btn-group btn-group-sm flex-wrap' role='group' aria-label='Site'>
+			<button v-for='value in config.site' type='button'
+				:class='"btn btn-outline-secondary"+(filters.site[value]?" active":"")'
+				:aria-pressed='filters.site[value]?true:false'
+				:title='siteLabel(value)'
+				@click='toggle("site",value)'>
+				<img v-if='siteIcon(value)' :src='siteIcon(value)' class='site-icon' alt='' />{{siteLabel(value)}}
+			</button>
 		</div>
-		<div>
-			<select v-model='filters.tool' class='custom-select' @change='load_results'>
-				<option value='' tt='any_tool'></option>
-				<option value='0' tt='tool_not_assigned'></option>
-				<option v-for='tool,tool_id in config.tools' :value='tool_id'>{{tool.nice_name}}</option>
-			</select>
-		</div>
-	</div>
-
-	<div class='row'>
-		<div tt='sort_by' class='mr-1'>
-		</div>
-		<div>
-			<select v-model='filters.sort_by' class="custom-select" @change='load_results'>
-				<option v-for='o in sort_by_options' :tt='o' :value='o'></option>
-			</select>
-		</div>
-		<div>
-			<div class="btn-group btn-group-toggle" data-toggle="buttons">
-				<label v-for='order in sort_orders' :class='"btn btn-outline-secondary"+(filters.sort_order==order?" active":"")'>
-					<input type="radio" v-model='filters.sort_order' :value='order' @change='load_results' /> <span :tt='order'></span>
-				</label>
-			</div>
+		<span class='filter-label ml-2' tt='sort_by'></span>
+		<select v-model='filters.sort_by' class='custom-select custom-select-sm issue-select' @change='load_results' aria-label='Sort by'>
+			<option v-for='o in sort_by_options' :tt='o' :value='o'></option>
+		</select>
+		<div class='btn-group btn-group-sm' role='group' aria-label='Sort order'>
+			<button v-for='order in sort_orders' type='button'
+				:class='"btn btn-outline-secondary"+(filters.sort_order==order?" active":"")'
+				:aria-pressed='filters.sort_order==order?true:false'
+				@click='setSortOrder(order)'><span :tt='order'></span></button>
 		</div>
 	</div>
 
-	<div class='row' v-if='loading'>
-		<i tt='loading'></i>
+	<div class='issue-stats'>
+		<span class='dash-muted'><span tt='this_query'></span> {{stats.this_query}}</span>
+		<span class='dash-muted'><span tt='total_open'></span> {{stats.total_open}}</span>
+		<span class='ml-auto d-inline-flex align-items-center'>
+			<a v-if='filters.offset>0' href='#' class='mr-2' @click.prevent='go_to_offset(filters.offset-filters.limit)' tt='prev'></a>
+			<input class='form-control form-control-sm offset-input' type='number' v-model.number='filters.offset' @keyup.enter='go_to_offset(filters.offset)' aria-label='Offset' />
+			<a v-if='filters.offset+filters.limit<stats.this_query' href='#' class='ml-2' @click.prevent='go_to_offset(filters.offset+filters.limit)' tt='next'></a>
+		</span>
 	</div>
-	<div class='row' v-else-if='results.length==0'>
-		<i tt='no_results'></i>
-	</div>
-	<div class='row mt-1' v-else>
-		<div class='row mb-1'>
-			<div class='mr-2'>
-				<span tt='this_query'></span>
-				{{stats.this_query}}
-			</div>
-			<div class='mr-2'>
-				<span tt='total_open'></span>
-				{{stats.total_open}}
-			</div>
-			<div class='ml-4'>
-				<span v-if='filters.offset>0' class='mr-1'>
-					<a href='#' @click.prevent='go_to_offset(filters.offset-filters.limit)' tt='prev'></a>
-				</span>
-				<span class='mr-1'>
-					<input style='width: 6rem;' type='number' v-model.number='filters.offset' @keyup.enter='go_to_offset(filters.offset)' />
-				</span>
-				<span v-if='filters.offset+filters.limit<stats.this_query'>
-					<a href='#' @click.prevent='go_to_offset(filters.offset+filters.limit)' tt='next'></a>
-				</span>
-			</div>
-		</div>
-		<table class='table table-striped'>
-			<tr v-for='r in results'>
-				<td>
-					<a :href='r.url' target='_blank'>
-						<img v-if='typeof image_url[r.site]!="undefined"' border=0 width=64 :title='r.site' :src='image_url[r.site]'/>
-						<span v-else>{{r.site}}</span>
-					</a>
-				</td>
-				<td>
-					{{r.label}}
-				</td>
-				<td style='text-align: center;'>
-					{{r.status}}<br/>
-					{{r.priority}}
-					<div v-if='can_edit()'>
-						<div v-if='r.status=="OPEN"'>
-							[<a href='#' @click.prevent='changeIssueStatus(r.id,"CLOSED")' tt='close_issue'></a>]
-						</div>
-					</div>
-				</td>
-				<td nowrap>
-					<div>{{r.date_created}}</div>
-					<div v-if='r.date_created!=r.date_last'>{{r.date_last}}</div>
-				</td>
-				<td>
-					<div style='font-size: 7pt; max-width: 300pt;'>
-						{{r.description}}
-					</div>
-				</td>
-				<td>
-					<tool-picker :can_edit='can_edit()' :toolid='r.tool' @tool-id-changed='changeToolId(r.id,$event)'></tool-picker>
-				</td>
-			</tr>
+
+	<div class='dash-muted' v-if='loading'><i tt='loading'></i></div>
+	<div class='dash-muted' v-else-if='results.length==0'><i tt='no_results'></i></div>
+	<div class='table-responsive' v-else>
+		<table class='table table-sm issues'>
+			<thead>
+				<tr>
+					<th class='col-site'><span class='sr-only'>Site</span></th>
+					<th>Issue</th>
+					<th class='col-tool'>Tool</th>
+					<th class='col-status'>Status</th>
+					<th class='col-priority'>Priority</th>
+					<th class='col-updated'>Updated</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr v-for='r in results' :class='{"closed":r.status=="CLOSED"}'>
+					<td class='col-site'>
+						<a v-if='r.url' :href='r.url' target='_blank' rel='noopener noreferrer' :title='siteLabel(r.site)'>
+							<img v-if='siteIcon(r.site)' :src='siteIcon(r.site)' class='site-icon' :alt='siteLabel(r.site)' />
+							<span v-else class='dash-muted'>{{r.site}}</span>
+						</a>
+						<span v-else class='dash-muted'>{{r.site}}</span>
+					</td>
+					<td>
+						<div class='issue-title'><router-link :to='issueLink(r)'>{{r.label || ("#"+r.id)}}</router-link></div>
+						<div class='issue-id' v-if='r.label'>#{{r.id}}</div>
+						<div class='issue-snippet' v-if='r.description' :title='r.description'>{{r.description}}</div>
+					</td>
+					<td class='col-tool'>
+						<tool-picker :can_edit='can_edit()' :toolid='r.tool' @tool-id-changed='changeToolId(r.id,$event)'></tool-picker>
+					</td>
+					<td class='col-status'>
+						<span :class='"status-icon status-"+statusInfo(r.status).severity' aria-hidden='true'>{{statusInfo(r.status).icon}}</span>
+						<span class='status-text'>{{statusInfo(r.status).label}}</span>
+						<button v-if='can_edit() && r.status=="OPEN"' type='button' class='close-issue' title='Close issue' @click='changeIssueStatus(r.id,"CLOSED")'>
+							<span tt='close_issue'>close</span>
+						</button>
+					</td>
+					<td class='col-priority'>
+						<span :class='"priority-icon status-"+priorityInfo(r.priority).severity' :title='"Priority: "+priorityInfo(r.priority).label' aria-hidden='true'>{{priorityInfo(r.priority).icon}}</span>
+						<span class='sr-only'>{{priorityInfo(r.priority).label}} priority</span>
+					</td>
+					<td class='col-updated' :title='r.date_last'>
+						<div>{{ago(r.date_last)}}</div>
+						<div class='issue-created' v-if='r.date_created && r.date_created!=r.date_last'>created {{ago(r.date_created)}}</div>
+					</td>
+				</tr>
+			</tbody>
 		</table>
 	</div>
-
 </div>
 </template>
 
@@ -121,14 +127,6 @@ let IssueList = Vue.extend ( {
 		sort_by_options:['label','status','date_created','date_last','site','tool','priority'] ,
 		button_groups:['site','status','priority'] ,
 		sort_orders:['ascending','descending'] ,
-		image_url:{
-			'WIKI':'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Wikipedia-logo-v2.svg/120px-Wikipedia-logo-v2.svg.png',
-			'WIKIDATA':'https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/120px-Wikidata-logo.svg.png',
-			'TWITTER':'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Font_Awesome_5_brands_Twitter.svg/120px-Font_Awesome_5_brands_Twitter.svg.png',
-			'GITHUB':'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Font_Awesome_5_brands_github-square.svg/120px-Font_Awesome_5_brands_github-square.svg.png',
-			'CODEBERG':'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Codeberg_logo.svg/120px-Codeberg_logo.svg.png',
-			'BITBUCKET':'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Bitbucket-blue-logomark-only.svg/120px-Bitbucket-blue-logomark-only.svg.png'
-		}
 	} } ,
 	created : function () {
 		let me = this ;
@@ -212,21 +210,29 @@ let IssueList = Vue.extend ( {
 			} ) ;
 			return ret.join(',');
 		} ,
+		toggle : function ( group , value ) {
+			this.filters[group][value] = !this.filters[group][value] ;
+			this.load_results() ;
+		} ,
+		setSortOrder : function ( order ) {
+			this.filters.sort_order = order ;
+			this.load_results() ;
+		} ,
 		go_to_offset : function ( new_offset ) {
 			this.filters.offset = Math.max ( 0 , Math.floor ( new_offset * 1 ) || 0 ) ;
 			this.load_results();
 		} ,
-		can_edit : function () {
-			let me = this ;
-			if ( typeof widar == 'undefined' ) return ;
-			if ( !widar.is_logged_in ) return false ;
-			if ( config.write_access.indexOf(widar.getUserName()) == -1 ) return false ;
-			return true ;
+		// The list keeps its filters in the URL, so the detail page can link back to them.
+		issueLink : function ( r ) {
+			return { path:'/issue/'+r.id , query:{ from:this.$route.fullPath } } ;
 		} ,
-		capitalize : function (s) {
-			if (typeof s !== 'string') return ''
-			return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
-		} ,
+		can_edit : function () { return issue_ui.can_edit() } ,
+		siteIcon : function ( site ) { return issue_ui.siteIcon(site) } ,
+		siteLabel : function ( site ) { return issue_ui.siteLabel(site) } ,
+		statusInfo : function ( status ) { return issue_ui.status(status) } ,
+		priorityInfo : function ( priority ) { return issue_ui.priority(priority) } ,
+		ago : function ( timestamp ) { return issue_ui.ago(timestamp) } ,
+		capitalize : function (s) { return issue_ui.capitalize(s) } ,
 		changeIssueStatus : function ( issue_id , new_status ) {
 			let me = this ;
 			$.post ( './api.php' , {

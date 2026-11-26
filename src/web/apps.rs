@@ -96,6 +96,8 @@ mod tests {
         assert!(js.headers["content-type"].to_str().unwrap().contains("javascript"));
         let component = get(dir.path(), "/buggregator/vue_components/service-card.html").await;
         assert!(component.body.contains("by_tool"));
+        let detail = get(dir.path(), "/buggregator/vue_components/issue-detail.html").await;
+        assert!(detail.body.contains("issue-history"));
         assert_eq!(get(dir.path(), "/ts2/geneawiki2").await.headers["location"], "/ts2/geneawiki2/");
         assert_eq!(get(dir.path(), "/ts2/css/common.css").await.status.as_u16(), 200);
         assert_eq!(get(dir.path(), "/ts2/css/tablesorter/blue/asc.gif").await.status.as_u16(), 200);

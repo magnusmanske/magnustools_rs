@@ -93,6 +93,22 @@ impl<F: Fn(&str) -> Option<String>> Request<'_, F> {
                 let mut conn = self.state.tool_db.conn().await?;
                 out.insert("data".to_string(), issues::get_issues(&mut conn, &IssueQuery::new(self.get)).await?);
             }
+            "get_issue" => {
+                let issue_id = number("issue_id");
+                if issue_id == 0 {
+                    out.insert("status".to_string(), "No issue ID set".into());
+                } else {
+                    let mut conn = self.state.tool_db.conn().await?;
+                    match issues::get_issue(&mut conn, issue_id).await? {
+                        Some(data) => {
+                            out.insert("data".to_string(), data);
+                        }
+                        None => {
+                            out.insert("status".to_string(), "No such issue".into());
+                        }
+                    }
+                }
+            }
             "get_config" => {
                 let mut conn = self.state.tool_db.conn().await?;
                 out.insert(

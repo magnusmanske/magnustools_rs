@@ -83,7 +83,7 @@ old tool's subdomain, use Toolforge's redirect container; see `PHP2RUST.md`.
 | `/wikidata-terminator/` | Wikidata items missing a label, description or sitelink (formerly wikidata-terminator.toolforge.org; `/api.php` kept) |
 | `/wp_data_url/` | An article with its images inlined |
 | `/xcontribs/` | How a user's edits are spread over the Wikimedia projects (formerly erwin85.toolforge.org) |
-| `/buggregator/api/` | Buggregator API; the front-end (`public/buggregator/`) has the issues, the service dashboard, and the usage dashboard (what the logger counted) |
+| `/buggregator/api/` | Buggregator API; the front-end (`public/buggregator/`) has the issue list with per-issue pages, the service dashboard, and the usage dashboard (what the logger counted) |
 | `/buggregator/ingest.php` | Service dashboard pushes from `wikimisc` telemetry (also `/buggregator/ingest/`; not a redirect, as the client does not follow those) |
 | `/toolinfo_buggregator.json` | Toolinfo for tools not on Toolhub yet |
 

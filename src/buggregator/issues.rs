@@ -91,6 +91,40 @@ pub async fn get_issues(conn: &mut Conn, query: &IssueQuery) -> Result<Value> {
     }))
 }
 
+/// One issue with its creator and change log, for the detail page.
+/// `None` if there is no such issue.
+pub async fn get_issue(conn: &mut Conn, issue_id: u64) -> Result<Option<Value>> {
+    let Some(row) = conn.exec_first(format!("SELECT {ISSUE_COLUMNS} FROM issue WHERE id=?"), (issue_id,)).await? else {
+        return Ok(None);
+    };
+    let history: Vec<Row> = conn
+        .exec(
+            "SELECT log.timestamp, log.event, text.text AS value, user.name AS user, user.site AS user_site
+             FROM log
+             JOIN text ON text.id=log.text_id
+             JOIN user ON user.id=log.user_id
+             WHERE log.issue_id=?
+             ORDER BY log.timestamp DESC, log.id DESC",
+            (issue_id,),
+        )
+        .await?;
+    let creator: Option<Row> = conn
+        .exec_first(
+            "SELECT user.name, user.site
+             FROM user_issue
+             JOIN user ON user.id=user_issue.user_id
+             WHERE user_issue.issue_id=? AND user_issue.role='CREATOR'
+             LIMIT 1",
+            (issue_id,),
+        )
+        .await?;
+    Ok(Some(json!({
+        "issue": row_as_strings(&row),
+        "history": history.iter().map(row_as_strings).collect::<Vec<_>>(),
+        "creator": creator.as_ref().map(row_as_strings),
+    })))
+}
+
 /// Tools by id, each with a `nice_name`.
 pub async fn tools_by_id(conn: &mut Conn) -> Result<Map<String, Value>> {
     let rows: Vec<Row> = conn.query("SELECT * FROM tool ORDER BY name, subdomain").await?;

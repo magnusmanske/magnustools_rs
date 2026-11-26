@@ -1,0 +1,159 @@
+<template id='issue-detail-template'>
+<div class='container-fluid dash'>
+	<tool-navbar>
+		<div slot='right'>
+			<widar></widar>
+		</div>
+	</tool-navbar>
+
+	<div class='dash-filters'>
+		<router-link :to='back' class='mr-2'>← <span tt='issues'>Issues</span></router-link>
+		<span class='dash-muted' v-if='id'>#{{id}}</span>
+		<router-link to='/dashboard' class='ml-auto'>Service dashboard</router-link>
+		<router-link to='/usage'>Usage</router-link>
+	</div>
+
+	<div v-if='error' class='alert alert-warning'>{{error}}</div>
+	<div v-else-if='loading' class='dash-muted'><i tt='loading'></i></div>
+	<div v-else-if='data' class='issue-detail'>
+		<div class='issue-headline'>
+			<h2 class='h4 mb-0'>{{title}}</h2>
+			<a v-if='issue.url' :href='issue.url' target='_blank' rel='noopener noreferrer' class='issue-source' :title='siteLabel'>
+				<img v-if='siteIcon' :src='siteIcon' class='site-icon' alt='' />
+				{{siteLabel}} <span aria-hidden='true'>↗</span>
+			</a>
+			<div class='issue-badges'>
+				<span class='badge-issue'>
+					<span :class='"status-icon status-"+statusInfo.severity' aria-hidden='true'>{{statusInfo.icon}}</span>
+					{{statusInfo.label}}
+				</span>
+				<span class='badge-issue' :title='"Priority: "+priorityInfo.label'>
+					<span :class='"priority-icon status-"+priorityInfo.severity' aria-hidden='true'>{{priorityInfo.icon}}</span>
+					{{priorityInfo.label}}
+				</span>
+			</div>
+		</div>
+
+		<dl class='issue-meta'>
+			<div>
+				<dt>Tool</dt>
+				<dd><tool-picker :can_edit='can_edit()' :toolid='issue.tool' @tool-id-changed='changeToolId'></tool-picker></dd>
+			</div>
+			<div>
+				<dt>Site</dt>
+				<dd>{{siteLabel}}</dd>
+			</div>
+			<div>
+				<dt>Created</dt>
+				<dd :title='issue.date_created'>{{date(issue.date_created)}}</dd>
+			</div>
+			<div>
+				<dt>Last change</dt>
+				<dd :title='issue.date_last'>{{date(issue.date_last)}}</dd>
+			</div>
+			<div v-if='creator'>
+				<dt>Reported by</dt>
+				<dd>{{creator.name}}</dd>
+			</div>
+			<div>
+				<dt>Internal ID</dt>
+				<dd>{{issue.id}}</dd>
+			</div>
+		</dl>
+
+		<div class='issue-description-full' v-if='issue.description'>{{issue.description}}</div>
+		<div class='issue-description-full dash-muted' v-else>No description.</div>
+
+		<div class='issue-actions' v-if='can_edit()'>
+			<button v-if='issue.status=="OPEN"' type='button' class='btn btn-sm btn-outline-secondary' @click='setStatus("CLOSED")'>Close issue</button>
+			<button v-else type='button' class='btn btn-sm btn-outline-secondary' @click='setStatus("OPEN")'>Reopen issue</button>
+		</div>
+
+		<h3 class='h6 mt-4'>History</h3>
+		<ul class='issue-history' v-if='history.length'>
+			<li v-for='h in history'>
+				<span class='history-time' :title='h.timestamp'>{{date(h.timestamp)}}</span>
+				<span>{{eventText(h)}}</span>
+				<span class='history-user'>{{h.user}}</span>
+			</li>
+		</ul>
+		<div class='dash-muted' v-else>No changes have been recorded.</div>
+	</div>
+</div>
+</template>
+
+<script>
+'use strict';
+
+let IssueDetail = Vue.extend ( {
+	props : [] ,
+	data : function () { return { id:'' , data:null , loading:true , error:'' } } ,
+	created : function () {
+		this.load() ;
+	} ,
+	watch : {
+		'$route.params.id' : function () { this.load() } ,
+	} ,
+	computed : {
+		issue : function () { return this.data ? this.data.issue : {} } ,
+		history : function () { return this.data ? this.data.history : [] } ,
+		creator : function () { return this.data ? this.data.creator : null } ,
+		title : function () { return this.issue.label || ( 'Issue #' + this.issue.id ) } ,
+		siteLabel : function () { return issue_ui.siteLabel ( this.issue.site ) } ,
+		siteIcon : function () { return issue_ui.siteIcon ( this.issue.site ) } ,
+		statusInfo : function () { return issue_ui.status ( this.issue.status ) } ,
+		priorityInfo : function () { return issue_ui.priority ( this.issue.priority ) } ,
+		back : function () {
+			let from = this.$route.query.from ;
+			return typeof from == 'string' && from.charAt(0) == '/' ? from : '/' ;
+		} ,
+	} ,
+	methods : {
+		load : function () {
+			let me = this ;
+			me.id = me.$route.params.id ;
+			me.data = null ;
+			me.loading = true ;
+			me.error = '' ;
+			dash.api ( { action:'get_issue' , issue_id:me.id } )
+				.then ( function ( data ) { me.data = data } )
+				.catch ( function ( e ) { me.error = e } )
+				.finally ( function () { me.loading = false } ) ;
+		} ,
+		// After an edit, without hiding the page that is already there.
+		reload : function () {
+			let me = this ;
+			dash.api ( { action:'get_issue' , issue_id:me.id } )
+				.then ( function ( data ) { me.data = data } )
+				.catch ( function () {} ) ;
+		} ,
+		setStatus : function ( status ) {
+			let me = this ;
+			$.post ( './api.php' , { action:'set_issue_status' , issue_id:me.id , new_status:status } , function ( d ) {
+				if ( d.status == 'OK' ) me.reload() ;
+				else alert ( d.status ) ;
+			} , 'json' ) ;
+		} ,
+		changeToolId : function ( tool_id ) {
+			let me = this ;
+			$.post ( './api.php' , { action:'set_issue_tool' , issue_id:me.id , new_tool_id:tool_id } , function ( d ) {
+				if ( d.status == 'OK' ) me.reload() ;
+				else alert ( d.status ) ;
+			} , 'json' ) ;
+		} ,
+		eventText : function ( h ) {
+			if ( h.event == 'STATUS' ) return 'Status set to ' + issue_ui.capitalize ( h.value ) ;
+			if ( h.event == 'TOOL_ID' ) return h.value == '0' ? 'Tool unassigned' : 'Tool set to ' + this.toolName ( h.value ) ;
+			return h.event + ': ' + h.value ;
+		} ,
+		toolName : function ( id ) {
+			let tool = config.tools[id] ;
+			return tool ? tool.nice_name : '#' + id ;
+		} ,
+		date : function ( timestamp ) { return issue_ui.date ( timestamp ) } ,
+		can_edit : function () { return issue_ui.can_edit() } ,
+	} ,
+	template : '#issue-detail-template'
+} ) ;
+
+</script>

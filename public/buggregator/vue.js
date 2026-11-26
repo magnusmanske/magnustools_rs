@@ -13,6 +13,7 @@ $(document).ready ( function () {
 		vue_components.loadComponents ( ['wd-link','tool-translate','tool-navbar','typeahead-search','widar',
 			'vue_components/tool-picker.html',
 			'vue_components/issue-list.html',
+			'vue_components/issue-detail.html',
 			'vue_components/ts-chart.html',
 			'vue_components/restart-timeline.html',
 			'vue_components/service-card.html',
@@ -29,6 +30,7 @@ $(document).ready ( function () {
 			wd_link_wd = wd ;
 			const routes = [
 			  { path: '/', component: IssueList , props:true },
+			  { path: '/issue/:id', component: IssueDetail },
 			  { path: '/dashboard', component: ServiceDashboard },
 			  { path: '/usage', component: UsageDashboard },
 			] ;
