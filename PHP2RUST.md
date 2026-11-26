@@ -117,7 +117,7 @@ Other:
 - [x] Tool table: `referee` moved to `wd-infernal` / `rust/axum` (2026-11-13); the old subdomain redirects there.
 - [x] Tool table: erwin85 and joanjoc redirect rows are now `rust/axum` (2026-11-13).
 - [x] Tool table: `baglama2`, `WD-FIST` and `distributed game` notes reflect their Rust parts (2026-11-13).
-- [x] Tool table: the magpie rows (commonshelper, geograph2commons, url2commons, flickr2commons) are `rust/axum` with magpie URLs (2026-11-20).
+- [x] Tool table: the magpie rows (commonshelper, geograph2commons, url2commons, flickr2commons) are `rust/axum` with magpie URLs (2026-11-20); their `subdomain` moved to `magpie` on 2026-11-26 so the monitor no longer reports them as non-200 (`sql/2026-11-26-magpie-tools.sql`).
 - [x] Tool table: all active PHP rows updated to `php8.4` (2026-11-23): `reasonator`/`geneawiki*`/`widee`, `toolflow`, `wikiflix`, `wikishootme`, and `upload-stats-bot` (`has_webservice` stays 0); see `sql/2026-11-23-tool-php-versions.sql`.
 - [x] Reasonator: not a port target; V2 is JS and the PHP shell is OAuth/OpenGraph. The 503 is fixed and the backlog is still down to 4 (2026-11-23).
 - [x] The leftover `/tmp/wdt_tail.*` is gone (checked 2026-11-23).
