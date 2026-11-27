@@ -39,3 +39,9 @@ pub mod tool_db;
 pub mod tools;
 pub mod web;
 pub mod wiki;
+
+/// The schema of the Buggregator database (`sql/buggregator.sql`).
+pub const BUGGREGATOR_SCHEMA: &str = include_str!("../sql/buggregator.sql");
+
+/// The reference schema of the Terminator database (`sql/terminator.sql`).
+pub const TERMINATOR_SCHEMA: &str = include_str!("../sql/terminator.sql");
